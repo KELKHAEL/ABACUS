@@ -1,0 +1,327 @@
+/* Container */
+.page-container {
+  padding: 40px;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.page-title {
+  color: #104a28;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.btn-primary {
+  background-color: #104a28;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #0d3b20;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 74, 40, 0.2);
+}
+
+/* Filter Bar */
+.filter-bar {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-wrapper {
+  flex: 2;
+  position: relative;
+  min-width: 250px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 10px 10px 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: #104a28;
+}
+
+.filter-select {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: white;
+  color: #4b5563;
+  font-size: 14px;
+  outline: none;
+}
+
+.btn-reset {
+  padding: 10px 16px;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-reset:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Table Design */
+.table-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  background-color: #f9fafb;
+  padding: 16px 24px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.data-table td {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.data-table tr:hover {
+  background-color: #f9fafb;
+}
+
+/* Badges */
+.badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-regular { background: #dcfce7; color: #166534; }
+.badge-irregular { background: #fee2e2; color: #991b1b; }
+.badge-new { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+
+.google-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #555;
+}
+
+/* Password Column*/
+.password-box {
+  font-family: 'Courier New', monospace;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end; /* Aligns buttons to the right */
+}
+
+.btn-icon {
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* DEFAULT STATE: Slight grey background so they look like buttons */
+  background-color: #f3f4f6; 
+}
+
+/* EDIT BUTTON - Always Dark Green */
+.btn-edit {
+  color: #104a28 !important; /* Forces Green color always */
+}
+
+.btn-edit:hover { 
+  background-color: #104a28; /* Green background on hover */
+  color: white !important;    /* White text on hover */
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(16, 74, 40, 0.2);
+}
+
+/* DELETE BUTTON - Always Red */
+.btn-delete {
+  color: #dc2626 !important; /* Forces Red color always */
+}
+
+.btn-delete:hover { 
+  background-color: #dc2626; /* Red background on hover */
+  color: white !important;   /* White text on hover */
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(220, 38, 38, 0.2);
+}
+
+/* VERIFY BUTTON (For new students) */
+.btn-verify { 
+  background-color: #fef9c3; 
+  color: #854d0e !important; 
+  font-weight: bold; 
+  padding: 6px 12px; 
+  font-size: 12px;
+}
+
+.btn-verify:hover {
+  background-color: #fde047;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  padding: 32px;
+  border-radius: 16px;
+  width: 420px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  margin-bottom: 24px;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #104a28;
+  margin: 0;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  border-color: #104a28;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(16, 74, 40, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 10px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-save {
+  flex: 1;
+  padding: 10px;
+  background: #fbbf24; /* CVSU Gold */
+  border: none;
+  border-radius: 8px;
+  color: #422006;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-save:hover { background: #f59e0b; }

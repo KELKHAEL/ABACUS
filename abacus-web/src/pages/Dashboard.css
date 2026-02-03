@@ -1,0 +1,156 @@
+/* Container Layout */
+.dashboard-container {
+  padding: 40px;
+  background-color: #f8f9fa; /* Light grey background for contrast */
+  min-height: 100vh;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* Header Section */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+}
+
+.welcome-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #104a28; /* CVSU Green */
+  margin: 0;
+}
+
+.welcome-subtitle {
+  color: #666;
+  margin: 5px 0 0 0;
+  font-size: 16px;
+}
+
+.date-display {
+  font-weight: 500;
+  color: #888;
+  font-size: 14px;
+}
+
+/* Grid Layout */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+/* Card Design */
+.stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 180px; /* Uniform height */
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(16, 74, 40, 0.15); /* Greenish shadow on hover */
+  border-color: #104a28;
+}
+
+/* --- UPDATED CARD HEADER --- */
+.card-header {
+  display: flex;
+  /* Changed from space-between to flex-start to place text NEXT to the icon */
+  justify-content: flex-start; 
+  /* Changed from flex-start to center to vertically align text with the icon */
+  align-items: center; 
+  gap: 16px; /* Adds space between the icon and the text */
+}
+
+.icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-wrapper.green { background-color: rgba(16, 74, 40, 0.1); }
+.icon-wrapper.gold { background-color: rgba(238, 198, 10, 0.15); }
+.icon-wrapper.blue { background-color: rgba(0, 86, 179, 0.1); }
+.icon-wrapper.white { background-color: rgba(255, 255, 255, 0.2); }
+
+.card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Card Content */
+.card-content {
+  margin-top: 20px;
+}
+
+.count-number {
+  font-size: 36px;
+  font-weight: 800;
+  color: #333;
+  margin: 0;
+  line-height: 1;
+}
+
+.stat-desc {
+  font-size: 14px;
+  color: #666;
+  margin: 5px 0 0 0;
+}
+
+/* Card Footer (Link area) */
+.card-footer {
+  margin-top: auto;
+  padding-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #104a28;
+  font-weight: 600;
+  font-size: 14px;
+  opacity: 0; /* Hidden by default */
+  transform: translateX(-10px);
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover .card-footer {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Special Styling for Semester Card */
+.highlight-card {
+  background: linear-gradient(135deg, #104a28 0%, #1a6b3d 100%);
+  border: none;
+}
+
+.highlight-card:hover {
+  box-shadow: 0 10px 30px rgba(16, 74, 40, 0.4);
+  transform: translateY(-5px);
+}
+
+.text-white { color: white !important; }
+.text-white-70 { color: rgba(255, 255, 255, 0.7) !important; }
+
+.status-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: white;
+  backdrop-filter: blur(4px);
+}

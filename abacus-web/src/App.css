@@ -14,40 +14,114 @@ body {
   color: var(--text-dark);
 }
 
-/* --- LOGIN PAGE STYLES (Fixing the Plain Look) --- */
-.login-wrapper {
+/* --- NEW LOGIN PAGE STYLES (Split Layout) --- */
+.login-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
   height: 100vh;
   width: 100vw;
-  background-color: var(--cvsu-green); /* Full Green Background */
-  background-image: linear-gradient(135deg, #0d3b20 0%, #166035 100%); /* Subtle Gradient */
+  overflow: hidden;
 }
 
-.login-box {
-  background: white;
-  padding: 40px;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+/* Left Side - Green Branding */
+.login-left {
+  flex: 1;
+  background-color: var(--cvsu-green);
+  background-image: linear-gradient(135deg, #0d3b20 0%, #166035 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  position: relative;
+}
+
+/* Optional pattern overlay for texture */
+.login-left::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: radial-gradient(#ffffff 1px, transparent 1px);
+  background-size: 30px 30px;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+.brand-content {
   text-align: center;
+  z-index: 2;
 }
 
-.login-title {
-  color: var(--cvsu-green);
-  font-size: 28px;
+.brand-icon-large {
+  background: rgba(255,255,255,0.1);
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px auto;
+  backdrop-filter: blur(5px);
+}
+
+.brand-content h1 {
+  font-size: 48px;
   font-weight: 900;
-  margin-bottom: 8px;
+  margin: 0;
+  letter-spacing: 2px;
+}
+
+.brand-content p {
+  font-size: 18px;
+  color: rgba(255,255,255,0.8);
+  margin: 5px 0 0 0;
+  font-weight: 300;
+}
+
+.brand-divider {
+  width: 40px;
+  height: 4px;
+  background: var(--cvsu-gold);
+  margin: 25px auto;
+  border-radius: 2px;
+}
+
+.brand-school {
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 1px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
 }
 
-.login-subtitle {
-  color: #6b7280;
-  font-size: 14px;
+/* Right Side - Form */
+.login-right {
+  flex: 1;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-form-wrapper {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-header {
   margin-bottom: 30px;
+}
+
+.login-header h2 {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0 0 8px 0;
+}
+
+.login-header p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 15px;
 }
 
 .login-form {
@@ -56,45 +130,91 @@ body {
   gap: 20px;
 }
 
-.login-input {
-  width: 100%;
-  padding: 14px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.2s;
-  box-sizing: border-box; /* Ensures padding doesn't break width */
+.input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
 }
 
-.login-input:focus {
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  color: #9ca3af;
+  pointer-events: none; /* Allows clicking through to input */
+}
+
+.input-wrapper input {
+  width: 100%;
+  padding: 12px 12px 12px 42px; /* Left padding makes room for icon */
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.2s;
+  background: #f9fafb;
   outline: none;
+}
+
+.input-wrapper input:focus {
   border-color: var(--cvsu-green);
-  background-color: #f0fdf4;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(16, 74, 40, 0.1);
 }
 
 .login-btn {
-  background-color: var(--cvsu-gold);
-  color: #3e2700;
+  margin-top: 10px;
+  background-color: var(--cvsu-green);
+  color: white;
   padding: 14px;
   border: none;
   border-radius: 8px;
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s, background-color 0.2s;
-  text-transform: uppercase;
+  transition: background-color 0.2s;
 }
 
 .login-btn:hover {
-  background-color: #ca9a00;
-  transform: translateY(-2px);
+  background-color: #0d3b20;
 }
 
-.login-btn:active {
-  transform: translateY(0);
+.login-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
 }
 
-/* --- DASHBOARD & SIDEBAR STYLES --- */
+.login-footer {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.login-footer p {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Mobile Responsiveness for Login */
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+  }
+  .login-left {
+    display: none; /* Hide branding on very small screens or make it a top banner */
+  }
+  .login-right {
+    flex: 1;
+  }
+}
+
+/* --- DASHBOARD & SIDEBAR STYLES (Keeping existing) --- */
 .app-container {
   display: flex;
   height: 100vh;
@@ -201,19 +321,19 @@ body {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-/* --- TABLE STYLES (Fixing the UI) --- */
+/* --- TABLE STYLES --- */
 .table-container {
   background: white;
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  overflow-x: auto; /* Adds scrollbar if screen is too small */
+  overflow-x: auto;
 }
 
 .data-table {
   width: 100%;
-  border-collapse: collapse; /* Removes gaps between cells */
-  min-width: 800px; /* Ensures table doesn't squish too much */
+  border-collapse: collapse;
+  min-width: 800px;
 }
 
 .data-table th {
@@ -235,10 +355,10 @@ body {
 }
 
 .data-table tr:hover {
-  background-color: #f9fafb; /* Subtle hover effect */
+  background-color: #f9fafb;
 }
 
-/* --- BADGES (Status Colors) --- */
+/* --- BADGES --- */
 .badge {
   padding: 6px 12px;
   border-radius: 20px;
@@ -250,12 +370,12 @@ body {
 
 .badge-regular {
   background-color: #dcfce7;
-  color: #166534; /* Green text on light green bg */
+  color: #166534;
 }
 
 .badge-irregular {
   background-color: #ffedd5;
-  color: #9a3412; /* Orange text on light orange bg */
+  color: #9a3412;
 }
 
 /* --- ACTION BUTTONS --- */
@@ -273,7 +393,7 @@ body {
 }
 
 .btn-edit {
-  background-color: #104a28; /* CvSU Green */
+  background-color: #104a28;
   color: white;
 }
 
@@ -293,8 +413,8 @@ body {
 
 /* --- NEW BADGES --- */
 .badge-new {
-  background-color: #dbeafe; /* Light Blue */
-  color: #1e40af;            /* Dark Blue Text */
+  background-color: #dbeafe;
+  color: #1e40af;
   border: 1px solid #bfdbfe;
   display: flex;
   align-items: center;

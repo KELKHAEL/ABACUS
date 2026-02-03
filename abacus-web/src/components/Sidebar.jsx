@@ -1,45 +1,86 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebaseWeb';
+import { auth } from '../firebaseWeb'; // 1. Import auth
+import { signOut } from 'firebase/auth'; // 2. Import signOut
+import { 
+  LayoutDashboard, 
+  Users, 
+  GraduationCap, 
+  FileChartColumn, 
+  LogOut, 
+  Triangle 
+} from 'lucide-react';
+import './Sidebar.css';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/' },
-    { name: 'Manage Students', path: '/students' },
-    { name: 'Manage Grades', path: '/grades' },
-    { name: 'Manage Instructors', path: '/instructors' },
-  ];
+  // Helper function to check if the path is active
+  const isActive = (path) => location.pathname === path;
 
   const handleLogout = async () => {
-    await signOut(auth);
-    window.location.reload();
+    try {
+      console.log("Logging out...");
+      await signOut(auth); // 3. Actually sign out from Firebase
+      navigate('/'); // App.jsx will detect the auth change and show Login automatically
+    } catch (error) {
+      console.error("Error logging out: ", error);
+    }
   };
 
   return (
-    <div className="sidebar">
-      <div className="logo-section">
-        <span style={{color: '#eab308'}}>▲</span> ABACUS ADMIN
+    <aside className="sidebar">
+      {/* Header */}
+      <div className="sidebar-header">
+        <Triangle size={24} fill="#fbbf24" color="#fbbf24" style={{ transform: 'rotate(180deg)' }}/>
+        <h1 className="brand-title">ABACUS ADMIN</h1>
       </div>
 
-      <nav style={{flex: 1}}>
-        {menuItems.map((item) => (
-          <div 
-            key={item.name}
-            className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
-            onClick={() => navigate(item.path)}
-          >
-            {item.name}
-          </div>
-        ))}
+      {/* Navigation */}
+      <nav className="nav-links">
+        
+        <div 
+          className={`nav-item ${isActive('/Dashboard') ? 'active' : ''}`} 
+          onClick={() => navigate('/Dashboard')}
+        >
+          <LayoutDashboard size={20} />
+          <span>Dashboard</span>
+        </div>
+
+        <div 
+          className={`nav-item ${isActive('/Students') ? 'active' : ''}`} 
+          onClick={() => navigate('/Students')}
+        >
+          <GraduationCap size={20} />
+          <span>Manage Students</span>
+        </div>
+
+        <div 
+          className={`nav-item ${isActive('/Grades') ? 'active' : ''}`} 
+          onClick={() => navigate('/Grades')}
+        >
+          <FileChartColumn size={20} />
+          <span>Manage Grades</span>
+        </div>
+
+        <div 
+          className={`nav-item ${isActive('/Instructors') ? 'active' : ''}`} 
+          onClick={() => navigate('/Instructors')}
+        >
+          <Users size={20} />
+          <span>Manage Instructors</span>
+        </div>
+
       </nav>
 
-      <div className="nav-link" onClick={handleLogout} style={{marginTop: 'auto', color: '#fca5a5'}}>
-        Logout ➜
+      {/* Footer / Logout */}
+      <div className="sidebar-footer">
+        <button className="logout-btn" onClick={handleLogout}>
+          <LogOut size={20} />
+          <span>Logout</span>
+        </button>
       </div>
-    </div>
+    </aside>
   );
 }

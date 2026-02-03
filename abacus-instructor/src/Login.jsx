@@ -1,6 +1,9 @@
 import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "./firebaseConfig";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; // Import Firestore functions
+import { auth, db } from "./firebaseConfig"; // Ensure db is exported from your config
+import { Mail, Lock, BookOpen } from "lucide-react"; // Using BookOpen for Instructor theme
+import "./Login.css"; // We will create this file below
 
 const Login = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState("");
@@ -14,7 +17,32 @@ const Login = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // 1. Authenticate User
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Check Role in Firestore (Security Check)
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // STRICT CHECK: Is this user actually a TEACHER?
+        if (userData.role === "TEACHER") {
+          // Success!
+          if(onLoginSuccess) onLoginSuccess(user);
+        } else {
+          // User exists but is NOT a teacher (e.g. Admin or Student)
+          await signOut(auth);
+          setError("Access Denied: You are not authorized as an Instructor.");
+        }
+      } else {
+        // User has no database record
+        await signOut(auth);
+        setError("Account not found in Instructor records.");
+      }
+
     } catch (err) {
       console.error(err);
       setError("Invalid email or password.");
@@ -24,143 +52,71 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <div style={styles.logo}>▲</div>
-          <h1 style={styles.title}>ABACUS INSTRUCTOR</h1>
-          <p style={styles.subtitle}>Sign in to manage quizzes and grades</p>
+    <div className="login-container">
+      {/* LEFT SIDE - BRANDING */}
+      <div className="login-left">
+        <div className="brand-content">
+          <div className="brand-icon-large">
+             <BookOpen size={60} color="#eab308" />
+          </div>
+          <h1>ABACUS</h1>
+          <p>Instructor</p>
+          <div className="brand-divider"></div>
+          <span className="brand-school">Cavite State University - Tanza</span>
         </div>
+      </div>
 
-        <form onSubmit={handleLogin} style={styles.form}>
-          {error && <div style={styles.error}>{error}</div>}
+      {/* RIGHT SIDE - FORM */}
+      <div className="login-right">
+        <div className="login-form-wrapper">
+          <div className="login-header">
+            <h2>Instructor Login</h2>
+            <p>Sign in to manage your quizzes and grades.</p>
+          </div>
           
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email Address</label>
-            <input 
-              type="email" 
-              required
-              style={styles.input}
-              placeholder="instructor@cvsu.edu.ph"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+          <form onSubmit={handleLogin} className="login-form">
+            {error && <div className="error-banner">{error}</div>}
 
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <input 
-              type="password" 
-              required
-              style={styles.input}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+            <div className="input-group">
+              <label>CvSU Email</label>
+              <div className="input-wrapper">
+                <Mail className="input-icon" size={18} />
+                <input 
+                  type="email" 
+                  required
+                  placeholder="instructor@cvsu.edu.ph"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
 
-          <button type="submit" style={styles.button} disabled={loading}>
-            {loading ? "Signing in..." : "LOGIN TO DASHBOARD"}
-          </button>
-        </form>
-        
-        <div style={styles.footer}>
-          <span style={{color: '#888', fontSize: '12px'}}>Restricted Access. Authorized Personnel Only.</span>
+            <div className="input-group">
+              <label>Password</label>
+              <div className="input-wrapper">
+                <Lock className="input-icon" size={18} />
+                <input 
+                  type="password" 
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? "Verifying Access..." : "Access Dashboard"}
+            </button>
+          </form>
+
+          <div className="login-footer">
+            <p>Restricted Access • Authorized Faculty Only</p>
+          </div>
         </div>
       </div>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    height: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#104a28",
-    fontFamily: "'Segoe UI', Roboto, sans-serif",
-  },
-  card: {
-    width: "100%",
-    maxWidth: "400px",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    padding: "40px",
-    boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-  },
-  header: {
-    textAlign: "center",
-    marginBottom: "30px",
-  },
-  logo: {
-    fontSize: "40px",
-    color: "#FFC107", // Brand Yellow
-    marginBottom: "10px",
-  },
-  title: {
-    fontSize: "24px",
-    fontWeight: "bold",
-    color: "#104a28",
-    margin: "0 0 5px 0",
-    letterSpacing: "1px",
-  },
-  subtitle: {
-    fontSize: "14px",
-    color: "#666",
-    margin: 0,
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "20px",
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  label: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#444",
-    textTransform: "uppercase",
-  },
-  input: {
-    padding: "12px 15px",
-    borderRadius: "6px",
-    border: "1px solid #ddd",
-    fontSize: "15px",
-    outline: "none",
-    transition: "border 0.2s",
-  },
-  button: {
-    padding: "14px",
-    borderRadius: "6px",
-    border: "none",
-    backgroundColor: "#FFC107",
-    color: "#104a28",
-    fontWeight: "bold",
-    fontSize: "14px",
-    cursor: "pointer",
-    marginTop: "10px",
-    letterSpacing: "0.5px",
-    transition: "background 0.2s",
-  },
-  error: {
-    backgroundColor: "#ffebee",
-    color: "#c62828",
-    padding: "10px",
-    borderRadius: "4px",
-    fontSize: "13px",
-    textAlign: "center",
-  },
-  footer: {
-    marginTop: "30px",
-    textAlign: "center",
-    borderTop: "1px solid #eee",
-    paddingTop: "20px",
-  }
 };
 
 export default Login;

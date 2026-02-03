@@ -1,0 +1,112 @@
+/* Sidebar Container */
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background-color: #104a28; /* CVSU Green */
+  display: flex;
+  flex-direction: column;
+  /* UPDATED: Increased bottom padding to lift content up */
+  padding: 24px 16px 40px 16px; 
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  left: 0;
+  flex-shrink: 0; 
+  box-sizing: border-box; /* Ensures padding is included in height calculation */
+}
+
+/* Header / Logo Area */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  margin-bottom: 40px;
+}
+
+.brand-title {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+/* Navigation Links */
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-grow: 1; /* Pushes the logout button to the bottom */
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #a8d5ba; /* Light green-grey for inactive text */
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+/* Hover State */
+.nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+/* Active State */
+.nav-item.active {
+  background-color: rgba(255, 255, 255, 0.1); /* Subtle white overlay */
+  color: #fff;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Add a gold accent line for the active state */
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 16px; /* Align with padding */
+  height: 20px;
+  width: 3px;
+  background-color: #fbbf24; /* Gold/Yellow */
+  border-radius: 4px;
+}
+
+/* Logout Section */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  /* UPDATED: Added margin to lift the button further off the edge */
+  margin-bottom: 10px; 
+}
+
+.logout-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: #ffbaba; 
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background-color: rgba(255, 69, 58, 0.1);
+  color: #ff453a;
+}

@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore'; 
 import { db } from '../firebaseWeb';
 import { useNavigate } from 'react-router-dom';
+import { Users, GraduationCap, FileChartColumn, CalendarDays, ArrowRight } from 'lucide-react';
+import './Dashboard.css';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ students: 0, teachers: 0 });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, loading: true });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -13,8 +15,7 @@ export default function Dashboard() {
         // Count Students
         const studentQuery = query(collection(db, "users"), where("role", "==", "STUDENT"));
         const studentSnapshot = await getDocs(studentQuery);
-        const studentCount = studentSnapshot.size; // .size gives the count
-
+        
         // Count Instructors
         const teacherQuery = query(collection(db, "users"), where("role", "==", "TEACHER"));
         const teacherSnapshot = await getDocs(teacherQuery);
@@ -25,12 +26,14 @@ export default function Dashboard() {
         });
 
         setStats({ 
-          students: studentCount, 
-          teachers: realTeachers.length 
+          students: studentSnapshot.size, 
+          teachers: realTeachers.length,
+          loading: false
         });
 
       } catch (error) { 
-        console.error("Error fetching stats:", error); 
+        console.error("Error fetching stats:", error);
+        setStats(prev => ({ ...prev, loading: false }));
       }
     };
 
@@ -38,49 +41,91 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div>
-      <h2 className="welcome-section">Welcome Admin!</h2>
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div>
+          <h1 className="welcome-title">Welcome back, Admin!</h1>
+          <p className="welcome-subtitle">Here is what's happening at ABACUS today.</p>
+        </div>
+        <div className="date-display">
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </div>
+      </header>
       
       <div className="stats-grid">
-        {/* STUDENTS CARD */}
-        <div className="stat-card">
-          <div>
-            <h3>Student Grades</h3>
-            <button className="card-btn" onClick={() => navigate('/grades')}>
-              View
-            </button>
-          </div>
-          <div style={{fontSize: '40px'}}>📊</div>
-        </div>
-
         {/* INSTRUCTORS CARD */}
-        <div className="stat-card">
-          <div>
-            <h3>View Users</h3>
-            <button className="card-btn" onClick={() => navigate('/instructors')}>
-              View
-            </button>
+        <div className="stat-card" onClick={() => navigate('/instructors')}>
+          <div className="card-header">
+            <div className="icon-wrapper green">
+              <Users size={24} color="#104a28" />
+            </div>
+            <span className="card-label">Instructors</span>
           </div>
-          <div style={{fontSize: '40px'}}>💻</div>
+          <div className="card-content">
+            <h2 className="count-number">
+              {stats.loading ? "..." : stats.teachers}
+            </h2>
+            <p className="stat-desc">Active faculty members</p>
+          </div>
+          <div className="card-footer">
+            <span>Manage Instructors</span>
+            <ArrowRight size={16} />
+          </div>
         </div>
 
-        {/* SEMESTER CARD */}
-        <div className="semester-card">
-          <small>ACTIVE SEMESTER</small>
-          <h2>A.Y. 2025-2026</h2>
-          <p>FIRST Semester</p>
+        {/* STUDENTS CARD (Combined Count + Navigation if needed) */}
+        <div className="stat-card" onClick={() => navigate('/Students')}>
+          <div className="card-header">
+            <div className="icon-wrapper gold">
+              <GraduationCap size={24} color="#bfa100" />
+            </div>
+            <span className="card-label">Students</span>
+          </div>
+          <div className="card-content">
+            <h2 className="count-number">
+               {stats.loading ? "..." : stats.students}
+            </h2>
+            <p className="stat-desc">Total enrolled students</p>
+          </div>
+          <div className="card-footer">
+            <span>View All Students</span>
+            <ArrowRight size={16} />
+          </div>
         </div>
-      </div>
 
-      {/* COUNTERS */}
-      <div style={{marginTop: '50px', display: 'flex', gap: '50px', justifyContent: 'center'}}>
-        <div style={{textAlign: 'center'}}>
-          <h1 style={{fontSize: '60px', margin: 0, color: '#104a28'}}>{stats.teachers}</h1>
-          <p style={{margin: 0, color: '#666'}}>Instructors Available</p>
+        {/* GRADES CARD */}
+        <div className="stat-card" onClick={() => navigate('/grades')}>
+          <div className="card-header">
+            <div className="icon-wrapper blue">
+              <FileChartColumn size={24} color="#0056b3" />
+            </div>
+            <span className="card-label">Grades</span>
+          </div>
+          <div className="card-content">
+            <h2 className="count-number">View</h2>
+            <p className="stat-desc">Analytics & Records</p>
+          </div>
+          <div className="card-footer">
+            <span>Check Grades</span>
+            <ArrowRight size={16} />
+          </div>
         </div>
-        <div style={{textAlign: 'center'}}>
-          <h1 style={{fontSize: '60px', margin: 0, color: '#104a28'}}>{stats.students}</h1>
-          <p style={{margin: 0, color: '#666'}}>Students Enrolled</p>
+
+        {/* SEMESTER CARD (Highlight Card) */}
+        <div className="stat-card highlight-card">
+          <div className="card-header">
+            <div className="icon-wrapper white">
+              <CalendarDays size={24} color="#ffffff" />
+            </div>
+            <span className="card-label text-white">Academic Year</span>
+          </div>
+          <div className="card-content">
+            <h2 className="count-number text-white">2025-2026</h2>
+            <p className="stat-desc text-white-70">First Semester</p>
+          </div>
+          <div className="card-footer text-white">
+            <span className="status-badge">Active</span>
+          </div>
         </div>
       </div>
     </div>

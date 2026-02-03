@@ -7,7 +7,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
 
   const [rawData, setRawData] = useState('');
   const [result, setResult] = useState(null);
-  const [activeTab, setActiveTab] = useState('FDT'); // 'FDT', 'MD', 'Variance'
+  const [activeTab, setActiveTab] = useState('FDT'); 
 
   const calculateFDT = () => {
     Keyboard.dismiss();
@@ -34,7 +34,6 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     let cumFreqLess = 0;
     let sum_fx = 0;
 
-    // --- BUILD CLASSES ---
     for (let i = 0; i < 30; i++) {
       const currentUpper = currentLower + c - 1;
       const classData = data.filter(n => n >= currentLower && n <= currentUpper);
@@ -42,10 +41,10 @@ export default function FrequencyDistributionSimulation({ navigation }) {
 
       if (currentLower > HV && f === 0) break;
 
-      const x = (currentLower + currentUpper) / 2; // Class Mark
+      const x = (currentLower + currentUpper) / 2;
       const LCB = currentLower - 0.5; 
       const UCB = currentUpper + 0.5; 
-      const rf = (f / N) * 100; // Relative Frequency
+      const rf = (f / N) * 100;
       const fx = f * x;
       
       cumFreqLess += f;
@@ -56,7 +55,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
         lower: currentLower,
         upper: currentUpper,
         f, x, lcb: LCB, ucb: UCB,
-        rf: rf.toFixed(2), // Keep 2 decimals for rf%
+        rf: rf.toFixed(2),
         cfLess: cumFreqLess,
         fx
       });
@@ -65,7 +64,6 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       if (cumFreqLess >= N) break;
     }
 
-    // >CF column
     let runningTotal = N;
     classes = classes.map(row => {
       const r = { ...row, cfGreater: runningTotal };
@@ -73,17 +71,31 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       return r;
     });
 
-    // --- STATS CALCULATIONS ---
     const mean = sum_fx / N;
+
+    // Median/Mode Logic
+    const medianPos = N / 2;
+    const medianClass = classes.find(cls => cls.cfLess >= medianPos);
+    const mIdx = classes.indexOf(medianClass);
+    const Fb = mIdx > 0 ? classes[mIdx - 1].cfLess : 0;
+    const median = medianClass.lcb + ((medianPos - Fb) / medianClass.f) * c;
+
+    const maxFreq = Math.max(...classes.map(cls => cls.f));
+    const modalClass = classes.find(cls => cls.f === maxFreq);
+    const moIdx = classes.indexOf(modalClass);
+    const f1 = modalClass.f;
+    const f0 = moIdx > 0 ? classes[moIdx - 1].f : 0;
+    const f2 = moIdx < classes.length - 1 ? classes[moIdx + 1].f : 0;
+    const mode = modalClass.lcb + ((f1 - f0) / ((f1 - f0) + (f1 - f2))) * c;
+
     let sum_f_abs_dev = 0; 
     let sum_f_sq_dev = 0;
 
     const finalClasses = classes.map(row => {
-      const dev = Math.abs(row.x - mean); // |x - x̄|
-      const f_dev = row.f * dev;          // f|x - x̄|
-      const sq_dev = Math.pow(row.x - mean, 2); // (x - x̄)²
-      const f_sq_dev = row.f * sq_dev;    // f(x - x̄)²
-
+      const dev = Math.abs(row.x - mean); 
+      const f_dev = row.f * dev;          
+      const sq_dev = Math.pow(row.x - mean, 2); 
+      const f_sq_dev = row.f * sq_dev;    
       sum_f_abs_dev += f_dev;
       sum_f_sq_dev += f_sq_dev;
 
@@ -96,20 +108,25 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       };
     });
 
-    const meanDeviation = sum_f_abs_dev / N;
-    const variance = sum_f_sq_dev / (N - 1);
-    const stdDev = Math.sqrt(variance);
-
     setResult({
-      stats: { N, HV, LV, Range, k: k_exact.toFixed(3), k_rounded: k, c: c_calc.toFixed(2), c_rounded: c },
+      stats: { N, HV, LV, Range, k_rounded: k, c_rounded: c },
       table: finalClasses,
-      ct: { sum_fx: sum_fx.toFixed(2), mean: mean.toFixed(2) },
+      ct: { 
+        sum_fx: sum_fx.toFixed(2), 
+        mean: mean.toFixed(2), 
+        median: median.toFixed(2), 
+        mode: mode.toFixed(2),
+        medianClass: medianClass.classStr,
+        modalClass: modalClass.classStr,
+        lmd: medianClass.lcb, fmd: medianClass.f, fb: Fb,
+        lmo: modalClass.lcb, f0, f1, f2
+      },
       disp: {
+        meanDeviation: (sum_f_abs_dev / N).toFixed(2),
+        variance: (sum_f_sq_dev / (N - 1)).toFixed(2),
+        stdDev: Math.sqrt(sum_f_sq_dev / (N - 1)).toFixed(2),
         sum_f_abs_dev: sum_f_abs_dev.toFixed(2),
-        sum_f_sq_dev: sum_f_sq_dev.toFixed(2),
-        meanDeviation: meanDeviation.toFixed(2),
-        variance: variance.toFixed(2),
-        stdDev: stdDev.toFixed(2)
+        sum_f_sq_dev: sum_f_sq_dev.toFixed(2)
       }
     });
   };
@@ -127,11 +144,9 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        
-        {/* INPUT CARD */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>DATA SET INPUT</Text>
-          <TextInput style={styles.textArea} multiline placeholder="e.g. 50, 55, 60..." placeholderTextColor="#ccc" value={rawData} onChangeText={setRawData} />
+          <TextInput style={styles.textArea} multiline placeholder="e.g. 50, 55, 60..." value={rawData} onChangeText={setRawData} />
           <View style={styles.btnContainer}>
             <View style={styles.secondaryBtnRow}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={clear}><Text style={styles.secondaryBtnText}>Clear Input</Text></TouchableOpacity>
@@ -143,32 +158,28 @@ export default function FrequencyDistributionSimulation({ navigation }) {
 
         {result && (
           <View>
-            {/* TABS */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity style={[styles.tab, activeTab === 'FDT' && styles.activeTab]} onPress={() => setActiveTab('FDT')}>
-                <Text style={[styles.tabText, activeTab === 'FDT' && styles.activeTabText]}>FDT Table</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.tab, activeTab === 'MD' && styles.activeTab]} onPress={() => setActiveTab('MD')}>
-                <Text style={[styles.tabText, activeTab === 'MD' && styles.activeTabText]}>Mean Deviation</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.tab, activeTab === 'Variance' && styles.activeTab]} onPress={() => setActiveTab('Variance')}>
-                <Text style={[styles.tabText, activeTab === 'Variance' && styles.activeTabText]}>Variance & SD</Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
+              <TouchableOpacity style={[styles.tab, activeTab === 'FDT' && styles.activeTab]} onPress={() => setActiveTab('FDT')}><Text style={[styles.tabText, activeTab === 'FDT' && styles.activeTabText]}>FDT Table</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.tab, activeTab === 'MD' && styles.activeTab]} onPress={() => setActiveTab('MD')}><Text style={[styles.tabText, activeTab === 'MD' && styles.activeTabText]}>Mean Deviation</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.tab, activeTab === 'Variance' && styles.activeTab]} onPress={() => setActiveTab('Variance')}><Text style={[styles.tabText, activeTab === 'Variance' && styles.activeTabText]}>Variance & SD</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.tab, activeTab === 'HowTo' && styles.activeTab]} onPress={() => setActiveTab('HowTo')}><Text style={[styles.tabText, activeTab === 'HowTo' && styles.activeTabText]}>How to Solve</Text></TouchableOpacity>
+            </ScrollView>
 
-            {/* === VIEW 1: BASIC FDT TABLE === */}
             {activeTab === 'FDT' && (
               <View>
+                <View style={styles.centralTendencyRow}>
+                    <View style={[styles.ctBox, {borderBottomColor: '#104a28'}]}><Text style={styles.ctLabel}>MEAN</Text><Text style={styles.ctValue}>{result.ct.mean}</Text></View>
+                    <View style={[styles.ctBox, {borderBottomColor: '#2D7FF9'}]}><Text style={styles.ctLabel}>MEDIAN</Text><Text style={styles.ctValue}>{result.ct.median}</Text></View>
+                    <View style={[styles.ctBox, {borderBottomColor: '#F25487'}]}><Text style={styles.ctLabel}>MODE</Text><Text style={styles.ctValue}>{result.ct.mode}</Text></View>
+                </View>
                 <View style={styles.stepCard}>
                   <Text style={styles.stepTitle}>FDT Construction Steps:</Text>
                   <Text style={styles.stepItem}>1. Range (R) = HV - LV = {result.stats.Range}</Text>
-                  <Text style={styles.stepItem}>2. Classes (k) = 1 + 3.322 log(N) ≈ {result.stats.k_rounded}</Text>
-                  <Text style={styles.stepItem}>3. Class Size (c) = R ÷ k ≈ {result.stats.c_rounded}</Text>
+                  <Text style={styles.stepItem}>2. Classes (k) ≈ {result.stats.k_rounded}</Text>
+                  <Text style={styles.stepItem}>3. Class Size (c) ≈ {result.stats.c_rounded}</Text>
                 </View>
-
                 <View style={styles.tableCard}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                    <View>
+                  <ScrollView horizontal><View>
                       <View style={[styles.row, styles.headerRow]}>
                         <Text style={[styles.cell, styles.headerCell, {width: 80}]}>Classes</Text>
                         <Text style={[styles.cell, styles.headerCell, {width: 40}]}>f</Text>
@@ -196,13 +207,12 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                         <Text style={[styles.cell, {width: 40, fontWeight:'bold'}]}>{result.stats.N}</Text>
                         <Text style={[styles.cell, {flex: 1}]}></Text>
                       </View>
-                    </View>
-                  </ScrollView>
+                  </View></ScrollView>
                 </View>
               </View>
             )}
 
-            {/* === VIEW 2: MEAN DEVIATION TABLE === */}
+            {/* MEAN DEVIATION TAB */}
             {activeTab === 'MD' && (
               <View>
                 <View style={[styles.statCard, {borderLeftColor: '#F25487'}]}>
@@ -213,10 +223,8 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                     <Text style={styles.stepTextCentered}>{result.disp.sum_f_abs_dev} ÷ {result.stats.N} = {result.disp.meanDeviation}</Text>
                   </View>
                 </View>
-
                 <View style={styles.tableCard}>
-                  <ScrollView horizontal>
-                    <View>
+                  <ScrollView horizontal><View>
                       <View style={[styles.row, {backgroundColor: '#F25487'}]}>
                         <Text style={[styles.cell, styles.headerCell, {width: 80}]}>Classes</Text>
                         <Text style={[styles.cell, styles.headerCell, {width: 40}]}>f</Text>
@@ -243,36 +251,27 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                         <Text style={[styles.cell, {width: 70}]}>-</Text>
                         <Text style={[styles.cell, {width: 80, fontWeight:'bold', color: '#F25487'}]}>{result.disp.sum_f_abs_dev}</Text>
                       </View>
-                    </View>
-                  </ScrollView>
+                  </View></ScrollView>
                 </View>
               </View>
             )}
 
-            {/* === VIEW 3: VARIANCE TABLE === */}
+            {/* VARIANCE TAB */}
             {activeTab === 'Variance' && (
               <View>
                 <View style={[styles.statCard, {borderLeftColor: '#7B61FF'}]}>
                   <Text style={styles.statTitleCentered}>VARIANCE & STD DEV</Text>
                   <View style={{flexDirection: 'row', justifyContent: 'space-around', width: '100%'}}>
-                    <View style={{alignItems:'center'}}>
-                      <Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s² = {result.disp.variance}</Text>
-                      <Text style={{fontSize: 10, color:'#888'}}>VARIANCE</Text>
-                    </View>
-                    <View style={{alignItems:'center'}}>
-                      <Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s = {result.disp.stdDev}</Text>
-                      <Text style={{fontSize: 10, color:'#888'}}>STD. DEV</Text>
-                    </View>
+                    <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s² = {result.disp.variance}</Text><Text style={{fontSize: 10, color:'#888'}}>VARIANCE</Text></View>
+                    <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s = {result.disp.stdDev}</Text><Text style={{fontSize: 10, color:'#888'}}>STD. DEV</Text></View>
                   </View>
                   <View style={styles.subStep}>
                     <Text style={styles.stepTextCentered}>Variance = Σ f(x - x̄)² / (n - 1)</Text>
                     <Text style={styles.stepTextCentered}>{result.disp.sum_f_sq_dev} ÷ {result.stats.N - 1} = {result.disp.variance}</Text>
                   </View>
                 </View>
-
                 <View style={styles.tableCard}>
-                  <ScrollView horizontal>
-                    <View>
+                  <ScrollView horizontal><View>
                       <View style={[styles.row, {backgroundColor: '#7B61FF'}]}>
                         <Text style={[styles.cell, styles.headerCell, {width: 80}]}>Classes</Text>
                         <Text style={[styles.cell, styles.headerCell, {width: 40}]}>f</Text>
@@ -294,21 +293,81 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                       <View style={[styles.row, {borderTopWidth: 2, backgroundColor: '#f3e5f5'}]}>
                         <Text style={[styles.cell, {width: 80, fontWeight:'bold'}]}>Total</Text>
                         <Text style={[styles.cell, {width: 40, fontWeight:'bold'}]}>{result.stats.N}</Text>
-                        <Text style={[styles.cell, {width: 50}]}>-</Text>
-                        <Text style={[styles.cell, {width: 70}]}>-</Text>
-                        <Text style={[styles.cell, {width: 80}]}>-</Text>
+                        <Text style={[styles.cell, {flex: 3}]}></Text>
                         <Text style={[styles.cell, {width: 90, fontWeight:'bold', color: '#7B61FF'}]}>{result.disp.sum_f_sq_dev}</Text>
                       </View>
-                    </View>
-                  </ScrollView>
+                  </View></ScrollView>
                 </View>
               </View>
             )}
 
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            {/* HOW TO SOLVE TAB */}
+            {activeTab === 'HowTo' && (
+              <View>
+              <Text style={styles.sectionHeader}>Central Tendency</Text>
+              
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>1. Mean (x̄)</Text>
+                  <Text style={styles.formulaText}>Formula: x̄ = Σfx / n</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>x̄ = {result.ct.sum_fx} / {result.stats.N}</Text>
+                      <Text style={styles.finalAnswerText}>x̄ = {result.ct.mean}</Text>
+                  </View>
+              </View>
+
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>2. Median (x̃)</Text>
+                  <Text style={styles.stepDtl}>• n/2 = {result.stats.N/2} | Class: {result.ct.medianClass}</Text>
+                  <Text style={styles.formulaText}>Formula: x̃ = Lmd + c [ (n/2 - Fb) / fmd ]</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>x̃ = {result.ct.lmd} + {result.stats.c_rounded} [ ({result.stats.N/2} - {result.ct.fb}) / {result.ct.fmd} ]</Text>
+                      <Text style={styles.finalAnswerText}>x̃ = {result.ct.median}</Text>
+                  </View>
+              </View>
+
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>3. Mode (x̂)</Text>
+                  <Text style={styles.formulaText}>Formula: x̂ = Lmo + c [ (f1 - f0) / ((f1 - f0) + (f1 - f2)) ]</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>x̂ = {result.ct.lmo} + {result.stats.c_rounded} [ ({result.ct.f1} - {result.ct.f0}) / (({result.ct.f1} - {result.ct.f0}) + ({result.ct.f1} - {result.ct.f2})) ]</Text>
+                      <Text style={styles.finalAnswerText}>x̂ = {result.ct.mode}</Text>
+                  </View>
+              </View>
+
+              <Text style={styles.sectionHeader}>Measures of Dispersion</Text>
+
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>4. Mean Deviation (MD)</Text>
+                  <Text style={styles.formulaText}>Formula: MD = Σf|x - x̄| / n</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>MD = {result.disp.sum_f_abs_dev} / {result.stats.N}</Text>
+                      <Text style={styles.finalAnswerText}>MD = {result.disp.meanDeviation}</Text>
+                  </View>
+              </View>
+
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>5. Variance (s²)</Text>
+                  <Text style={styles.formulaText}>Formula: s² = Σf(x - x̄)² / (n - 1)</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>s² = {result.disp.sum_f_sq_dev} / ({result.stats.N} - 1)</Text>
+                      <Text style={styles.finalAnswerText}>s² = {result.disp.variance}</Text>
+                  </View>
+              </View>
+
+              <View style={styles.solveCard}>
+                  <Text style={styles.solveTitle}>6. Standard Deviation (s)</Text>
+                  <Text style={styles.formulaText}>Formula: s = √s²</Text>
+                  <View style={styles.substitutionBox}>
+                      <Text style={styles.subTextMain}>s = √{result.disp.variance}</Text>
+                      <Text style={styles.finalAnswerText}>s = {result.disp.stdDev}</Text>
+                  </View>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+    </ScrollView>
+  </SafeAreaView>
   );
 }
 
@@ -318,44 +377,45 @@ const styles = StyleSheet.create({
   backButton: { marginRight: 15 },
   headerTitle: { fontSize: 18, fontWeight: '900', color: '#333' },
   content: { padding: 20, paddingBottom: 50 },
-
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, elevation: 2 },
   cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 10 },
-  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#eee', minHeight: 80, textAlignVertical: 'top', color: '#333', fontSize: 16 },
-
+  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#eee', minHeight: 80, textAlignVertical: 'top' },
   btnContainer: { marginTop: 15, gap: 10 },
   secondaryBtnRow: { flexDirection: 'row', gap: 10 },
-  secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', backgroundColor: '#fff' },
-  secondaryBtnText: { fontWeight: 'bold', color: '#666', fontSize: 13 },
+  secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
+  secondaryBtnText: { fontWeight: 'bold', color: '#666' },
   loadBtn: { backgroundColor: '#E3F2FD', borderColor: '#2D7FF9' },
   loadBtnText: { color: '#2D7FF9' },
-  primaryBtn: { width: '100%', paddingVertical: 16, borderRadius: 12, backgroundColor: '#104a28', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-  primaryBtnText: { fontWeight: '900', color: '#fff', fontSize: 16, letterSpacing: 1 },
-
-  tabContainer: { flexDirection: 'row', marginBottom: 20, backgroundColor: '#eee', borderRadius: 10, padding: 4 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, justifyContent: 'center' },
-  activeTab: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  tabText: { fontWeight: 'bold', color: '#666', fontSize: 12, textAlign: 'center' },
-  activeTabText: { color: '#104a28' },
-
+  primaryBtn: { width: '100%', paddingVertical: 16, borderRadius: 12, backgroundColor: '#104a28', alignItems: 'center' },
+  primaryBtnText: { fontWeight: '900', color: '#fff' },
+  tabContainer: { flexDirection: 'row', marginBottom: 20 },
+  tab: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#eee', marginRight: 8 },
+  activeTab: { backgroundColor: '#104a28' },
+  tabText: { fontWeight: 'bold', color: '#666', fontSize: 12 },
+  activeTabText: { color: '#fff' },
+  centralTendencyRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, gap: 8 },
+  ctBox: { flex: 1, backgroundColor: '#fff', padding: 12, borderRadius: 10, alignItems: 'center', borderBottomWidth: 3, elevation: 1 },
+  ctLabel: { fontSize: 10, fontWeight: 'bold', color: '#888' },
+  ctValue: { fontSize: 18, fontWeight: '900', color: '#333' },
   stepCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#eee' },
   stepTitle: { fontWeight: 'bold', marginBottom: 10, color: '#333', textDecorationLine: 'underline' },
   stepItem: { fontSize: 13, color: '#555', marginBottom: 8 },
-
-  tableCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#eee', elevation: 2 },
-  row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 12, paddingHorizontal: 5 },
+  tableCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#eee' },
+  row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 12 },
   headerRow: { backgroundColor: '#104a28' },
   oddRow: { backgroundColor: '#f9f9f9' },
-  cell: { textAlign: 'center', fontSize: 12, color: '#333' },
+  cell: { textAlign: 'center', fontSize: 11, color: '#333' },
   headerCell: { fontWeight: 'bold', color: '#fff' },
-
-  statCard: { 
-    backgroundColor: '#fff', padding: 25, borderRadius: 16, borderWidth: 1, borderColor: '#eee',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
-    alignItems: 'center', marginBottom: 20, borderLeftWidth: 5, borderLeftColor: '#2D7FF9'
-  },
-  statTitleCentered: { fontSize: 14, fontWeight: 'bold', color: '#888', letterSpacing: 1, textAlign: 'center', textTransform: 'uppercase' },
-  statResultBig: { fontSize: 42, fontWeight: '900', color: '#2D7FF9', marginVertical: 10, textAlign: 'center' },
+  solveCard: { backgroundColor: '#fff', padding: 18, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#eee' },
+  solveTitle: { fontWeight: 'bold', fontSize: 15, color: '#104a28', marginBottom: 8 },
+  formulaText: { fontStyle: 'italic', color: '#555', marginBottom: 10, fontSize: 12 },
+  stepDtl: { fontSize: 11, color: '#777', marginBottom: 4 },
+  substitutionBox: { backgroundColor: '#f8f9fa', padding: 12, borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#104a28' },
+  subTextMain: { fontSize: 13, color: '#333' },
+  finalAnswerText: { fontSize: 17, fontWeight: 'bold', color: '#104a28', marginTop: 8 },
+  statCard: { backgroundColor: '#fff', padding: 25, borderRadius: 16, alignItems: 'center', marginBottom: 20, borderLeftWidth: 5 },
+  statTitleCentered: { fontSize: 14, fontWeight: 'bold', color: '#888' },
+  statResultBig: { fontSize: 42, fontWeight: '900', marginVertical: 10 },
   subStep: { marginTop: 10, backgroundColor: '#f9f9f9', padding: 15, borderRadius: 12, width: '100%' },
   stepTextCentered: { fontSize: 16, color: '#333', textAlign: 'center', fontWeight: 'bold' }
 });

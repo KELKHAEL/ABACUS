@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, ActivityIndicator, TouchableOpacity, StatusBar } from 'react-native';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; 
 import { auth, db } from '../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,26 +8,37 @@ export default function MyGradesScreen({ navigation }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [studentName, setStudentName] = useState("Student");
+  const [quizStatusMap, setQuizStatusMap] = useState({}); // Stores quiz statuses
 
   useEffect(() => {
-    fetchGrades();
+    fetchGradesAndStatus();
   }, []);
 
-  const fetchGrades = async () => {
+  const fetchGradesAndStatus = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
+      if (!user) return;
 
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setStudentName(userData.fullName || "Student");
-          const history = userData.gradesList || [];
-          history.reverse(); 
-          setGrades(history);
-        }
+      // 1. Fetch User Grades
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        setStudentName(userData.fullName || "Student");
+        const history = userData.gradesList || [];
+        history.reverse(); 
+        setGrades(history);
       }
+
+      // 2. Fetch Quiz Statuses (to check for disabled/deleted ones)
+      const quizzesSnap = await getDocs(collection(db, "quizzes"));
+      const statusMap = {};
+      quizzesSnap.forEach((doc) => {
+          statusMap[doc.id] = doc.data().status; // 'active' or 'deleted'
+      });
+      setQuizStatusMap(statusMap);
+
     } catch (error) {
       console.error("Error fetching grades:", error);
     } finally {
@@ -38,22 +49,46 @@ export default function MyGradesScreen({ navigation }) {
   const renderGradeItem = ({ item }) => {
     const score = parseFloat(item.grade);
     const isPassing = score >= 75;
+    
+    // Check if the quiz is deleted in the map
+    // item.quizId comes from when you saved the grade
+    const isDisabled = quizStatusMap[item.quizId] === 'deleted';
 
     return (
-      <View style={styles.gradeCard}>
+      <View style={[styles.gradeCard, isDisabled && styles.disabledCard]}>
         <View style={styles.cardLeft}>
-          <Text style={styles.subjectCode}>{item.subjectCode || "QUIZ"}</Text>
-          <Text style={styles.subjectTitle}>{item.subjectTitle}</Text>
+          <Text style={[styles.subjectCode, isDisabled && styles.disabledText]}>
+            {item.subjectCode || "QUIZ"} 
+            {isDisabled && " (DISABLED)"}
+          </Text>
+          <Text style={[styles.subjectTitle, isDisabled && styles.disabledText]}>
+            {item.subjectTitle}
+          </Text>
           <Text style={styles.date}>{new Date(item.dateAdded).toDateString()}</Text>
         </View>
         
         <View style={styles.cardRight}>
-          <Text style={[styles.gradeText, { color: isPassing ? '#104a28' : '#d32f2f' }]}>
+          <Text style={[
+              styles.gradeText, 
+              isDisabled ? styles.disabledText : { color: isPassing ? '#104a28' : '#d32f2f' }
+            ]}>
             {item.grade}%
           </Text>
-          <View style={[styles.badge, { backgroundColor: isPassing ? '#e8f5e9' : '#ffebee' }]}>
-            <Text style={[styles.badgeText, { color: isPassing ? '#104a28' : '#d32f2f' }]}>
-              {isPassing ? "PASSED" : "FAILED"}
+          
+          {/* Badge */}
+          <View style={[
+              styles.badge, 
+              isDisabled 
+                ? { backgroundColor: '#e0e0e0' } 
+                : { backgroundColor: isPassing ? '#e8f5e9' : '#ffebee' }
+            ]}>
+            <Text style={[
+                styles.badgeText, 
+                isDisabled 
+                  ? { color: '#888' } 
+                  : { color: isPassing ? '#104a28' : '#d32f2f' }
+              ]}>
+              {isDisabled ? "ARCHIVED" : (isPassing ? "PASSED" : "FAILED")}
             </Text>
           </View>
         </View>
@@ -114,6 +149,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
   },
+  // New Styles for Disabled State
+  disabledCard: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
+    borderWidth: 1,
+    shadowOpacity: 0,
+    elevation: 0
+  },
+  disabledText: {
+    color: '#999'
+  },
+
   cardLeft: { flex: 1, marginRight: 10 },
   subjectCode: { fontSize: 12, fontWeight: 'bold', color: '#888', letterSpacing: 1, marginBottom: 4 },
   subjectTitle: { fontSize: 16, fontWeight: '700', color: '#333', marginBottom: 4 },

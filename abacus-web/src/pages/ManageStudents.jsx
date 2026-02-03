@@ -1,12 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, createUserAccount } from '../firebaseWeb';
+import { 
+  Search, 
+  Plus, 
+  Filter, 
+  Edit, 
+  Trash2, 
+  RefreshCw, 
+  User, 
+  Mail,
+  Key  // <--- Added Key Icon
+} from 'lucide-react';
+import './ManageStudents.css';
 
 export default function ManageStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterSection, setFilterSection] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
   // Modal & Edit States
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -45,11 +62,12 @@ export default function ManageStudents() {
       }));
       
       const sortedList = studentList.sort((a, b) => {
+        // Sort new students to top
         const aIsNew = a.studentId === "To be assigned" || !a.studentId;
         const bIsNew = b.studentId === "To be assigned" || !b.studentId;
         if (aIsNew && !bIsNew) return -1;
         if (!aIsNew && bIsNew) return 1;
-        return 0; 
+        return a.fullName.localeCompare(b.fullName); 
       });
 
       setStudents(sortedList);
@@ -67,14 +85,9 @@ export default function ManageStudents() {
     setIsEditing(false);
     setEditId(null);
     setFormData({ 
-      fullName: '', 
-      email: '', 
-      studentId: '', 
-      program: 'BSIT', 
-      yearLevel: '1', 
-      section: '1', 
-      status: 'Regular', 
-      password: generatePassword()
+      fullName: '', email: '', studentId: '', 
+      program: 'BSIT', yearLevel: '1', section: '1', 
+      status: 'Regular', password: generatePassword()
     });
     setShowModal(true);
   };
@@ -82,7 +95,6 @@ export default function ManageStudents() {
   const openEditModal = (student) => {
     setIsEditing(true);
     setEditId(student.id);
-    
     const cleanStudentId = student.studentId === "To be assigned" ? "" : student.studentId;
     
     setFormData({
@@ -154,36 +166,108 @@ export default function ManageStudents() {
     }
   };
 
-  const filteredStudents = students.filter(student => 
-    student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.studentId?.includes(searchTerm)
-  );
+  // --- NEW ADMIN RESET FUNCTION ---
+  const handleAdminReset = async (student) => {
+    const newPassword = window.prompt(`Enter new password for ${student.fullName}:`, "cvsu1234");
+    
+    if (!newPassword) return; // Cancelled
+    if (newPassword.length < 6) return alert("Password must be at least 6 characters.");
+
+    try {
+      // Call LOCAL server (Make sure npm run server is running)
+      const response = await fetch('http://localhost:5000/admin-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: student.id, 
+          new_password: newPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`Success! Password for ${student.fullName} is now: ${newPassword}`);
+      } else {
+        throw new Error(data.error);
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Failed to reset. Ensure 'npm run server' is running.");
+    }
+  };
+
+  // MULTI-FILTER LOGIC
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          student.studentId?.includes(searchTerm);
+    
+    const matchesYear = filterYear ? student.yearLevel === filterYear : true;
+    const matchesSection = filterSection ? student.section === filterSection : true;
+    const matchesStatus = filterStatus ? student.status === filterStatus : true;
+
+    return matchesSearch && matchesYear && matchesSection && matchesStatus;
+  });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterYear('');
+    setFilterSection('');
+    setFilterStatus('');
+  };
 
   return (
-    <div style={{padding: '20px'}}>
+    <div className="page-container">
       {/* HEADER */}
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px'}}>
-        <h1 style={{margin: 0, color: '#104a28'}}>Manage Students</h1>
-        <button 
-          onClick={openAddModal}
-          style={{backgroundColor: '#104a28', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}
-        >
-          + Add Student Manually
+      <div className="page-header">
+        <h1 className="page-title">Manage Students</h1>
+        <button className="btn-primary" onClick={openAddModal}>
+          <Plus size={20} />
+          Add Student Manually
         </button>
       </div>
 
-      {/* SEARCH */}
-      <div className="filters" style={{background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '20px'}}>
-        <input 
-          placeholder="Search by Name or ID..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{padding: '10px', borderRadius: '6px', border: '1px solid #ddd', width: '100%'}}
-        />
+      {/* FILTER BAR */}
+      <div className="filter-bar">
+        <div className="search-wrapper">
+          <Search className="search-icon" size={18} />
+          <input 
+            className="search-input"
+            placeholder="Search by Name or ID..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <select className="filter-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+          <option value="">All Years</option>
+          <option value="1">1st Year</option>
+          <option value="2">2nd Year</option>
+          <option value="3">3rd Year</option>
+          <option value="4">4th Year</option>
+        </select>
+
+        <select className="filter-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
+          <option value="">All Sections</option>
+          <option value="1">Section 1</option>
+          <option value="2">Section 2</option>
+          <option value="3">Section 3</option>
+        </select>
+
+        <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="">All Status</option>
+          <option value="Regular">Regular</option>
+          <option value="Irregular">Irregular</option>
+        </select>
+
+        <button className="btn-reset" onClick={clearFilters}>
+          Reset
+        </button>
       </div>
 
       {/* TABLE */}
-      <div className="table-container">
+      <div className="table-card">
         <table className="data-table">
           <thead>
             <tr>
@@ -191,96 +275,162 @@ export default function ManageStudents() {
               <th>Status</th>
               <th>Student ID</th>
               <th>Year/Sec</th>
-              <th>Login Type / Password</th>
-              <th>Actions</th>
+              <th>Access Key / Password</th>
+              <th style={{textAlign: 'right'}}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px'}}>Loading...</td></tr> : 
-             filteredStudents.length === 0 ? <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px'}}>No students found.</td></tr> :
-             filteredStudents.map((student) => {
-               const isNew = student.studentId === "To be assigned" || !student.studentId;
-               
-               return (
-                <tr key={student.id} style={isNew ? {backgroundColor: '#f0f9ff'} : {}}>
-                  <td style={{fontWeight: 'bold'}}>
-                    {student.fullName}
-                    {isNew && <div style={{fontSize: '10px', color: '#1e40af', marginTop: '4px'}}>📩 {student.email}</div>}
-                  </td>
-                  
-                  {/* STATUS BADGE */}
-                  <td>
-                    {isNew ? (
-                      <span className="badge badge-new">⚠️ NEW</span>
-                    ) : (
-                      <span className={student.status === 'Irregular' ? 'badge badge-irregular' : 'badge badge-regular'}>
-                        {student.status || 'Regular'}
-                      </span>
-                    )}
-                  </td>
+            {loading ? (
+              <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>Loading Students...</td></tr>
+            ) : filteredStudents.length === 0 ? (
+              <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px', color: '#888'}}>No students found matching filters.</td></tr>
+            ) : (
+              filteredStudents.map((student) => {
+                const isNew = student.studentId === "To be assigned" || !student.studentId;
+                
+                return (
+                  <tr key={student.id}>
+                    <td>
+                      {/* UPDATED: Added Icons for Name and Email */}
+                      <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <User size={16} color="#104a28"/>
+                        {student.fullName}
+                      </div>
+                      <div style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px'}}>
+                        <Mail size={12}/>
+                        {student.email}
+                      </div>
+                    </td>
+                    
+                    <td>
+                      {isNew ? (
+                        <span className="badge badge-new">Needs Verification</span>
+                      ) : (
+                        <span className={`badge ${student.status === 'Irregular' ? 'badge-irregular' : 'badge-regular'}`}>
+                          {student.status || 'Regular'}
+                        </span>
+                      )}
+                    </td>
 
-                  <td style={isNew ? {color: '#999', fontStyle: 'italic'} : {}}>{student.studentId || 'N/A'}</td>
-                  
-                  <td>{student.yearLevel} - {student.section}</td>
-                  
-                  {/* PASSWORD COLUMN */}
-                  <td>
-                    {student.defaultPassword ? (
-                      <span style={{fontFamily: 'monospace', color: '#104a28'}}>{student.defaultPassword}</span>
-                    ) : (
-                      <span className="google-tag">
-                        <span style={{color: '#4285F4'}}>G</span> Google Account
-                      </span>
-                    )}
-                  </td>
+                    <td style={{fontFamily: 'monospace', color: isNew ? '#ef4444' : '#374151'}}>
+                      {student.studentId || 'Not Assigned'}
+                    </td>
+                    
+                    <td>{student.yearLevel} - {student.section}</td>
+                    
+                    <td>
+                      {student.defaultPassword ? (
+                        // UPDATED: Used class instead of inline style
+                        <span className="password-box">
+                          {student.defaultPassword}
+                        </span>
+                      ) : (
+                        <span className="google-tag">
+                           <span style={{color: '#4285F4', fontWeight: 'bold'}}>G</span> Google
+                        </span>
+                      )}
+                    </td>
 
-                  <td>
-                    <div style={{display: 'flex', gap: '10px'}}>
-                      <button className="action-btn btn-edit" onClick={() => openEditModal(student)}>
-                        {isNew ? '✅ Verify' : '✎ Edit'}
-                      </button>
-                      <button className="action-btn btn-delete" onClick={() => handleDelete(student.id)}>🗑 Delete</button>
-                    </div>
-                  </td>
-                </tr>
-               );
-             })}
+                    <td>
+                      <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
+                        
+                        {/* --- NEW RESET PASSWORD BUTTON --- */}
+                        {!isNew && (
+                          <button 
+                            className="btn-icon" 
+                            style={{color: '#d97706', background: '#fef3c7', marginRight: '5px'}}
+                            onClick={() => handleAdminReset(student)} 
+                            title="Reset Password"
+                          >
+                            <Key size={18} />
+                          </button>
+                        )}
+                        {/* --------------------------------- */}
+
+                        <button className={`btn-icon ${isNew ? 'btn-verify' : 'btn-edit'}`} onClick={() => openEditModal(student)} title="Edit / Verify">
+                           {isNew ? "Verify" : <Edit size={18} />}
+                        </button>
+                        <button className="btn-icon btn-delete" onClick={() => handleDelete(student.id)} title="Delete">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
 
       {/* MODAL */}
       {showModal && (
-        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000}}>
-          <div style={{background: 'white', padding: '30px', borderRadius: '12px', width: '400px'}}>
-            <h2 style={{marginTop: 0, color: '#104a28'}}>{isEditing ? 'Verify / Edit Student' : 'Add New Student'}</h2>
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2 className="modal-title">{isEditing ? 'Edit Student Details' : 'Add New Student'}</h2>
+            </div>
             
-            <form onSubmit={handleSaveStudent} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-              <input required placeholder="Full Name" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} style={modalInputStyle} />
-              
-              <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
-                <label style={{fontSize: '12px', fontWeight: 'bold', color: '#666'}}>Student ID *</label>
-                <input required placeholder="Enter Student ID (e.g. 20221045)" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value})} style={{...modalInputStyle, borderColor: '#eab308', borderWidth: '2px'}} />
+            <form onSubmit={handleSaveStudent}>
+              <div className="form-group">
+                <label className="form-label">Full Name</label>
+                <input className="form-input" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
               </div>
 
-              <input required type="email" placeholder="CvSU Email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={isEditing} style={{...modalInputStyle, background: isEditing ? '#f3f4f6' : 'white'}} />
-              {!isEditing && (
-                <div style={{display: 'flex', gap: '5px', alignItems: 'center'}}>
-                   <input required type="text" value={formData.password} readOnly style={{...modalInputStyle, background: '#f0fdf4', color: '#166534', fontWeight: 'bold'}} />
-                   <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '10px', cursor: 'pointer'}}>↻</button>
+              <div className="form-group">
+                <label className="form-label">Student ID <span style={{color: '#ca8a04'}}>(Required)</span></label>
+                <input className="form-input" required placeholder="e.g. 20221045" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value})} style={{borderColor: '#fbbf24'}}/>
+              </div>
+
+              <div style={{display: 'flex', gap: '16px'}}>
+                <div className="form-group" style={{flex: 1}}>
+                  <label className="form-label">Email</label>
+                  <input className="form-input" type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={isEditing} style={{background: isEditing ? '#f3f4f6' : 'white'}} />
                 </div>
-              )}
-
-              <div style={{display: 'flex', gap: '10px'}}>
-                <select style={modalInputStyle} value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}><option value="1">Year 1</option><option value="2">Year 2</option><option value="3">Year 3</option><option value="4">Year 4</option></select>
-                <select style={modalInputStyle} value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}><option value="1">Sec 1</option><option value="2">Sec 2</option><option value="3">Sec 3</option></select>
+                {!isEditing && (
+                  <div className="form-group" style={{flex: 1}}>
+                      <label className="form-label">Password</label>
+                      <div style={{display: 'flex', gap: '8px'}}>
+                        <input className="form-input" value={formData.password} readOnly style={{background: '#f0fdf4', color: '#15803d', fontWeight: 'bold'}} />
+                        <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '8px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '6px', background: 'white'}}><RefreshCw size={16}/></button>
+                      </div>
+                  </div>
+                )}
               </div>
-              
-              <select style={modalInputStyle} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Regular">Regular</option><option value="Irregular">Irregular</option></select>
 
-              <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                <button type="button" onClick={() => setShowModal(false)} style={{...modalBtnStyle, background: '#ccc', color: '#333'}}>Cancel</button>
-                <button type="submit" style={{...modalBtnStyle, background: '#eab308', color: '#3e2700'}}>{isEditing ? 'Save & Verify' : 'Create Student'}</button>
+              <div style={{display: 'flex', gap: '16px'}}>
+                <div className="form-group" style={{flex: 1}}>
+                  <label className="form-label">Year Level</label>
+                  <select className="form-input" value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{flex: 1}}>
+                  <label className="form-label">Section</label>
+                  <select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}>
+                    <option value="1">Section 1</option>
+                    <option value="2">Section 2</option>
+                    <option value="3">Section 3</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Status</label>
+                <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                  <option value="Regular">Regular</option>
+                  <option value="Irregular">Irregular</option>
+                </select>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit" className="btn-save">
+                  {isEditing ? 'Save Changes' : 'Create Student'}
+                </button>
               </div>
             </form>
           </div>
@@ -289,7 +439,3 @@ export default function ManageStudents() {
     </div>
   );
 }
-
-const modalInputStyle = { padding: '10px', borderRadius: '6px', border: '1px solid #ddd', width: '100%', boxSizing: 'border-box' };
-const modalBtnStyle = { flex: 1, padding: '10px', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer' };
-
