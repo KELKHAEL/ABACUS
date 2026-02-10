@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore'; 
-import { db } from '../firebaseWeb';
+import { db } from "../../firebaseWeb";
 import { useNavigate } from 'react-router-dom';
 import { Users, GraduationCap, FileChartColumn, CalendarDays, ArrowRight } from 'lucide-react';
-import './Dashboard.css';
+import './AdminDashboard.css';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ students: 0, teachers: 0, loading: true });

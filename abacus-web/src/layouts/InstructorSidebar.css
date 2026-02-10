@@ -290,7 +290,7 @@ body {
   color: #666;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2; /* Show only 2 lines */
+  -webkit-line-lamp: 2; /* Show only 2 lines */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

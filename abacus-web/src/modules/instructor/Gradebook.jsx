@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../firebaseConfig";
+// ✅ FIXED: Import from the local firebaseWeb file inside abacus-web
+import { db } from "../../firebaseWeb"; 
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { 
   Search, Filter, Eye, Edit3, 
-  Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2 // Added Trash2
+  Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2 
 } from 'lucide-react';
+import './Instructor.css';
 
 export default function Gradebook() {
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [quizStatusMap, setQuizStatusMap] = useState({}); // Stores quiz statuses
+  const [quizStatusMap, setQuizStatusMap] = useState({}); 
 
   // Filters
   const [search, setSearch] = useState("");
@@ -45,7 +47,6 @@ export default function Gradebook() {
         const quizzesSnap = await getDocs(collection(db, "quizzes"));
         const statusMap = {};
         quizzesSnap.forEach((doc) => {
-            // Map Quiz ID to its status ('active' or 'deleted')
             statusMap[doc.id] = doc.data().status; 
         });
         setQuizStatusMap(statusMap);
@@ -99,11 +100,10 @@ export default function Gradebook() {
     setEditGrades(updated);
   };
 
-  // --- NEW: DELETE GRADE FUNCTION ---
   const handleDeleteGrade = (index) => {
     if(window.confirm("Are you sure you want to remove this grade record?")) {
         const updated = [...editGrades];
-        updated.splice(index, 1); // Remove item at index
+        updated.splice(index, 1); 
         setEditGrades(updated);
     }
   };

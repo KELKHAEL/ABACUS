@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db, createUserAccount } from '../firebaseWeb';
+import { db, createUserAccount } from "../../firebaseWeb";
 import { 
   Search, 
   Plus, 

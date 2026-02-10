@@ -1,157 +1,116 @@
+// src/App.jsx
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'; // 1. Added Navigate and useNavigate
-import { signOut } from 'firebase/auth'; 
-import { auth, signInWithEmailAndPassword } from './firebaseWeb';
-import { Mail, Lock, ShieldCheck } from 'lucide-react';
-import './App.css';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebaseWeb';
 
-import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import ManageStudents from './pages/ManageStudents';
-import ManageInstructors from './pages/ManageInstructors';
-import ManageGrades from './pages/ManageGrades';
+// Layouts
+import AdminSidebar from './layouts/AdminSidebar';
+import InstructorSidebar from './layouts/InstructorSidebar';
+
+// Pages - ADMIN
+import AdminDashboard from './modules/admin/AdminDashboard';
+import ManageStudents from './modules/admin/ManageStudents';
+import ManageInstructors from './modules/admin/ManageInstructors';
+
+// Pages - INSTRUCTOR
+import InstructorDashboard from './modules/instructor/InstructorDashboard';
+import CreateQuiz from './modules/instructor/CreateQuiz';
+import Gradebook from './modules/instructor/Gradebook';
+
+// Auth
+import Login from './auth/Login';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null); // 'ADMIN' | 'TEACHER' | null
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      // Security Check: Only allow the specific admin email
-      if (u && u.email === "admin@cvsu.edu.ph") {
-        setUser(u);
-      } else if (u) {
-        console.warn("Unauthorized access attempt by:", u.email);
-        signOut(auth); 
-        setUser(null);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true);
+      if (currentUser) {
+        setUser(currentUser);
+        
+        if (currentUser.email === "admin@cvsu.edu.ph") {
+          setRole("ADMIN");
+          setLoading(false);
+        } else {
+          // Check Firestore for Instructor Role
+          try {
+            const snap = await getDoc(doc(db, "users", currentUser.uid));
+            if (snap.exists() && snap.data().role === "TEACHER") {
+              setRole("TEACHER");
+            } else {
+              setRole("UNAUTHORIZED");
+            }
+          } catch (e) {
+            console.error("Role check failed", e);
+            setRole("ERROR");
+          }
+          setLoading(false);
+        }
       } else {
         setUser(null);
+        setRole(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsubscribe;
   }, []);
 
-  if (loading) return <div style={{padding: 50}}>Loading...</div>;
+  if (loading) return <div style={{padding: 50}}>Loading ABACUS...</div>;
+
+  if (user && !role) return <div style={{padding: 50, textAlign: 'center'}}>Verifying Access...</div>;
 
   return (
     <BrowserRouter>
-      {user ? (
-        <div className="app-container">
-          <Sidebar />
-          <div className="main-content">
-            <Routes>
-              {/* 2. FIX: Redirect root "/" to "/Dashboard" automatically */}
-              <Route path="/" element={<Navigate to="/Dashboard" replace />} />
-              
-              <Route path="/Dashboard" element={<Dashboard />} />
-              <Route path="/Students" element={<ManageStudents />} />
-              <Route path="/Grades" element={<ManageGrades />} />
-              <Route path="/Instructors" element={<ManageInstructors />} />
-              
-              {/* Optional: Catch any unknown routes and send to Dashboard */}
-              <Route path="*" element={<Navigate to="/Dashboard" replace />} />
-            </Routes>
-          </div>
-        </div>
-      ) : (
-        <LoginPage />
-      )}
+      <Routes>
+        {/* PUBLIC ROUTE */}
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+
+        {/* ROOT REDIRECT */}
+        <Route path="/" element={
+           role === 'ADMIN' ? <Navigate to="/admin/AdminDashboard" /> :
+           role === 'TEACHER' ? <Navigate to="/instructor/InstructorDashboard" /> :
+           <Navigate to="/login" />
+        } />
+
+        {/* --- ADMIN ROUTES (Fixed Paths) --- */}
+        <Route element={role === 'ADMIN' ? <AdminLayout /> : <Navigate to="/login" />}>
+          <Route path="/admin/AdminDashboard" element={<AdminDashboard />} />
+          <Route path="/admin/ManageStudents" element={<ManageStudents />} />
+          <Route path="/admin/ManageInstructors" element={<ManageInstructors />} />
+        </Route>
+
+        {/* --- INSTRUCTOR ROUTES (Fixed Paths) --- */}
+        <Route element={role === 'TEACHER' ? <InstructorLayout /> : <Navigate to="/login" />}>
+           <Route path="/instructor/InstructorDashboard" element={<InstructorDashboard />} />
+           <Route path="/instructor/CreateQuiz" element={<CreateQuiz />} />
+           <Route path="/instructor/Gradebook" element={<Gradebook />} />
+        </Route>
+
+        {/* FALLBACK */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
     </BrowserRouter>
   );
 }
 
-function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate(); // 3. Use the hook for navigation
+// --- LAYOUT HELPERS ---
+const AdminLayout = () => (
+  <div className="app-container">
+    <AdminSidebar />
+    <div className="main-content"><Outlet /></div>
+  </div>
+);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Strict Admin Check
-      if (userCredential.user.email !== "admin@cvsu.edu.ph") {
-        await signOut(auth);
-        throw new Error("Unauthorized Access: You are not an Administrator.");
-      }
-      
-      // 4. FIX: Explicitly navigate to Dashboard after successful login
-      navigate('/Dashboard');
-
-    } catch (err) {
-      alert("Login Failed: " + err.message);
-    }
-    setIsLoading(false);
-  };
-
-  return (
-    <div className="login-container">
-      {/* LEFT SIDE - BRANDING */}
-      <div className="login-left">
-        <div className="brand-content">
-          <div className="brand-icon-large">
-             <ShieldCheck size={80} color="#eab308" />
-          </div>
-          <h1>ABACUS</h1>
-          <p>Administrator</p>
-          <div className="brand-divider"></div>
-          <span className="brand-school">Cavite State University - Tanza</span>
-        </div>
-      </div>
-
-      {/* RIGHT SIDE - FORM */}
-      <div className="login-right">
-        <div className="login-form-wrapper">
-          <div className="login-header">
-            <h2>Welcome Back</h2>
-            <p>Please enter your credentials to access the dashboard.</p>
-          </div>
-          
-          <form onSubmit={handleLogin} className="login-form">
-            <div className="input-group">
-              <label>Admin Account</label>
-              <div className="input-wrapper">
-                <Mail className="input-icon" size={18} />
-                <input 
-                  placeholder="Enter Email" 
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)} 
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label>Admin Password</label>
-              <div className="input-wrapper">
-                <Lock className="input-icon" size={18} />
-                <input 
-                  type="password" 
-                  placeholder="Enter password" 
-                  value={password}
-                  onChange={e => setPassword(e.target.value)} 
-                  required
-                />
-              </div>
-            </div>
-
-            <button className="login-btn" type="submit" disabled={isLoading}>
-              {isLoading ? 'Authenticating...' : 'Sign In to Dashboard'}
-            </button>
-          </form>
-
-          <div className="login-footer">
-            <p>Authorized Personnel Only</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const InstructorLayout = () => (
+  <div className="app-container">
+    <InstructorSidebar />
+    <div className="main-content"><Outlet /></div>
+  </div>
+);
 
 export default App;

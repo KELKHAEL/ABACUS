@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { db } from "../firebaseConfig";
+import { db } from "../../firebaseWeb"; 
 import { collection, addDoc } from "firebase/firestore";
 import { 
   Trash2, Plus, X, Check, 
@@ -7,6 +7,7 @@ import {
   Circle, MoreVertical, Save,
   Target, BarChart
 } from 'lucide-react';
+import './Instructor.css';
 
 export default function CreateQuiz({ setActiveTab }) {
   const [quizTitle, setQuizTitle] = useState("Untitled Quiz");
