@@ -1,30 +1,26 @@
 import React from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { auth } from '../firebaseWeb';
-import { signOut } from 'firebase/auth';
+import { useLocation, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
   GraduationCap, 
+  Megaphone, // Changed to Megaphone for Announcements
   LogOut, 
   Triangle 
 } from 'lucide-react';
 import './AdminSidebar.css';
 
 export default function AdminSidebar() {
-  const navigate = useNavigate();
   const location = useLocation();
 
   // Helper to check if the current path matches the link
   const isActive = (path) => location.pathname === path;
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login'); // Redirect to login after logout
-    } catch (error) {
-      console.error("Error logging out: ", error);
-    }
+  // --- LOGOUT LOGIC ---
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/'; 
   };
 
   return (
@@ -63,6 +59,15 @@ export default function AdminSidebar() {
         >
           <Users size={20} />
           <span>Manage Students</span>
+        </Link>
+
+        {/* MANAGE ANNOUNCEMENTS LINK */}
+        <Link 
+          to="/admin/ManageAnnouncements" 
+          className={`nav-item ${isActive('/admin/ManageAnnouncements') ? 'active' : ''}`}
+        >
+          <Megaphone size={20} /> 
+          <span>Manage Announcements</span>
         </Link>
       </nav>
 

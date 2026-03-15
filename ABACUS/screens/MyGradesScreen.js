@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, ActivityIndicator, TouchableOpacity, StatusBar } from 'react-native';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; 
-import { auth, db } from '../firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../AuthContext'; 
+
+// ❗ REPLACE THIS WITH YOUR PC'S IP ADDRESS
+const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
 export default function MyGradesScreen({ navigation }) {
+  const { user } = useContext(AuthContext);
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [studentName, setStudentName] = useState("Student");
-  const [quizStatusMap, setQuizStatusMap] = useState({}); // Stores quiz statuses
+  const [quizStatusMap, setQuizStatusMap] = useState({}); 
 
   useEffect(() => {
     fetchGradesAndStatus();
@@ -16,26 +18,24 @@ export default function MyGradesScreen({ navigation }) {
 
   const fetchGradesAndStatus = async () => {
     try {
-      const user = auth.currentUser;
       if (!user) return;
 
-      // 1. Fetch User Grades
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      // 1. Fetch All Grades (Ideally, backend should filter, but we filter here for now)
+      const gradesResponse = await fetch(`${API_URL}/grades`);
+      const allGrades = await gradesResponse.json();
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setStudentName(userData.fullName || "Student");
-        const history = userData.gradesList || [];
-        history.reverse(); 
-        setGrades(history);
-      }
+      // Filter for THIS student only
+      // Note: Our API returns snake_case (user_id), context has camelCase (user.id)
+      const myGrades = allGrades.filter(g => g.user_id === user.id);
+      setGrades(myGrades);
 
       // 2. Fetch Quiz Statuses (to check for disabled/deleted ones)
-      const quizzesSnap = await getDocs(collection(db, "quizzes"));
+      const quizzesResponse = await fetch(`${API_URL}/quizzes`);
+      const allQuizzes = await quizzesResponse.json();
+      
       const statusMap = {};
-      quizzesSnap.forEach((doc) => {
-          statusMap[doc.id] = doc.data().status; // 'active' or 'deleted'
+      allQuizzes.forEach((q) => {
+          statusMap[q.id] = q.status; 
       });
       setQuizStatusMap(statusMap);
 
@@ -50,21 +50,23 @@ export default function MyGradesScreen({ navigation }) {
     const score = parseFloat(item.grade);
     const isPassing = score >= 75;
     
-    // Check if the quiz is deleted in the map
-    // item.quizId comes from when you saved the grade
-    const isDisabled = quizStatusMap[item.quizId] === 'deleted';
+    // Check if quiz is deleted
+    const isDisabled = quizStatusMap[item.quiz_id] === 'deleted';
 
     return (
       <View style={[styles.gradeCard, isDisabled && styles.disabledCard]}>
         <View style={styles.cardLeft}>
           <Text style={[styles.subjectCode, isDisabled && styles.disabledText]}>
-            {item.subjectCode || "QUIZ"} 
+            QUIZ 
             {isDisabled && " (DISABLED)"}
           </Text>
           <Text style={[styles.subjectTitle, isDisabled && styles.disabledText]}>
             {item.subjectTitle}
           </Text>
-          <Text style={styles.date}>{new Date(item.dateAdded).toDateString()}</Text>
+          <Text style={styles.date}>
+             {/* Handle MySQL date string */}
+             {item.dateTaken ? new Date(item.dateTaken).toDateString() : "Just now"}
+          </Text>
         </View>
         
         <View style={styles.cardRight}>
@@ -149,7 +151,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
   },
-  // New Styles for Disabled State
   disabledCard: {
     backgroundColor: '#f5f5f5',
     borderColor: '#e0e0e0',

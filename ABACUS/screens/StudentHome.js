@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
+import { 
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, 
+  Alert, RefreshControl, ActivityIndicator 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../AuthContext'; 
+
+// ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
+const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
 // Module Card Component
 const ModuleCard = ({ title, category, color, onPress }) => (
   <TouchableOpacity style={[styles.card, { borderLeftWidth: 5, borderLeftColor: color }]} onPress={onPress}>
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, marginRight: 10 }}> 
       <Text style={styles.cardTitle}>{title}</Text>
       <Text style={styles.cardCategory}>{category}</Text>
     </View>
@@ -18,7 +23,7 @@ const ModuleCard = ({ title, category, color, onPress }) => (
 // Simulation Card Component
 const SimulationCard = ({ title, desc, color, onPress }) => (
   <TouchableOpacity style={[styles.simCard, { borderLeftWidth: 5, borderLeftColor: color }]} onPress={onPress}>
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, marginRight: 10 }}>
       <Text style={styles.simTitle}>{title}</Text>
       <Text style={styles.simDesc}>{desc}</Text>
     </View>
@@ -26,22 +31,90 @@ const SimulationCard = ({ title, desc, color, onPress }) => (
   </TouchableOpacity>
 );
 
-// Filter Button Component
-const FilterButton = ({ title, active, onPress }) => (
-  <TouchableOpacity 
-    style={[styles.filterBtn, active && styles.filterBtnActive]} 
-    onPress={onPress}
-  >
-    <Text style={[styles.filterText, active && styles.filterTextActive]}>{title}</Text>
-  </TouchableOpacity>
-);
+// --- UPDATED ANNOUNCEMENT CARD (FIXED FOR SMALL SCREENS) ---
+const AnnouncementCard = ({ item }) => {
+  const isRegistrar = item.author_role === 'ADMIN';
+  
+  return (
+    <View style={[styles.announceCard, isRegistrar ? styles.adminBorder : styles.instructorBorder]}>
+      {/* Header: Author + Date */}
+      <View style={styles.announceHeader}>
+        <View style={styles.authorRow}>
+          <Ionicons 
+            name={isRegistrar ? "megaphone" : "school"} 
+            size={18} 
+            color={isRegistrar ? "#d32f2f" : "#104a28"} 
+            style={{marginTop: 2}} // Align icon with top of text
+          />
+          <Text style={[styles.authorText, isRegistrar ? {color: '#d32f2f'} : {color: '#104a28'}]}>
+            {isRegistrar ? "Announcement from the Registrar" : item.author_name}
+          </Text>
+        </View>
+        <Text style={styles.dateText}>
+          {new Date(item.created_at).toLocaleDateString()}
+        </Text>
+      </View>
+      
+      <View style={styles.divider} />
+
+      <Text style={styles.announceTitle}>{item.title}</Text>
+      <Text style={styles.announceContent}>{item.content}</Text>
+    </View>
+  );
+};
 
 export default function StudentHome({ navigation }) {
+  const { user } = useContext(AuthContext); 
   const [activeTab, setActiveTab] = useState('Home'); 
-  const [activeCategory, setActiveCategory] = useState('All'); 
-  const [studentName, setStudentName] = useState("Student");
+  
+  const [announcements, setAnnouncements] = useState([]);
+  const [loadingAnnounce, setLoadingAnnounce] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // --- DATA DECLARATION (Must be above render functions) ---
+  // Name handling
+  const studentName = user?.fullName 
+    ? (user.fullName.includes(',') ? user.fullName.split(',')[1].trim() : user.fullName) 
+    : "Student";
+
+  // --- FETCH ANNOUNCEMENTS ---
+  const fetchAnnouncements = async () => {
+    if (!user) return;
+    try {
+      const response = await fetch(`${API_URL}/announcements/student/${user.id}`);
+      const text = await response.text(); 
+
+      try {
+        const data = JSON.parse(text);
+        if (Array.isArray(data)) {
+          setAnnouncements(data);
+        } else {
+          setAnnouncements([]); 
+        }
+      } catch (e) {
+        console.error("Server HTML Error");
+      }
+    } catch (error) {
+      console.error("Network Error");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'Announcements') {
+      setLoadingAnnounce(true);
+      fetchAnnouncements().finally(() => setLoadingAnnounce(false));
+    }
+  }, [activeTab]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchAnnouncements().finally(() => setRefreshing(false));
+  }, []);
+
+  const handleProfileClick = () => {
+    navigation.navigate('ProfileScreen');
+  };
+
+  // --- MODULES DATA ---
   const allModules = [
     { 
       id: 1, 
@@ -206,37 +279,18 @@ export default function StudentHome({ navigation }) {
     }
   ];
 
-  const displayedModules = activeCategory === 'All' 
-    ? allModules 
-    : allModules.filter(m => m.category === activeCategory);
-
-  const handleProfileClick = () => {
-    Alert.alert("Account Options", "Do you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Log Out", 
-        style: 'destructive', 
-        onPress: async () => {
-          try { 
-            await signOut(auth); 
-          } catch (e) { 
-            Alert.alert("Error", e.message); 
-          }
-        }
-      }
-    ]);
-  };
-
-  // --- HOME TAB ---
+  // --- RENDER FUNCTIONS ---
   const renderHome = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greetingText}>Hello, {studentName}</Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>
+            Hello, {studentName}
+          </Text>
           <Text style={styles.subText}>Ready to learn Discrete Math?</Text>
         </View>
         <TouchableOpacity style={styles.profileBtn} onPress={handleProfileClick}>
-          <Ionicons name="person-circle-outline" size={32} color="#104a28" />
+          <Ionicons name="person-circle-outline" size={36} color="#104a28" />
         </TouchableOpacity>
       </View>
 
@@ -254,7 +308,7 @@ export default function StudentHome({ navigation }) {
       <Text style={styles.sectionTitle}>Learning Modules</Text>
 
       <View style={styles.listContainer}>
-        {displayedModules.map((item) => (
+        {allModules.map((item) => (
           <ModuleCard 
             key={item.id} 
             title={item.title} 
@@ -272,7 +326,6 @@ export default function StudentHome({ navigation }) {
     </ScrollView>
   );
 
-  // --- SIMULATIONS TAB ---
   const renderSimulations = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
       <Text style={styles.headerTitle}>Computational Simulations</Text>
@@ -281,11 +334,12 @@ export default function StudentHome({ navigation }) {
       <View style={{marginTop: 20, gap: 15}}>
         <SimulationCard title="Sets Builder" desc="Venn Diagrams & Operations" color="#2D7FF9" onPress={() => navigation.navigate('SetsSimulation')} />
         <SimulationCard title="Truth Tables" desc="Logic Generator" color="#7B61FF" onPress={() => navigation.navigate('TruthTableSimulation')} />
-        <SimulationCard title="Bitwise Calculator" desc="AND, OR, XOR operations on binary strings." color="#824055" onPress={() => navigation.navigate("BitwiseSimulation")} />
-        <SimulationCard title="Logic Circuits" desc="Visualize gates (AND, OR, NOT) from text." color="#71328e" onPress={() => navigation.navigate("LogicCircuitSimulation")} />
-        <SimulationCard title="Permutations & Combinations" desc="Calculate nPr and nCr with steps." color="#F25487" onPress={() => navigation.navigate("PermutationSimulation")} />
+        <SimulationCard title="Bitwise Calculator" desc="AND, OR, XOR operations." color="#824055" onPress={() => navigation.navigate("BitwiseSimulation")} />
+        <SimulationCard title="Logic Circuits" desc="Visualize gates (AND, OR, NOT)." color="#71328e" onPress={() => navigation.navigate("LogicCircuitSimulation")} />
+        <SimulationCard title="Permutations" desc="Calculate nPr and nCr." color="#F25487" onPress={() => navigation.navigate("PermutationSimulation")} />
         <SimulationCard title="Probability Simulation" desc="Single, Double, and Series event odds." color="#00C853" onPress={() => navigation.navigate("ProbabilitySimulation")} />
         <SimulationCard title="Frequency Distribution Table" desc="Convert raw data into a statistical table." color="#9C27B0" onPress={() => navigation.navigate("FrequencyDistributionTable")} />
+        <SimulationCard title="Z-Table Simulation" desc="Find area under the normal curve (Left, Right, Between)." color="#E91E63" onPress={() => navigation.navigate("ZTableSimulation")} />
         <SimulationCard title="Dijkstra's Path Lab" desc="Compute shortest paths in a weighted graph." color="#104a28" onPress={() => navigation.navigate("DijkstraSimulation")} />
         <SimulationCard title="Relations Lab" desc="Analyze properties (Reflexive, Symmetric, Transitive) with Boolean Matrices." color="#104a28" onPress={() => navigation.navigate("RelationsLab")} />
         <SimulationCard title="Euclidean Lab" desc="Compute Greatest Common Divisor." color="#104a28" onPress={() => navigation.navigate("EuclideanLab")} />
@@ -295,10 +349,38 @@ export default function StudentHome({ navigation }) {
     </ScrollView>
   );
 
+  const renderAnnouncements = () => (
+    <ScrollView 
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <Text style={styles.headerTitle}>Announcements</Text>
+      <Text style={styles.subText}>Updates from your Instructors & Registrar</Text>
+
+      <View style={{marginTop: 20, gap: 15}}>
+        {loadingAnnounce ? (
+           <ActivityIndicator size="large" color="#104a28" style={{marginTop: 20}} />
+        ) : announcements.length === 0 ? (
+           <View style={styles.emptyState}>
+             <Ionicons name="notifications-off-outline" size={50} color="#ccc" />
+             <Text style={styles.emptyText}>No announcements yet.</Text>
+           </View>
+        ) : (
+           announcements.map((item) => (
+             <AnnouncementCard key={item.id} item={item} />
+           ))
+        )}
+      </View>
+      <View style={styles.spacer} />
+    </ScrollView>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFAFA" />
-      {activeTab === 'Home' ? renderHome() : renderSimulations()}
+      {activeTab === 'Home' && renderHome()}
+      {activeTab === 'Simulations' && renderSimulations()}
+      {activeTab === 'Announcements' && renderAnnouncements()}
 
       <View style={styles.bottomNavContainer}>
         <View style={styles.bottomNav}>
@@ -318,8 +400,12 @@ export default function StudentHome({ navigation }) {
             {activeTab === 'Simulations' && <Text style={styles.navTextActive}>Labs</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} onPress={handleProfileClick}>
-            <Ionicons name="settings-outline" size={24} color="#666" />
+          <TouchableOpacity 
+            style={[styles.navItem, activeTab === 'Announcements' && styles.navItemActive]}
+            onPress={() => setActiveTab('Announcements')}
+          >
+            <Ionicons name={activeTab === 'Announcements' ? "notifications" : "notifications-outline"} size={22} color={activeTab === 'Announcements' ? "white" : "#666"} />
+            {activeTab === 'Announcements' && <Text style={styles.navTextActive}>News</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -330,28 +416,28 @@ export default function StudentHome({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   scrollContent: { padding: 24, paddingBottom: 100 },
+  
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  headerTextContainer: { flex: 1, paddingRight: 10 },
   headerTitle: { fontSize: 26, fontWeight: '900', color: '#333' },
   greetingText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   subText: { fontSize: 14, color: '#888' },
-  profileBtn: { padding: 5 }, 
+  profileBtn: { padding: 0 }, 
+
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
   actionButton: { 
     width: '48%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', borderRadius: 12, 
     paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 1 
   },
   actionButtonText: { fontSize: 13, fontWeight: '600', color: '#333' },
-  filterBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 10, borderWidth: 1, borderColor: '#eee' },
-  filterBtnActive: { backgroundColor: '#104a28', borderColor: '#104a28' },
-  filterText: { fontSize: 13, color: '#666', fontWeight: '500' },
-  filterTextActive: { color: 'white' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 15 },
   listContainer: { gap: 15 },
+  
   card: { 
     backgroundColor: '#fff', borderRadius: 12, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1
   },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
+  cardTitle: { fontSize: 16, fontWeight: '600', color: '#333', flexWrap: 'wrap' },
   cardCategory: { fontSize: 11, color: '#888', marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
   simCard: {
     backgroundColor: 'white', padding: 20, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -359,14 +445,59 @@ const styles = StyleSheet.create({
   },
   simTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   simDesc: { fontSize: 13, color: '#666', marginTop: 4 },
-  spacer: { height: 50 },
+
+  // --- UPDATED ANNOUNCEMENT STYLES ---
+  announceCard: {
+    backgroundColor: 'white', borderRadius: 12, padding: 16, 
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    borderLeftWidth: 4
+  },
+  adminBorder: { borderLeftColor: '#d32f2f' }, 
+  instructorBorder: { borderLeftColor: '#104a28' }, 
+  
+  // FIX: Use flex-start alignment and allow wrapping
+  announceHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', // Allows text to wrap without pushing date down weirdly
+    marginBottom: 8 
+  },
+  authorRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', // Align icon with top line of text
+    gap: 6,
+    flex: 1, // Take available width
+    marginRight: 8 // Space before date
+  },
+  authorText: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    textTransform: 'uppercase',
+    flexShrink: 1, // Allow shrinking
+    flexWrap: 'wrap', // Force wrapping on small screens
+    lineHeight: 16 // Better spacing when wrapped
+  },
+  dateText: { 
+    fontSize: 10, // Slightly smaller for better fit
+    color: '#999',
+    marginTop: 2
+  },
+  divider: { height: 1, backgroundColor: '#eee', marginBottom: 8 },
+  announceTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 6 },
+  announceContent: { fontSize: 14, color: '#555', lineHeight: 22 }, // Better reading spacing
+  
+  emptyState: { alignItems: 'center', marginTop: 50 },
+  emptyText: { color: '#999', marginTop: 10 },
+
+  spacer: { height: 80 }, 
+
   bottomNavContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center' },
   bottomNav: { 
-    flexDirection: 'row', backgroundColor: '#fff', width: '90%', paddingVertical: 12, paddingHorizontal: 25, 
-    borderRadius: 35, justifyContent: 'space-between', alignItems: 'center', 
+    flexDirection: 'row', backgroundColor: '#fff', width: '90%', paddingVertical: 12, paddingHorizontal: 20, 
+    borderRadius: 35, justifyContent: 'space-around', alignItems: 'center', 
     shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 
   },
-  navItem: { padding: 5 },
-  navItemActive: { backgroundColor: '#104a28', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  navTextActive: { color: '#fff', fontWeight: '600', fontSize: 14 }
+  navItem: { padding: 5, alignItems: 'center' },
+  navItemActive: { backgroundColor: '#104a28', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  navTextActive: { color: '#fff', fontWeight: '600', fontSize: 13 }
 });

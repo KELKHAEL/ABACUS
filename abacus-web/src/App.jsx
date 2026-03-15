@@ -1,9 +1,5 @@
-// src/App.jsx
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebaseWeb';
 
 // Layouts
 import AdminSidebar from './layouts/AdminSidebar';
@@ -13,56 +9,43 @@ import InstructorSidebar from './layouts/InstructorSidebar';
 import AdminDashboard from './modules/admin/AdminDashboard';
 import ManageStudents from './modules/admin/ManageStudents';
 import ManageInstructors from './modules/admin/ManageInstructors';
+import ManageAnnouncements from './modules/admin/ManageAnnouncements';
 
 // Pages - INSTRUCTOR
 import InstructorDashboard from './modules/instructor/InstructorDashboard';
 import CreateQuiz from './modules/instructor/CreateQuiz';
 import Gradebook from './modules/instructor/Gradebook';
+import MyClassList from './modules/instructor/MyClassList';
 
 // Auth
 import Login from './auth/Login';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null); // 'ADMIN' | 'TEACHER' | null
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
-      if (currentUser) {
-        setUser(currentUser);
-        
-        if (currentUser.email === "admin@cvsu.edu.ph") {
-          setRole("ADMIN");
-          setLoading(false);
-        } else {
-          // Check Firestore for Instructor Role
-          try {
-            const snap = await getDoc(doc(db, "users", currentUser.uid));
-            if (snap.exists() && snap.data().role === "TEACHER") {
-              setRole("TEACHER");
-            } else {
-              setRole("UNAUTHORIZED");
-            }
-          } catch (e) {
-            console.error("Role check failed", e);
-            setRole("ERROR");
-          }
-          setLoading(false);
-        }
+    // --- NEW LOGIC: Check LocalStorage instead of Firebase ---
+    const checkLogin = () => {
+      const storedUser = localStorage.getItem('user');
+      const storedToken = localStorage.getItem('token');
+
+      if (storedUser && storedToken) {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        setRole(parsedUser.role); // 'ADMIN' or 'INSTRUCTOR'
       } else {
         setUser(null);
         setRole(null);
-        setLoading(false);
       }
-    });
-    return unsubscribe;
+      setLoading(false);
+    };
+
+    checkLogin();
   }, []);
 
   if (loading) return <div style={{padding: 50}}>Loading ABACUS...</div>;
-
-  if (user && !role) return <div style={{padding: 50, textAlign: 'center'}}>Verifying Access...</div>;
 
   return (
     <BrowserRouter>
@@ -73,22 +56,25 @@ function App() {
         {/* ROOT REDIRECT */}
         <Route path="/" element={
            role === 'ADMIN' ? <Navigate to="/admin/AdminDashboard" /> :
+           role === 'INSTRUCTOR' ? <Navigate to="/instructor/InstructorDashboard" /> :
            role === 'TEACHER' ? <Navigate to="/instructor/InstructorDashboard" /> :
            <Navigate to="/login" />
         } />
 
-        {/* --- ADMIN ROUTES (Fixed Paths) --- */}
+        {/* --- ADMIN ROUTES --- */}
         <Route element={role === 'ADMIN' ? <AdminLayout /> : <Navigate to="/login" />}>
           <Route path="/admin/AdminDashboard" element={<AdminDashboard />} />
           <Route path="/admin/ManageStudents" element={<ManageStudents />} />
           <Route path="/admin/ManageInstructors" element={<ManageInstructors />} />
+          <Route path="/admin/ManageAnnouncements" element={<ManageAnnouncements />} />
         </Route>
 
-        {/* --- INSTRUCTOR ROUTES (Fixed Paths) --- */}
-        <Route element={role === 'TEACHER' ? <InstructorLayout /> : <Navigate to="/login" />}>
+        {/* --- INSTRUCTOR ROUTES --- */}
+        <Route element={role === 'INSTRUCTOR' || role === 'TEACHER' ? <InstructorLayout /> : <Navigate to="/login" />}>
            <Route path="/instructor/InstructorDashboard" element={<InstructorDashboard />} />
            <Route path="/instructor/CreateQuiz" element={<CreateQuiz />} />
            <Route path="/instructor/Gradebook" element={<Gradebook />} />
+           <Route path="/instructor/MyClassList" element={<MyClassList />} />
         </Route>
 
         {/* FALLBACK */}

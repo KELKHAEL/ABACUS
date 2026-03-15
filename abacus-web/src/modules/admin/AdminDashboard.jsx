@@ -1,33 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore'; 
-import { db } from "../../firebaseWeb";
 import { useNavigate } from 'react-router-dom';
-import { Users, GraduationCap, FileChartColumn, CalendarDays, ArrowRight } from 'lucide-react';
+import { Users, GraduationCap, Megaphone, CalendarDays, ArrowRight } from 'lucide-react'; // Changed Icon
 import './AdminDashboard.css';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ students: 0, teachers: 0, loading: true });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, announcements: 0, loading: true });
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Count Students
-        const studentQuery = query(collection(db, "users"), where("role", "==", "STUDENT"));
-        const studentSnapshot = await getDocs(studentQuery);
+        // --- 1. Fetch Students ---
+        const studentRes = await fetch('http://localhost:5000/users?role=STUDENT');
+        const studentData = await studentRes.json();
         
-        // Count Instructors
-        const teacherQuery = query(collection(db, "users"), where("role", "==", "TEACHER"));
-        const teacherSnapshot = await getDocs(teacherQuery);
-        
-        const realTeachers = teacherSnapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.email && data.email.toLowerCase() !== "admin@cvsu.edu.ph";
-        });
+        // --- 2. Fetch Instructors ---
+        const teacherRes = await fetch('http://localhost:5000/users?role=INSTRUCTOR');
+        const teacherData = await teacherRes.json();
 
+        // --- 3. Fetch Announcements (NEW) ---
+        const announceRes = await fetch('http://localhost:5000/announcements/all');
+        const announceData = await announceRes.json();
+        
+        // --- 4. Update State ---
         setStats({ 
-          students: studentSnapshot.size, 
-          teachers: realTeachers.length,
+          students: Array.isArray(studentData) ? studentData.length : 0, 
+          teachers: Array.isArray(teacherData) ? teacherData.length : 0,
+          announcements: Array.isArray(announceData) ? announceData.length : 0,
           loading: false
         });
 
@@ -54,7 +53,7 @@ export default function Dashboard() {
       
       <div className="stats-grid">
         {/* INSTRUCTORS CARD */}
-        <div className="stat-card" onClick={() => navigate('/instructors')}>
+        <div className="stat-card" onClick={() => navigate('/admin/ManageInstructors')}>
           <div className="card-header">
             <div className="icon-wrapper green">
               <Users size={24} color="#104a28" />
@@ -73,8 +72,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* STUDENTS CARD (Combined Count + Navigation if needed) */}
-        <div className="stat-card" onClick={() => navigate('/Students')}>
+        {/* STUDENTS CARD */}
+        <div className="stat-card" onClick={() => navigate('/admin/ManageStudents')}>
           <div className="card-header">
             <div className="icon-wrapper gold">
               <GraduationCap size={24} color="#bfa100" />
@@ -93,25 +92,27 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* GRADES CARD */}
-        <div className="stat-card" onClick={() => navigate('/grades')}>
+        {/* ANNOUNCEMENTS CARD (REPLACED GRADES) */}
+        <div className="stat-card" onClick={() => navigate('/admin/ManageAnnouncements')}>
           <div className="card-header">
-            <div className="icon-wrapper blue">
-              <FileChartColumn size={24} color="#0056b3" />
+            <div className="icon-wrapper red">
+              <Megaphone size={24} color="#d32f2f" />
             </div>
-            <span className="card-label">Grades</span>
+            <span className="card-label">Announcements</span>
           </div>
           <div className="card-content">
-            <h2 className="count-number">View</h2>
-            <p className="stat-desc">Analytics & Records</p>
+            <h2 className="count-number">
+                {stats.loading ? "..." : stats.announcements}
+            </h2>
+            <p className="stat-desc">Generated updates</p>
           </div>
           <div className="card-footer">
-            <span>Check Grades</span>
+            <span>Manage Content</span>
             <ArrowRight size={16} />
           </div>
         </div>
 
-        {/* SEMESTER CARD (Highlight Card) */}
+        {/* SEMESTER CARD */}
         <div className="stat-card highlight-card">
           <div className="card-header">
             <div className="icon-wrapper white">

@@ -1,30 +1,95 @@
-import React, { useState } from "react";
-import { db } from "../../firebaseWeb"; 
-import { collection, addDoc } from "firebase/firestore";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom"; 
 import { 
   Trash2, Plus, X, Check, 
-  GripVertical, AlignLeft, CheckSquare, 
+  AlignLeft, CheckSquare, 
   Circle, MoreVertical, Save,
   Target, BarChart
 } from 'lucide-react';
 import './Instructor.css';
 
 export default function CreateQuiz({ setActiveTab }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editQuizId, setEditQuizId] = useState(null);
+
+  // Instructor's Assigned Classes (Fetched from local storage or API)
+  const [myClasses, setMyClasses] = useState([]);
+  
+  // Selected Target Class (Combined Year & Section)
+  // We'll store it as a string like "1-1" (Year-Section) for easier handling in a single select
+  const [selectedClassStr, setSelectedClassStr] = useState(""); 
+
+  // Form State
   const [quizTitle, setQuizTitle] = useState("Untitled Quiz");
   const [quizDesc, setQuizDesc] = useState("");
-  
-  // --- NEW STATES FOR TARGET AUDIENCE ---
-  const [targetYear, setTargetYear] = useState("1");
-  const [targetSection, setTargetSection] = useState("1");
   const [difficulty, setDifficulty] = useState("Easy");
-  // --------------------------------------
 
   const [questions, setQuestions] = useState([
     { id: Date.now(), questionText: "", options: ["Option 1"], correctIndex: 0, correctAnswerText: "", type: "multiple-choice", required: true }
   ]);
   const [activeQuestion, setActiveQuestion] = useState(null);
 
-  // --- LOGIC ---
+  // --- 1. LOAD INSTRUCTOR CLASSES ---
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        // Ensure assignedClasses exists and is an array
+        let classes = [];
+        
+        // Check for different possible property names/structures
+        if (user.assigned_classes) {
+            // If it came from MySQL login as a JSON string or object
+            classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
+        } else if (user.assignedClasses) {
+            // If it came from Firebase or pre-parsed object
+            classes = user.assignedClasses;
+        }
+
+        // Ensure classes is an array
+        if (!Array.isArray(classes)) {
+            classes = [];
+        }
+
+        setMyClasses(classes);
+        
+        // Default to the first class if available and nothing selected yet
+        if (classes.length > 0 && !selectedClassStr) {
+          setSelectedClassStr(`${classes[0].year}-${classes[0].section}`);
+        }
+      } catch (e) {
+        console.error("Error parsing user classes:", e);
+        setMyClasses([]);
+      }
+    }
+  }, []);
+
+  // --- 2. HANDLE EDIT MODE ---
+  useEffect(() => {
+    if (location.state && location.state.quizToEdit) {
+      const q = location.state.quizToEdit;
+      setIsEditing(true);
+      setEditQuizId(q.id);
+      setQuizTitle(q.title);
+      setQuizDesc(q.description || "");
+      
+      // Set the dropdown to match the quiz's target
+      if (q.target_year && q.target_section) {
+          setSelectedClassStr(`${q.target_year}-${q.target_section}`);
+      }
+      
+      setDifficulty(q.difficulty || "Easy");
+      
+      if (q.questions && q.questions.length > 0) {
+          setQuestions(q.questions);
+      }
+    }
+  }, [location.state]);
+
+  // --- LOGIC: Question Management ---
   const addNewQuestion = () => {
     const newId = Date.now();
     setQuestions([...questions, { 
@@ -78,9 +143,12 @@ export default function CreateQuiz({ setActiveTab }) {
     setQuestions(newQ);
   };
 
+  // --- 3. SAVE TO MYSQL ---
   const publishQuiz = async () => {
     if (!quizTitle.trim()) return alert("Please enter a Quiz Title.");
+    if (!selectedClassStr) return alert("Please select a target class.");
 
+    // Validation
     for (let i = 0; i < questions.length; i++) {
       if (!questions[i].questionText.trim()) return alert(`Question ${i + 1} is missing text.`);
       if (questions[i].type === 'short' && !questions[i].correctAnswerText.trim()) return alert(`Question ${i + 1} needs a correct answer key.`);
@@ -88,28 +156,50 @@ export default function CreateQuiz({ setActiveTab }) {
     }
 
     try {
-      const cleanQuestions = questions.map(({ id, ...rest }) => rest);
-      await addDoc(collection(db, "quizzes"), {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      if (!user) return alert("You must be logged in.");
+
+      // Parse the "Year-Section" string back into separate values
+      const [tYear, tSection] = selectedClassStr.split('-');
+
+      const payload = {
         title: quizTitle,
         description: quizDesc,
-        
-        // SAVE TARGET AUDIENCE DATA
-        targetYear: targetYear,
-        targetSection: targetSection,
+        targetYear: tYear,
+        targetSection: tSection,
         difficulty: difficulty,
-        // -------------------------
+        createdBy: user.id,
+        questions: questions // Send the whole array
+      };
 
-        status: 'active',
-        
-        questions: cleanQuestions,
-        createdAt: new Date().toISOString(),
-        createdBy: "Instructor" // Ideally replace with auth.currentUser.uid
+      let url = 'http://localhost:5000/quizzes';
+      let method = 'POST';
+
+      if (isEditing) {
+        url = `http://localhost:5000/quizzes/${editQuizId}`;
+        method = 'PUT';
+      }
+
+      const response = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-      alert("Quiz Published Successfully!");
-      setActiveTab('dashboard');
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(isEditing ? "Quiz Updated!" : "Quiz Published Successfully!");
+        if (setActiveTab) setActiveTab('dashboard');
+        else navigate('/instructor/InstructorDashboard'); // Safer navigation
+      } else {
+        throw new Error(data.error);
+      }
+
     } catch (e) {
       console.error(e);
-      alert("Error publishing quiz.");
+      alert("Error publishing quiz: " + e.message);
     }
   };
 
@@ -133,36 +223,32 @@ export default function CreateQuiz({ setActiveTab }) {
             placeholder="Form description" 
           />
 
-          {/* --- NEW: TARGET SETTINGS --- */}
+          {/* TARGET SETTINGS */}
           <div style={{marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
             
-            {/* Target Year & Section */}
-            <div style={{flex: 1, minWidth: '200px'}}>
+            {/* Target Class Selector */}
+            <div style={{flex: 1, minWidth: '250px'}}>
                 <label style={{fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px'}}>
                     <Target size={14}/> TARGET CLASS
                 </label>
-                <div style={{display: 'flex', gap: '10px'}}>
+                
+                {myClasses.length > 0 ? (
                     <select 
-                        style={{padding: '8px', borderRadius: '4px', border: '1px solid #ddd', flex: 1}}
-                        value={targetYear}
-                        onChange={(e) => setTargetYear(e.target.value)}
+                        style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9fafb'}}
+                        value={selectedClassStr}
+                        onChange={(e) => setSelectedClassStr(e.target.value)}
                     >
-                        <option value="1">1st Year</option>
-                        <option value="2">2nd Year</option>
-                        <option value="3">3rd Year</option>
-                        <option value="4">4th Year</option>
+                        {myClasses.map((cls, idx) => (
+                            <option key={idx} value={`${cls.year}-${cls.section}`}>
+                                Year {cls.year} - Section {cls.section}
+                            </option>
+                        ))}
                     </select>
-                    <select 
-                        style={{padding: '8px', borderRadius: '4px', border: '1px solid #ddd', flex: 1}}
-                        value={targetSection}
-                        onChange={(e) => setTargetSection(e.target.value)}
-                    >
-                        <option value="1">Section 1</option>
-                        <option value="2">Section 2</option>
-                        <option value="3">Section 3</option>
-                        <option value="4">Section 4</option>
-                    </select>
-                </div>
+                ) : (
+                    <div style={{fontSize:'13px', color:'#ef4444', padding:'8px', background:'#fee2e2', borderRadius:'4px'}}>
+                        No classes assigned to your account. Contact Admin.
+                    </div>
+                )}
             </div>
 
             {/* Difficulty */}
@@ -171,7 +257,7 @@ export default function CreateQuiz({ setActiveTab }) {
                     <BarChart size={14}/> DIFFICULTY
                 </label>
                 <select 
-                    style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                    style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd'}}
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
                 >
@@ -182,8 +268,6 @@ export default function CreateQuiz({ setActiveTab }) {
             </div>
 
           </div>
-          {/* ---------------------------- */}
-
         </div>
 
         {/* QUESTIONS LIST */}
@@ -242,7 +326,7 @@ export default function CreateQuiz({ setActiveTab }) {
                   {q.options.map((opt, oIdx) => (
                     <div key={oIdx} className="option-line">
                       
-                      {/* SELECTION CIRCLE/BOX */}
+                      {/* SELECTION MARKER */}
                       <div 
                         className={`selector-icon ${q.correctIndex === oIdx ? 'correct' : ''}`}
                         onClick={() => setCorrectIndex(qIdx, oIdx)}
@@ -276,7 +360,6 @@ export default function CreateQuiz({ setActiveTab }) {
 
             <div className="q-footer">
               <div className="footer-start">
-                {/* Visual hint for correct answer */}
                 {(q.type === 'multiple-choice' || q.type === 'checkbox') && (
                   <span className="correct-answer-hint">
                     <Check size={14} /> Mark the correct answer using the circle/box on the left.
@@ -305,7 +388,7 @@ export default function CreateQuiz({ setActiveTab }) {
           </div>
         ))}
 
-        {/* FLOATING SIDE MENU (Desktop) OR BOTTOM FAB (Mobile) */}
+        {/* ADD BUTTON */}
         <div className="floating-tools">
           <button className="tool-btn add" onClick={addNewQuestion} title="Add Question">
             <Plus size={24} />
@@ -314,12 +397,12 @@ export default function CreateQuiz({ setActiveTab }) {
 
       </div>
 
-      {/* BOTTOM ACTION BAR */}
+      {/* PUBLISH BAR */}
       <div className="bottom-publish-bar">
         <div className="bar-content">
-          <span className="draft-status">Draft saved locally</span>
+          <span className="draft-status">{isEditing ? "Editing Existing Quiz" : "Draft saved locally"}</span>
           <button className="btn-publish-final" onClick={publishQuiz}>
-            <Save size={18} /> Publish Quiz
+            <Save size={18} /> {isEditing ? "Update Quiz" : "Publish Quiz"}
           </button>
         </div>
       </div>

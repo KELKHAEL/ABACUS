@@ -1,7 +1,4 @@
 import React, { useState } from "react";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebaseWeb";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, BookOpen, Mail, Lock } from "lucide-react";
 import "./Login.css";
@@ -19,30 +16,37 @@ const Login = () => {
     setError("");
 
     try {
-      // 1. Authenticate
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      // 1. CALL YOUR NEW MYSQL API
+      const response = await fetch('http://localhost:5000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-      // 2. Check if Admin
-      if (user.email === "admin@cvsu.edu.ph") {
-        navigate("/admin/AdminDashboard");
-        return;
-      }
+      const data = await response.json();
 
-      // 3. Check if Instructor
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      
-      if (userDoc.exists() && userDoc.data().role === "TEACHER") {
-        // Using window.location.href ensures a fresh state load for the dashboard
-        window.location.href = "/instructor/InstructorDashboard";
+      if (data.success) {
+        // 2. STORE TOKEN & USER DATA
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // 3. REDIRECT BASED ON ROLE
+        if (data.user.role === 'ADMIN') {
+          window.location.href = "/admin/AdminDashboard";
+        } else if (data.user.role === 'INSTRUCTOR' || data.user.role === 'TEACHER') {
+          window.location.href = "/instructor/InstructorDashboard";
+        } else {
+          setError("Unauthorized: Students should use the Mobile App.");
+          localStorage.clear();
+        }
+        
       } else {
-        await signOut(auth);
-        setError("Unauthorized: You do not have access to this portal.");
+        // Show server error (e.g., "User not found", "Wrong password")
+        setError(data.error || "Login failed. Please check credentials.");
       }
-
     } catch (err) {
       console.error(err);
-      setError("Invalid email or password. Please try again.");
+      setError("Cannot connect to server. Is 'node server.js' running?");
     } finally {
       setLoading(false);
     }
@@ -50,12 +54,14 @@ const Login = () => {
 
   return (
     <div className="login-container">
-      {/* LEFT SIDE - BRANDING */}
+      {/* LEFT SIDE - BRANDING (Kept exactly as your design) */}
       <div className="login-left">
         <div className="brand-content">
           <div className="brand-icon-large">
-             <ShieldCheck size={45} color="#eab308" style={{marginRight: -10}} />
-             <BookOpen size={45} color="#eab308" />
+             <div style={{position: 'relative', width: 60, height: 60, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                <ShieldCheck size={45} color="#eab308" style={{position: 'absolute', left: -5}} />
+                <BookOpen size={45} color="#eab308" style={{position: 'absolute', left: 15}} />
+             </div>
           </div>
           <h1>ABACUS</h1>
           <div className="brand-divider"></div>
@@ -91,7 +97,7 @@ const Login = () => {
                    type="email" 
                    value={email} 
                    onChange={e => setEmail(e.target.value)} 
-                   placeholder="Enter your university email"
+                   placeholder="admin@cvsu.edu.ph"
                    required 
                  />
               </div>

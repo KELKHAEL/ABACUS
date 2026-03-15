@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useContext } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebaseConfig'; 
+import { AuthProvider, AuthContext } from './AuthContext'; // ✅ Import Context
 
 // Import Screens
 import LoginScreen from './screens/LoginScreen';
@@ -13,6 +12,7 @@ import LectureContentScreen from './screens/LectureContentScreen';
 import TeacherHome from './screens/TeacherHome';
 import ModuleDetailScreen from './screens/ModuleDetailScreen';
 import MyGradesScreen from './screens/MyGradesScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 // Simulations
 import SetsSimulation from './screens/simulations/SetsSimulation';
@@ -22,6 +22,7 @@ import LogicCircuitSimulation from './screens/simulations/LogicCircuitSimulation
 import PermutationSimulation from './screens/simulations/PermutationSimulation';
 import ProbabilitySimulation from './screens/simulations/ProbabilitySimulation';
 import FrequencyDistributionTable from './screens/simulations/FrequencyDistributionTable';
+import ZTableSimulation from './screens/simulations/ZTableSimulation';
 import DijkstraSimulation from './screens/simulations/DijkstraSimulation';
 import RelationsLab from './screens/simulations/RelationsLab';
 import EuclideanLab from './screens/simulations/EuclideanLab';
@@ -29,7 +30,7 @@ import TreeTraversalLab from './screens/simulations/TreeTraversalLab';
 
 // Quizzes
 import QuizListScreen from './screens/QuizListScreen'; 
-import QuizScreen from './screens/QuizScreen';         
+import QuizScreen from './screens/QuizScreen'; 
 
 // Lectures
 import IntroDiscreteMath_1_1 from './screens/lectures/IntroDiscreteMath_1_1';
@@ -124,17 +125,10 @@ import LinearDiophantine_10_5 from './screens/lectures/LinearDiophantine_10_5';
 
 const Stack = createNativeStackNavigator();
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
+// --- Main Navigator Component ---
+// This uses the context to decide which screen stack to show
+const AppNavigator = () => {
+  const { user, loading } = useContext(AuthContext); // ✅ Listen to Context
 
   if (loading) {
     return (
@@ -151,13 +145,17 @@ export default function App() {
         {user ? (
           // --- LOGGED IN SCREENS ---
           <>
-            <Stack.Screen name="StudentHome" component={StudentHome} />
-            <Stack.Screen name="TeacherHome" component={TeacherHome} />
+            {user.role === 'ADMIN' || user.role === 'Admin' || user.role === 'INSTRUCTOR' || user.role === 'TEACHER' ? (
+                 <Stack.Screen name="TeacherHome" component={TeacherHome} />
+            ) : (
+                 <Stack.Screen name="StudentHome" component={StudentHome} />
+            )}
             
             {/* Features */}
             <Stack.Screen name="ModuleDetail" component={ModuleDetailScreen} />
             <Stack.Screen name="LectureContent" component={LectureContentScreen} />
             <Stack.Screen name="MyGradesScreen" component={MyGradesScreen} />
+            <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
             
             {/* Simulations */}
             <Stack.Screen name="SetsSimulation" component={SetsSimulation} />
@@ -167,6 +165,7 @@ export default function App() {
             <Stack.Screen name="PermutationSimulation" component={PermutationSimulation} />
             <Stack.Screen name="ProbabilitySimulation" component={ProbabilitySimulation} />
             <Stack.Screen name="FrequencyDistributionTable" component={FrequencyDistributionTable} />
+            <Stack.Screen name="ZTableSimulation" component={ZTableSimulation} />
             <Stack.Screen name="DijkstraSimulation" component={DijkstraSimulation} />
             <Stack.Screen name="RelationsLab" component={RelationsLab} />
             <Stack.Screen name="EuclideanLab" component={EuclideanLab} />
@@ -278,5 +277,15 @@ export default function App() {
 
       </Stack.Navigator>
     </NavigationContainer>
+  );
+};
+
+// --- Main App Component ---
+// Wraps the navigator in the AuthProvider
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
   );
 }

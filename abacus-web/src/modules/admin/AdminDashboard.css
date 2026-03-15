@@ -1,7 +1,7 @@
 /* Container Layout */
 .dashboard-container {
   padding: 40px;
-  background-color: #f8f9fa; /* Light grey background for contrast */
+  background-color: #f8f9fa; 
   min-height: 100vh;
   font-family: 'Inter', 'Segoe UI', sans-serif;
 }
@@ -17,7 +17,7 @@
 .welcome-title {
   font-size: 28px;
   font-weight: 700;
-  color: #104a28; /* CVSU Green */
+  color: #104a28; 
   margin: 0;
 }
 
@@ -52,23 +52,21 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 180px; /* Uniform height */
+  height: 180px; 
 }
 
 .stat-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(16, 74, 40, 0.15); /* Greenish shadow on hover */
+  box-shadow: 0 10px 25px rgba(16, 74, 40, 0.15); 
   border-color: #104a28;
 }
 
-/* --- UPDATED CARD HEADER --- */
+/* Card Header */
 .card-header {
   display: flex;
-  /* Changed from space-between to flex-start to place text NEXT to the icon */
   justify-content: flex-start; 
-  /* Changed from flex-start to center to vertically align text with the icon */
   align-items: center; 
-  gap: 16px; /* Adds space between the icon and the text */
+  gap: 16px; 
 }
 
 .icon-wrapper {
@@ -84,6 +82,9 @@
 .icon-wrapper.gold { background-color: rgba(238, 198, 10, 0.15); }
 .icon-wrapper.blue { background-color: rgba(0, 86, 179, 0.1); }
 .icon-wrapper.white { background-color: rgba(255, 255, 255, 0.2); }
+
+/* NEW: Red background for Announcements */
+.icon-wrapper.red { background-color: rgba(211, 47, 47, 0.1); } 
 
 .card-label {
   font-size: 14px;
@@ -112,7 +113,7 @@
   margin: 5px 0 0 0;
 }
 
-/* Card Footer (Link area) */
+/* Card Footer */
 .card-footer {
   margin-top: auto;
   padding-top: 15px;
@@ -122,7 +123,7 @@
   color: #104a28;
   font-weight: 600;
   font-size: 14px;
-  opacity: 0; /* Hidden by default */
+  opacity: 0; 
   transform: translateX(-10px);
   transition: all 0.3s ease;
 }
@@ -132,7 +133,7 @@
   transform: translateX(0);
 }
 
-/* Special Styling for Semester Card */
+/* Highlight Card */
 .highlight-card {
   background: linear-gradient(135deg, #104a28 0%, #1a6b3d 100%);
   border: none;

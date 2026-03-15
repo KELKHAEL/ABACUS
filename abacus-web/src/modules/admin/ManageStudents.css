@@ -153,9 +153,26 @@
   font-weight: 600;
 }
 
-.badge-regular { background: #dcfce7; color: #166534; }
-.badge-irregular { background: #fee2e2; color: #991b1b; }
-.badge-new { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+.badge-regular { 
+    background: #dcfce7; 
+    color: #166534; 
+}
+
+.badge-irregular { 
+    background: #ffedd5; 
+    color: #b45309; 
+}
+
+.badge-dropped { 
+    background: #fee2e2; 
+    color: #991b1b; 
+}
+
+.badge-new { 
+    background: #fef9c3; 
+    color: #854d0e; 
+    border: 1px solid #fde047; 
+}
 
 .google-tag {
   display: inline-flex;
@@ -325,3 +342,21 @@
   cursor: pointer;
 }
 .btn-save:hover { background: #f59e0b; }
+
+.btn-secondary {
+  background-color: #2563eb; /* Blue */
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+.btn-secondary:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-2px);
+}

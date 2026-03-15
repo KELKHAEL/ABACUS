@@ -1,48 +1,55 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FilePlus, BookOpen, LogOut, Triangle } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebaseWeb';
-import './InstructorSidebar.css'; // Make sure this points to your shared CSS
+import { Link, useLocation } from 'react-router-dom'; // Removed useNavigate
+import { LayoutDashboard, FilePlus, BookOpen, Users,LogOut, Triangle } from 'lucide-react';
+import './InstructorSidebar.css'; 
 
 export default function InstructorSidebar() {
   const location = useLocation();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); <--- No longer needed
 
-  // 1. FIX: Define the isActive helper function
   const isActive = (path) => location.pathname === path;
 
-  // 2. FIX: Define handleLogout internally
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (error) {
-      console.error("Error signing out: ", error);
-    }
+  // --- LOGOUT LOGIC (Fixed) ---
+  const handleLogout = () => {
+    // 1. Clear Data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // 2. FORCE RELOAD to clear React State immediately
+    window.location.href = '/login'; 
   };
 
   return (
     <aside className="sidebar">
-      <div className="brand">
+      {/* BRAND HEADER */}
+      <div className="brand" style={{ marginBottom: '40px', padding: '0 10px' }}>
         <Triangle 
-          className="brand-icon" 
+          size={24} 
           fill="#FFC107" 
           color="#FFC107" 
           style={{transform: 'rotate(180deg)'}} 
         />
-        <span className="brand-text">ABACUS INSTRUCTOR</span>
+        <span className="brand-text" style={{ marginLeft: '10px', fontWeight: 'bold', color: 'white' }}>
+          ABACUS INSTRUCTOR
+        </span>
       </div>
 
       <nav className="nav-menu">
         {/* DASHBOARD LINK */}
         <Link 
           to="/instructor/InstructorDashboard" 
-          // 3. FIX: Use lowercase paths to match the 'to' prop
           className={`nav-item ${isActive('/instructor/InstructorDashboard') ? 'active' : ''}`}
         >
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
+        </Link>
+
+        {/* MY CLASS LIST LINK */}
+        <Link 
+          to="/instructor/MyClassList" 
+          className={`nav-item ${isActive('/instructor/MyClassList') ? 'active' : ''}`}>
+          <Users size={20} />
+          <span>My Class List</span>
         </Link>
 
         {/* CREATE QUIZ LINK */}
@@ -64,7 +71,8 @@ export default function InstructorSidebar() {
         </Link>
       </nav>
 
-      <div className="logout-container">
+      {/* LOGOUT BUTTON */}
+      <div className="logout-container" style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         <button className="logout-btn" onClick={handleLogout}>
           <LogOut size={18} />
           <span>Logout</span>

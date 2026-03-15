@@ -1,70 +1,52 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth, db } from "../../firebaseWeb"; 
-import { collection, getDocs, deleteDoc, doc, updateDoc, query, where, getDoc, writeBatch } from "firebase/firestore";
 import { 
-  Trash2, PlusCircle, Calendar, Eye, X, CheckCircle, HelpCircle,
-  RefreshCcw, Archive, LayoutGrid, Target, BarChart, Users, FileText, Edit, UserCheck
+  Trash2, PlusCircle, Calendar, Eye, X, HelpCircle,
+  RefreshCcw, Archive, LayoutGrid, Target, BarChart, 
+  Users, FileText, Edit, ArrowRight, BookOpen, Clock, Settings
 } from 'lucide-react';
 import './Instructor.css';
 
 export default function InstructorDashboard() {
   const [quizzes, setQuizzes] = useState([]);
-  const [myStudents, setMyStudents] = useState([]); // Stores the actual student list
+  const [studentCount, setStudentCount] = useState(0); 
   const [loading, setLoading] = useState(true);
+  
   const [viewingQuiz, setViewingQuiz] = useState(null);
-  const [viewMode, setViewMode] = useState('active'); // 'active' | 'bin'
+  const [viewMode, setViewMode] = useState('active'); 
+
+  // --- EDIT MODAL STATES ---
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    id: null,
+    title: '',
+    description: '',
+    targetYear: 'ALL',
+    targetSection: 'ALL',
+    difficulty: 'Easy'
+  });
+  
   const navigate = useNavigate();
 
-  // --- HELPER: SAFE DATE FORMATTING ---
-  const formatDate = (dateVal) => {
-    if (!dateVal) return new Date();
-    if (dateVal.toDate) return dateVal.toDate(); 
-    return new Date(dateVal);
+  const formatDate = (dateString) => {
+    if (!dateString) return new Date();
+    return new Date(dateString);
   };
 
-  // --- MAIN FETCH DATA ---
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+      const userStr = localStorage.getItem('user');
+      if (!userStr) { navigate('/login'); return; }
+      const user = JSON.parse(userStr);
 
-      // 1. GET INSTRUCTOR'S ASSIGNED CLASSES
-      const instructorRef = doc(db, "users", currentUser.uid);
-      const instructorSnap = await getDoc(instructorRef);
-      let assignedClasses = [];
-      
-      if (instructorSnap.exists()) {
-        assignedClasses = instructorSnap.data().assignedClasses || [];
-      }
+      const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const data = await res.json();
 
-      // 2. GET STUDENTS MATCHING THOSE CLASSES
-      const studentQuery = query(collection(db, "users"), where("role", "==", "STUDENT"));
-      const studentSnap = await getDocs(studentQuery);
-      
-      const filteredStudents = [];
-      studentSnap.forEach(doc => {
-        const s = doc.data();
-        // Check if student's Year & Section matches what the instructor teaches
-        const isMyStudent = assignedClasses.some(cls => 
-          cls.year === s.yearLevel && cls.section === s.section
-        );
-        if (isMyStudent) {
-          filteredStudents.push({ id: doc.id, ...s });
-        }
-      });
-      setMyStudents(filteredStudents); // Store the actual list, not just the count
+      if (data.error) throw new Error(data.error);
 
-      // 3. GET QUIZZES
-      const quizQuery = query(collection(db, "quizzes"), where("createdBy", "==", "Instructor"));
-      const quizSnap = await getDocs(quizQuery);
-      const list = [];
-      quizSnap.forEach((doc) => list.push({ id: doc.id, ...doc.data() }));
-      
-      // Sort: Newest First
-      list.sort((a, b) => formatDate(b.createdAt) - formatDate(a.createdAt));
-      setQuizzes(list);
+      setStudentCount(data.students ? data.students.length : 0);
+      setQuizzes(data.quizzes || []);
 
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -77,92 +59,77 @@ export default function InstructorDashboard() {
     fetchDashboardData();
   }, []);
 
-  // --- ACTIONS: EDIT QUIZ ---
-  const handleEdit = (quiz) => {
-    // Navigate to CreateQuiz but pass the quiz data to pre-fill the form
-    // You will need to update CreateQuiz.jsx to read this state
-    navigate('/instructor/CreateQuiz', { state: { quizToEdit: quiz } });
+  // --- EDIT ACTIONS ---
+  const openEditModal = (quiz) => {
+    setEditFormData({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description || '',
+      targetYear: quiz.target_year || 'ALL',
+      targetSection: quiz.target_section || 'ALL',
+      difficulty: quiz.difficulty || 'Easy'
+    });
+    setShowEditModal(true);
   };
 
-  // --- ACTIONS: SOFT DELETE (Move to Bin) ---
-  const handleSoftDelete = async (id, e) => {
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`http://localhost:5000/quizzes/${editFormData.id}/details`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editFormData)
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert("Quiz updated successfully!");
+        setShowEditModal(false);
+        fetchDashboardData(); 
+      } else {
+        alert("Failed to update: " + data.error);
+      }
+    } catch (err) {
+      alert("Server error. Ensure backend is running.");
+    }
+  };
+
+  // --- TRASH BIN ACTIONS ---
+  const changeQuizStatus = async (id, newStatus, e) => {
     e.stopPropagation();
-    if (window.confirm("Move this quiz to the Recycle Bin? (Grades are preserved)")) {
+    const actionName = newStatus === 'deleted' ? "Move to Bin" : "Restore";
+    if (window.confirm(`${actionName} this quiz?`)) {
       try {
-        await updateDoc(doc(db, "quizzes", id), { status: 'deleted' });
-        setQuizzes(prev => prev.map(q => q.id === id ? { ...q, status: 'deleted' } : q));
-      } catch (error) {
-        alert("Error: " + error.message);
+        const response = await fetch(`http://localhost:5000/quizzes/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          setQuizzes(prev => prev.map(q => q.id === id ? { ...q, status: newStatus } : q));
+        } else {
+          alert("Server error: " + data.error);
+        }
+      } catch (error) { 
+        alert("Network failed. Is the server running?"); 
       }
     }
   };
 
-  // --- ACTIONS: RESTORE ---
-  const handleRestore = async (id, e) => {
-    e.stopPropagation();
-    if (window.confirm("Restore this quiz?")) {
-      try {
-        await updateDoc(doc(db, "quizzes", id), { status: 'active' });
-        setQuizzes(prev => prev.map(q => q.id === id ? { ...q, status: 'active' } : q));
-      } catch (error) {
-        alert("Error: " + error.message);
-      }
-    }
-  };
-
-  // --- ACTIONS: HARD DELETE (WITH DATABASE CLEANUP) ---
   const handlePermanentDelete = async (quizId, e) => {
     e.stopPropagation();
-    
-    const confirmMsg = "WARNING: This will permanently delete the quiz AND remove it from all students' gradebooks in the database. This cannot be undone.";
-    
-    if (window.confirm(confirmMsg)) {
+    if (window.confirm("WARNING: This will permanently delete the quiz.")) {
       try {
-        // 1. Delete the Quiz Document
-        await deleteDoc(doc(db, "quizzes", quizId));
-
-        // 2. CLEANUP: Find all students who took this quiz and remove the record
-        // Note: In a real production app with thousands of users, this should be a Cloud Function.
-        // For this project, we iterate client-side.
-        
-        const batch = writeBatch(db); // Use batch for atomic updates
-        let updateCount = 0;
-
-        // Iterate through ALL students (not just my students, to be safe)
-        const allStudentsSnap = await getDocs(query(collection(db, "users"), where("role", "==", "STUDENT")));
-        
-        allStudentsSnap.forEach((studentDoc) => {
-            const data = studentDoc.data();
-            if (data.gradesList && Array.isArray(data.gradesList)) {
-                // Filter out the deleted quiz ID
-                const newGrades = data.gradesList.filter(grade => grade.quizId !== quizId);
-                
-                // If the length changed, it means they had that quiz. Update it.
-                if (newGrades.length !== data.gradesList.length) {
-                    const studentRef = doc(db, "users", studentDoc.id);
-                    batch.update(studentRef, { gradesList: newGrades });
-                    updateCount++;
-                }
-            }
-        });
-
-        if (updateCount > 0) {
-            await batch.commit();
-            console.log(`Cleaned up grades for ${updateCount} students.`);
-        }
-
-        // 3. Update UI
+        await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
-        alert("Quiz and associated grades permanently deleted.");
-
-      } catch (error) {
-        console.error("Delete failed:", error);
-        alert("Error deleting: " + error.message);
-      }
+      } catch (error) { alert("Delete failed."); }
     }
   };
 
-  // --- FILTERING ---
+  const handlePreview = async (quiz) => { setViewingQuiz(quiz); };
+
   const activeQuizzes = quizzes.filter(q => q.status === 'active' || !q.status);
   const deletedQuizzes = quizzes.filter(q => q.status === 'deleted');
   const displayedQuizzes = viewMode === 'active' ? activeQuizzes : deletedQuizzes;
@@ -172,77 +139,41 @@ export default function InstructorDashboard() {
       
       {/* 1. STATS OVERVIEW */}
       <div className="inst-stats-overview">
-        <div className="inst-stat-box" style={{borderLeftColor: '#0ea5e9'}}>
+        <div className="inst-stat-box blue-box" style={{cursor: 'pointer'}} onClick={() => navigate('/instructor/MyClassList')}>
             <div className="stat-info">
                 <h4>My Students</h4>
-                <span>{myStudents.length}</span>
+                <span>{studentCount}</span>
+                <div style={{fontSize:'12px', color:'#0ea5e9', marginTop:'5px', display:'flex', alignItems:'center'}}>
+                    View List <ArrowRight size={12} style={{marginLeft:'4px'}}/>
+                </div>
             </div>
-            <div className="stat-icon-wrapper" style={{background: '#e0f2fe'}}>
-                <Users size={24} color="#0ea5e9"/>
+            <div className="stat-icon-wrapper blue-icon">
+                <Users size={24} />
             </div>
         </div>
 
-        <div className="inst-stat-box" style={{borderLeftColor: '#eab308'}}>
+        <div className="inst-stat-box gold-box">
             <div className="stat-info">
                 <h4>Active Quizzes</h4>
                 <span>{activeQuizzes.length}</span>
             </div>
-            <div className="stat-icon-wrapper" style={{background: '#fef9c3'}}>
-                <FileText size={24} color="#eab308"/>
+            <div className="stat-icon-wrapper gold-icon">
+                <FileText size={24} />
             </div>
         </div>
 
-        <div className="inst-stat-box" style={{borderLeftColor: '#ef4444'}}>
+        <div className="inst-stat-box red-box">
             <div className="stat-info">
                 <h4>Recycle Bin</h4>
                 <span>{deletedQuizzes.length}</span>
             </div>
-            <div className="stat-icon-wrapper" style={{background: '#fee2e2'}}>
-                <Trash2 size={24} color="#ef4444"/>
+            <div className="stat-icon-wrapper red-icon">
+                <Trash2 size={24} />
             </div>
         </div>
       </div>
 
-      {/* 2. STUDENT LIST PREVIEW (New Feature) */}
-      <div className="dashboard-section">
-        <div className="section-header">
-            <h3><UserCheck size={20}/> My Class List</h3>
-            <p>Students currently assigned to your sections.</p>
-        </div>
-        <div className="student-list-preview">
-            {myStudents.length === 0 ? (
-                <p className="no-data">No students found matching your assigned Year/Section.</p>
-            ) : (
-                <div className="table-responsive">
-                    <table className="dash-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Student ID</th>
-                                <th>Program</th>
-                                <th>Year/Sec</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {myStudents.slice(0, 5).map(s => ( // Show only top 5 here
-                                <tr key={s.id}>
-                                    <td>{s.fullName}</td>
-                                    <td>{s.studentId}</td>
-                                    <td>{s.program}</td>
-                                    <td>{s.yearLevel} - {s.section}</td>
-                                    <td><span className={`status-pill ${s.status?.toLowerCase()}`}>{s.status || 'Regular'}</span></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {myStudents.length > 5 && <div className="see-more" onClick={() => navigate('/instructor/Gradebook')}>View all {myStudents.length} students in Gradebook →</div>}
-                </div>
-            )}
-        </div>
-      </div>
-
-      {/* 3. QUIZ HEADER */}
+      {/* 2. QUIZ HEADER */}
       <div className="inst-dashboard-header">
         <div className="header-left">
             <h2>{viewMode === 'active' ? 'Quiz Management' : 'Recycle Bin'}</h2>
@@ -259,7 +190,7 @@ export default function InstructorDashboard() {
         </div>
       </div>
 
-      {/* 4. QUIZ GRID */}
+      {/* 3. QUIZ GRID */}
       {loading ? (
         <div className="loading-state"><div className="spinner"></div><p>Loading data...</p></div>
       ) : displayedQuizzes.length === 0 ? (
@@ -280,33 +211,32 @@ export default function InstructorDashboard() {
               
               <div className="card-content">
                 <div className="card-header-row">
-                    <span className="card-badge">{quiz.questions?.length || 0} Questions</span>
-                    {viewMode === 'bin' && <span style={{fontSize:'10px', color:'#ef4444', fontWeight:'bold'}}>DELETED</span>}
+                    <div style={{height: '20px'}}>
+                        {viewMode === 'bin' && <span style={{fontSize:'10px', color:'#ef4444', fontWeight:'bold', display:'flex', alignItems:'center', gap:'4px'}}><Trash2 size={12}/> DELETED</span>}
+                    </div>
                 </div>
 
                 <h3 className="card-title">{quiz.title}</h3>
                 
                 <div className="card-tags">
-                   {quiz.targetYear && <span className="tag tag-year"><Target size={12}/> Year {quiz.targetYear}-{quiz.targetSection}</span>}
-                   {quiz.difficulty && <span className="tag tag-diff"><BarChart size={12}/> {quiz.difficulty}</span>}
+                    {quiz.target_year && <span className="tag tag-year"><Target size={12}/> Year {quiz.target_year}-{quiz.target_section}</span>}
+                    {quiz.difficulty && <span className="tag tag-diff"><BarChart size={12}/> {quiz.difficulty}</span>}
                 </div>
 
                 <p className="card-description">{quiz.description || "No description provided."}</p>
-                <div className="card-date"><Calendar size={14}/> {formatDate(quiz.createdAt).toLocaleDateString()}</div>
+                <div className="card-date"><Calendar size={14}/> {formatDate(quiz.created_at).toLocaleDateString()}</div>
               </div>
               
               <div className="card-actions">
                 {viewMode === 'active' ? (
                   <>
-                    <button className="btn-action btn-view" onClick={() => setViewingQuiz(quiz)} title="Preview"><Eye size={16}/></button>
-                    {/* EDIT BUTTON */}
-                    <button className="btn-action btn-edit" onClick={(e) => handleEdit(quiz)} title="Edit"><Edit size={16}/></button>
-                    {/* SOFT DELETE BUTTON */}
-                    <button className="btn-action btn-delete" onClick={(e) => handleSoftDelete(quiz.id, e)} title="Move to Bin"><Trash2 size={16}/></button>
+                    <button className="btn-action btn-view" onClick={() => handlePreview(quiz)} title="Preview Details"><Eye size={16}/></button>
+                    <button className="btn-action btn-edit" onClick={() => openEditModal(quiz)} title="Edit Details"><Edit size={16}/></button>
+                    <button className="btn-action btn-delete" onClick={(e) => changeQuizStatus(quiz.id, 'deleted', e)} title="Move to Bin"><Trash2 size={16}/></button>
                   </>
                 ) : (
                   <>
-                    <button className="btn-action btn-restore" onClick={(e) => handleRestore(quiz.id, e)} title="Restore"><RefreshCcw size={16}/></button>
+                    <button className="btn-action btn-restore" onClick={(e) => changeQuizStatus(quiz.id, 'active', e)} title="Restore"><RefreshCcw size={16}/></button>
                     <button className="btn-action btn-delete" onClick={(e) => handlePermanentDelete(quiz.id, e)} title="Delete Forever"><Trash2 size={16}/></button>
                   </>
                 )}
@@ -316,29 +246,166 @@ export default function InstructorDashboard() {
         </div>
       )}
 
-      {/* 5. PREVIEW MODAL */}
+      {/* 4. PREVIEW MODAL (IMPROVED UI) */}
       {viewingQuiz && (
         <div className="modal-overlay" onClick={() => setViewingQuiz(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{viewingQuiz.title}</h2>
-              <button className="btn-close" onClick={() => setViewingQuiz(null)}><X size={24}/></button>
-            </div>
-            <div className="modal-body">
-              {viewingQuiz.description && <div style={{padding:'15px', background:'#f8fafc', borderRadius:'8px', marginBottom:'20px'}}><strong>Description:</strong> {viewingQuiz.description}</div>}
-              {viewingQuiz.questions.map((q, idx) => (
-                <div key={idx} className="preview-question-item">
-                    <div className="pq-header"><span className="pq-number">Q{idx+1}</span> <span>{q.questionText}</span></div>
-                    <div className="pq-options">
-                        {q.type === 'short' ? <strong>Key: {q.correctAnswerText}</strong> : q.options.map((o, i)=><div key={i} className={`pq-option ${q.correctIndex===i?'correct':''}`}>{o}</div>)}
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden'}}>
+            
+            {/* Modal Header */}
+            <div style={{backgroundColor: '#f8f9fa', padding: '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                <div>
+                    <h2 style={{margin: 0, fontSize: '22px', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <BookOpen size={24} color="#104a28"/> {viewingQuiz.title}
+                    </h2>
+                    <div style={{display: 'flex', gap: '12px', marginTop: '12px'}}>
+                        {viewingQuiz.target_year && (
+                            <span style={{fontSize: '12px', background: '#ecfccb', color: '#365314', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold'}}>
+                                Target: Year {viewingQuiz.target_year} - {viewingQuiz.target_section}
+                            </span>
+                        )}
+                        {viewingQuiz.difficulty && (
+                            <span style={{fontSize: '12px', background: '#e0f2fe', color: '#075985', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold'}}>
+                                {viewingQuiz.difficulty}
+                            </span>
+                        )}
                     </div>
                 </div>
-              ))}
+                <button onClick={() => setViewingQuiz(null)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af'}}>
+                    <X size={24}/>
+                </button>
             </div>
-            <div className="modal-footer"><button className="btn-primary" onClick={() => setViewingQuiz(null)}>Close</button></div>
+
+            {/* Modal Body */}
+            <div style={{padding: '24px'}}>
+                <div style={{marginBottom: '20px'}}>
+                    <h4 style={{fontSize: '14px', color: '#6b7280', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+                        <FileText size={16}/> Description
+                    </h4>
+                    <p style={{fontSize: '15px', color: '#374151', lineHeight: '1.6', background: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #f3f4f6'}}>
+                        {viewingQuiz.description || "No description provided for this assessment."}
+                    </p>
+                </div>
+                
+                <div style={{display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af', fontSize: '13px'}}>
+                    <Clock size={14}/> Created on {formatDate(viewingQuiz.created_at).toLocaleDateString()}
+                </div>
+            </div>
+            
+            {/* Modal Footer */}
+            <div style={{padding: '16px 24px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end'}}>
+                <button 
+                    onClick={() => { setViewingQuiz(null); openEditModal(viewingQuiz); }} 
+                    style={{background: '#104a28', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'}}
+                >
+                    <Edit size={16}/> Edit Details
+                </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* 5. EDIT QUIZ MODAL (IMPROVED UI) */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '500px', padding: 0, overflow: 'hidden'}}>
+                
+                {/* Header */}
+                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <Settings size={22}/> Edit Quiz Settings
+                    </h2>
+                    <button onClick={() => setShowEditModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}>
+                        <X size={24}/>
+                    </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSaveEdit}>
+                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                        
+                        <div>
+                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Quiz Title</label>
+                            <input 
+                                required 
+                                value={editFormData.title} 
+                                onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
+                                style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box'}}
+                                onFocus={(e) => e.target.style.borderColor = '#104a28'}
+                                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                            />
+                        </div>
+                        
+                        <div>
+                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Description</label>
+                            <textarea 
+                                value={editFormData.description} 
+                                onChange={e => setEditFormData({...editFormData, description: e.target.value})} 
+                                rows="3" 
+                                style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit'}}
+                                onFocus={(e) => e.target.style.borderColor = '#104a28'}
+                                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                            />
+                        </div>
+                        
+                        <div style={{display: 'flex', gap: '16px'}}>
+                            <div style={{flex: 1}}>
+                                <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Target Year</label>
+                                <select 
+                                    value={editFormData.targetYear} 
+                                    onChange={e => setEditFormData({...editFormData, targetYear: e.target.value})}
+                                    style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', background: 'white', cursor: 'pointer'}}
+                                >
+                                    <option value="ALL">All Years</option>
+                                    <option value="1">1st Year</option>
+                                    <option value="2">2nd Year</option>
+                                    <option value="3">3rd Year</option>
+                                    <option value="4">4th Year</option>
+                                </select>
+                            </div>
+                            <div style={{flex: 1}}>
+                                <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Target Section</label>
+                                <select 
+                                    value={editFormData.targetSection} 
+                                    onChange={e => setEditFormData({...editFormData, targetSection: e.target.value})}
+                                    style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', background: 'white', cursor: 'pointer'}}
+                                >
+                                    <option value="ALL">All Sections</option>
+                                    <option value="1">Section 1</option>
+                                    <option value="2">Section 2</option>
+                                    <option value="3">Section 3</option>
+                                    <option value="4">Section 4</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Difficulty Level</label>
+                            <select 
+                                value={editFormData.difficulty} 
+                                onChange={e => setEditFormData({...editFormData, difficulty: e.target.value})}
+                                style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', background: 'white', cursor: 'pointer'}}
+                            >
+                                <option value="Easy">Easy</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    {/* Footer Actions */}
+                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
+                        <button type="button" onClick={() => setShowEditModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: 'pointer'}}>
+                            Cancel
+                        </button>
+                        <button type="submit" style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'}}>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 }
