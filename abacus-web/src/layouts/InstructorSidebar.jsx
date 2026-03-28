@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom'; // Removed useNavigate
-import { LayoutDashboard, FilePlus, BookOpen, Users,LogOut, Triangle } from 'lucide-react';
+import { LayoutDashboard, FilePlus, BookOpen, Users,LogOut, Triangle, UploadCloud, Megaphone } from 'lucide-react';
 import './InstructorSidebar.css'; 
 
 export default function InstructorSidebar() {
@@ -69,7 +69,25 @@ export default function InstructorSidebar() {
           <BookOpen size={20} />
           <span>Gradebook</span>
         </Link>
-      </nav>
+
+        {/* UPLOAD MODULES LINK */}
+        <Link 
+          to="/instructor/UploadModules" 
+          className={`nav-item ${isActive('/instructor/UploadModules') ? 'active' : ''}`}
+        >
+          <UploadCloud size={20} />
+          <span>Upload Modules</span>
+        </Link>
+      
+
+        <Link 
+          to="/instructor/Announcements" 
+          className={`nav-item ${isActive('/instructor/Announcements') ? 'active' : ''}`}
+        >
+          <Megaphone size={20} />
+          <span>Announcements</span>
+        </Link>
+        </nav>
 
       {/* LOGOUT BUTTON */}
       <div className="logout-container" style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>

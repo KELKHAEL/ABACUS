@@ -16,6 +16,8 @@ import InstructorDashboard from './modules/instructor/InstructorDashboard';
 import CreateQuiz from './modules/instructor/CreateQuiz';
 import Gradebook from './modules/instructor/Gradebook';
 import MyClassList from './modules/instructor/MyClassList';
+import UploadModules from './modules/instructor/UploadModules';
+import InstructorAnnouncements from './modules/instructor/InstructorAnnouncements';
 
 // Auth
 import Login from './auth/Login';
@@ -75,6 +77,8 @@ function App() {
            <Route path="/instructor/CreateQuiz" element={<CreateQuiz />} />
            <Route path="/instructor/Gradebook" element={<Gradebook />} />
            <Route path="/instructor/MyClassList" element={<MyClassList />} />
+           <Route path="/instructor/UploadModules" element={<UploadModules />} />
+           <Route path="/instructor/Announcements" element={<InstructorAnnouncements />} />
         </Route>
 
         {/* FALLBACK */}

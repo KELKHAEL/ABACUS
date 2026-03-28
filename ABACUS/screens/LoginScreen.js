@@ -43,7 +43,7 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Connection Error", "Is the server running on your PC?");
+      Alert.alert("Connection Error", "Is the server running?");
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export default function LoginScreen({ navigation }) {
             resizeMode="contain"
           />
           <Text style={styles.appName}>ABACUS</Text>
-          <Text style={styles.appTag}>Discrete Math Mastery</Text>
+          <Text style={styles.appTag}>Discrete Mathematics Mastery</Text>
         </View>
 
         {/* FORM AREA */}

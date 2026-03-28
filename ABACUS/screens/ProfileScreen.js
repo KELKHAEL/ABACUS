@@ -144,40 +144,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* --- ACADEMIC RECORD (Students Only) --- */}
-        {isStudent && (
-            <>
-                <Text style={styles.sectionTitle}>Quizzes Finished</Text>
-                {loading ? (
-                    <ActivityIndicator size="small" color="#104a28" style={{marginTop: 20}}/>
-                ) : grades.length === 0 ? (
-                    <Text style={styles.emptyText}>No quizzes taken yet.</Text>
-                ) : (
-                    grades.map((item, index) => {
-                        const isPass = parseFloat(item.grade) >= 75;
-                        return (
-                            <View key={index} style={styles.gradeRow}>
-                                <View style={styles.gradeLeft}>
-                                    <Text style={styles.quizTitle}>{item.subjectTitle}</Text>
-                                    <Text style={styles.quizDate}>
-                                        {item.dateTaken ? new Date(item.dateTaken).toDateString() : "Recently"}
-                                    </Text>
-                                </View>
-                                <View style={styles.gradeRight}>
-                                    <Text style={[styles.percentageText, {color: isPass ? '#104a28' : '#d32f2f'}]}>
-                                        {item.grade}%
-                                    </Text>
-                                    <Text style={[styles.statusSmall, {color: isPass ? '#104a28' : '#d32f2f'}]}>
-                                        {isPass ? "Passed" : "Failed"}
-                                    </Text>
-                                </View>
-                            </View>
-                        )
-                    })
-                )}
-            </>
-        )}
-
         {/* --- LOGOUT BUTTON --- */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#d32f2f" />

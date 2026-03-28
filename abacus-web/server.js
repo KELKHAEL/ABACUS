@@ -4,6 +4,14 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import multer from 'multer';       // NEW: For handling file uploads
+import path from 'path';           // NEW: For file paths
+import fs from 'fs';               // NEW: For deleting files
+import { fileURLToPath } from 'url'; // NEW: For getting the directory name in ES modules
+
+// --- Fix for __dirname in ES Modules ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 1. Initialize Configuration
 dotenv.config();
@@ -11,6 +19,23 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
+
+// --- NEW: Serve the 'uploads' folder statically so files can be downloaded via URL ---
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --- NEW: Multer Configuration for PDF Uploads ---
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // Saves files in the uploads folder
+  },
+  filename: (req, file, cb) => {
+    // Generates a unique filename (timestamp + random number + original extension)
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
+
 
 // 2. Create Database Connection Pool
 const db = mysql.createPool({
@@ -105,19 +130,18 @@ app.post('/login', async (req, res) => {
 });
 
 // ==========================
-// ADMIN: USER MANAGEMENT (UPDATED FOR TRASH BIN)
+// ADMIN: USER MANAGEMENT 
 // ==========================
 
-// 1. GET ACTIVE USERS (Updated to filter is_deleted = 0)
+// 1. GET ACTIVE USERS 
 app.get('/users', async (req, res) => {
   const { role } = req.query; 
   try {
-    // Base query only selects non-deleted users
     let query = "SELECT * FROM users WHERE is_deleted = 0";
     let params = [];
     
     if (role) {
-      query += " AND role = ?"; // Use AND because WHERE exists
+      query += " AND role = ?"; 
       params.push(role);
     }
     query += " ORDER BY full_name ASC";
@@ -129,7 +153,7 @@ app.get('/users', async (req, res) => {
   }
 });
 
-// 2. GET TRASHED USERS (New Route)
+// 2. GET TRASHED USERS 
 app.get('/trash/students', async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -141,12 +165,12 @@ app.get('/trash/students', async (req, res) => {
   }
 });
 
-// 3. CREATE USER (Students & Instructors)
+// 3. CREATE USER 
 app.post('/users', async (req, res) => {
   const { 
     fullName, email, password, role,
-    studentId, yearLevel, section, program, status, // Student
-    employeeId, department, assignedClasses // Instructor
+    studentId, yearLevel, section, program, status, 
+    employeeId, department, assignedClasses 
   } = req.body;
 
   try {
@@ -196,7 +220,7 @@ app.put('/users/:id', async (req, res) => {
   }
 });
 
-// 5. SOFT DELETE (Move to Trash) - NEW
+// 5. SOFT DELETE 
 app.put('/users/:id/soft-delete', async (req, res) => {
   const { id } = req.params;
   try {
@@ -207,7 +231,7 @@ app.put('/users/:id/soft-delete', async (req, res) => {
   }
 });
 
-// 6. RESTORE USER (Recover from Trash) - NEW
+// 6. RESTORE USER
 app.put('/users/:id/restore', async (req, res) => {
   const { id } = req.params;
   try {
@@ -218,7 +242,7 @@ app.put('/users/:id/restore', async (req, res) => {
   }
 });
 
-// 7. PERMANENT DELETE (Destroy Data) - NEW
+// 7. PERMANENT DELETE 
 app.delete('/users/:id/permanent', async (req, res) => {
   const { id } = req.params;
   try {
@@ -383,12 +407,14 @@ app.patch('/quizzes/:id/status', async (req, res) => {
 // --- UPDATE QUIZ DETAILS ONLY ---
 app.patch('/quizzes/:id/details', async (req, res) => {
   const { id } = req.params;
-  const { title, description, targetYear, targetSection, difficulty } = req.body;
+  const { title, description, difficulty, targetClasses } = req.body;
   
   try {
+    const targetClassesStr = Array.isArray(targetClasses) ? JSON.stringify(targetClasses) : '[]';
+
     await db.query(
       `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, difficulty=? WHERE id=?`,
-      [title, description, targetYear, targetSection, difficulty, id]
+      [title, description, targetClassesStr, 'JSON', difficulty, id]
     );
     res.json({ success: true });
   } catch (err) {
@@ -600,7 +626,7 @@ app.put('/announcements/:id', async (req, res) => {
   }
 });
 
-// GET ANNOUNCEMENTS FOR A STUDENT (Fixed to hide deleted items)
+// GET ANNOUNCEMENTS FOR A STUDENT
 app.get('/announcements/student/:id', async (req, res) => {
   const studentId = req.params.id;
   try {
@@ -609,7 +635,6 @@ app.get('/announcements/student/:id', async (req, res) => {
     
     const { year_level, section } = students[0];
 
-    // UPDATED QUERY: Added (is_deleted = 0) check wrapped in logic
     const [announcements] = await db.query(`
       SELECT * FROM announcements 
       WHERE is_deleted = 0 
@@ -627,10 +652,9 @@ app.get('/announcements/student/:id', async (req, res) => {
   }
 });
 
-// --- 1. GET ACTIVE ANNOUNCEMENTS (Update your existing route) ---
+// --- GET ACTIVE ANNOUNCEMENTS (ADMIN) ---
 app.get('/announcements/all', async (req, res) => {
   try {
-    // ADDED: WHERE is_deleted = 0
     const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 ORDER BY created_at DESC");
     res.json(rows);
   } catch (err) {
@@ -638,39 +662,59 @@ app.get('/announcements/all', async (req, res) => {
   }
 });
 
-// --- 2. GET TRASHED ANNOUNCEMENTS (New) ---
-app.get('/trash/announcements', async (req, res) => {
+// --- GET ACTIVE ANNOUNCEMENTS (INSTRUCTOR) ---
+app.get('/announcements/instructor/:id', async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 ORDER BY created_at DESC");
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [req.params.id]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- 3. SOFT DELETE (New) ---
+// --- GET TRASHED ANNOUNCEMENTS (ADMIN) ---
+app.get('/trash/announcements', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 ORDER BY deleted_at DESC");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- GET TRASHED ANNOUNCEMENTS (INSTRUCTOR) ---
+app.get('/trash/announcements/instructor/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 AND author_id = ? ORDER BY deleted_at DESC", [req.params.id]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SOFT DELETE ---
 app.put('/announcements/:id/soft-delete', async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query("UPDATE announcements SET is_deleted = 1 WHERE id = ?", [id]);
+    await db.query("UPDATE announcements SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- 4. RESTORE (New) ---
+// --- RESTORE ---
 app.put('/announcements/:id/restore', async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query("UPDATE announcements SET is_deleted = 0 WHERE id = ?", [id]);
+    await db.query("UPDATE announcements SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- 5. PERMANENT DELETE (New) ---
+// --- PERMANENT DELETE ---
 app.delete('/announcements/:id/permanent', async (req, res) => {
   const { id } = req.params;
   try {
@@ -681,13 +725,13 @@ app.delete('/announcements/:id/permanent', async (req, res) => {
   }
 });
 
-// --- ADMIN: CREATE ANNOUNCEMENT ---
+// --- CREATE ANNOUNCEMENT (Updated to accept authorId) ---
 app.post('/announcements', async (req, res) => {
-    const { title, content, authorRole, authorName, targetYear, targetSection } = req.body;
+    const { title, content, authorRole, authorName, authorId, targetYear, targetSection } = req.body;
     try {
         await db.query(
-            "INSERT INTO announcements (title, content, author_role, author_name, target_year, target_section) VALUES (?, ?, ?, ?, ?, ?)",
-            [title, content, authorRole, authorName, targetYear, targetSection]
+            "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [title, content, authorRole, authorName, authorId || null, targetYear, targetSection]
         );
         res.json({success: true});
     } catch(err) {
@@ -795,6 +839,186 @@ app.post('/register', async (req, res) => {
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
+
+// ==========================
+// NEW: UPLOAD MODULES ROUTES
+// ==========================
+
+// 1. UPLOAD A MODULE
+// Expects: FormData containing 'pdfFile' and fields (title, description, targetClasses, uploadedBy)
+app.post('/modules', upload.single('pdfFile'), async (req, res) => {
+  const { title, description, targetClasses, uploadedBy } = req.body;
+  
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const fileName = req.file.filename;
+  // We store the relative path. The frontend/mobile app will prepend their API_URL to this.
+  const fileUrl = `/uploads/${fileName}`; 
+
+  try {
+    // Validate targetClasses is a valid JSON string (defaults to empty array if missing)
+    let classesJSON = '[]';
+    if (targetClasses) {
+        try {
+            // Attempt to parse to ensure it's valid, then stringify back
+            classesJSON = JSON.stringify(JSON.parse(targetClasses)); 
+        } catch(e) {
+            console.warn("Invalid targetClasses JSON, defaulting to empty.");
+        }
+    }
+
+    await db.query(
+      `INSERT INTO modules (title, description, file_name, file_url, target_classes, uploaded_by) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [title, description, fileName, fileUrl, classesJSON, uploadedBy]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    // Clean up the uploaded file if database insertion fails
+    fs.unlinkSync(req.file.path); 
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- UPDATE: GET INSTRUCTOR'S ACTIVE MODULES ---
+app.get('/modules/instructor/:id', async (req, res) => {
+  try {
+    const [modules] = await db.query(
+      "SELECT * FROM modules WHERE uploaded_by = ? AND is_deleted = 0 ORDER BY created_at DESC", 
+      [req.params.id]
+    );
+    res.json(modules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- NEW: TRASH BIN MODULES ROUTES ---
+
+// 1. GET TRASHED MODULES
+app.get('/trash/modules/instructor/:id', async (req, res) => {
+  try {
+    const [modules] = await db.query(
+      "SELECT * FROM modules WHERE uploaded_by = ? AND is_deleted = 1 ORDER BY deleted_at DESC",
+      [req.params.id]
+    );
+    res.json(modules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. SOFT DELETE (Move to Trash)
+app.put('/modules/:id/soft-delete', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("UPDATE modules SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. RESTORE MODULE
+app.put('/modules/:id/restore', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("UPDATE modules SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. PERMANENT DELETE (Includes File Deletion)
+app.delete('/modules/:id/permanent', async (req, res) => {
+  try {
+    const [mod] = await db.query("SELECT file_name FROM modules WHERE id = ?", [req.params.id]);
+    
+    if (mod.length > 0) {
+      const filePath = path.join(__dirname, 'uploads', mod[0].file_name);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    
+    await db.query("DELETE FROM modules WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- AUTO-CLEANUP FUNCTION (30 DAYS) ---
+const cleanOldTrash = async () => {
+  try {
+    // 1. Clean old Modules
+    const [oldModules] = await db.query(
+      "SELECT id, file_name FROM modules WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY"
+    );
+    for (const mod of oldModules) {
+      const filePath = path.join(__dirname, 'uploads', mod.file_name);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      await db.query("DELETE FROM modules WHERE id = ?", [mod.id]);
+    }
+    
+    // 2. Clean old Announcements
+    const [oldAnnouncements] = await db.query(
+      "SELECT id FROM announcements WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY"
+    );
+    for (const ann of oldAnnouncements) {
+      await db.query("DELETE FROM announcements WHERE id = ?", [ann.id]);
+    }
+
+    if(oldModules.length > 0 || oldAnnouncements.length > 0) {
+        console.log(`🧹 Auto-cleaned ${oldModules.length} modules and ${oldAnnouncements.length} announcements from trash.`);
+    }
+  } catch (error) {
+    console.error("Error auto-cleaning trash:", error);
+  }
+};
+
+cleanOldTrash();
+
+// 3. GET MODULES FOR STUDENT (Filtered by Class)
+app.get('/modules/student/:id', async (req, res) => {
+  const studentId = req.params.id;
+  try {
+    const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [studentId]);
+    if (students.length === 0) return res.status(404).json({ error: "Student not found" });
+    
+    const { year_level, section } = students[0];
+
+    // Fetch all modules and join the author's name
+    const [modules] = await db.query(`
+      SELECT modules.*, users.full_name as author 
+      FROM modules 
+      JOIN users ON modules.uploaded_by = users.id 
+      ORDER BY created_at DESC
+    `);
+    
+    // Filter modules manually based on JSON matching
+    const relevantModules = modules.filter(mod => {
+      try {
+        const targets = JSON.parse(mod.target_classes);
+        // If targets is empty, treat it as a "Global" module (available to all)
+        if (!targets || targets.length === 0) return true; 
+        
+        // Otherwise, check if the student's year and section match ANY of the targets
+        // (Using == instead of === just in case of string/number mismatches)
+        return targets.some(t => t.year == year_level && t.section == section);
+      } catch (e) {
+        return true; // Fallback: if parsing fails, show it just in case
+      }
+    });
+
+    res.json(relevantModules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 // ==========================
 // START SERVER
