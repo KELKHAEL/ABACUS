@@ -703,21 +703,28 @@ app.post('/promote-student', upload.single('corImage'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No COR image uploaded" });
 
   try {
-    const [userRows] = await db.query("SELECT full_name, student_id FROM users WHERE id = ?", [userId]);
+    const [userRows] = await db.query("SELECT full_name, student_id, cor_image_url FROM users WHERE id = ?", [userId]);
     const student = userRows[0];
     
+    if (student.cor_image_url) {
+        const oldFilePath = path.join(__dirname, student.cor_image_url);
+        if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath);
+        }
+    }
+
     const safeName = student.full_name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
     const safeId = student.student_id.replace(/[^a-zA-Z0-9]/g, '');
     const ext = path.extname(req.file.originalname) || '.jpg';
     
     const newFileName = `${safeName}_${safeId}${ext}`;
     const newPath = path.join(__dirname, 'uploads', newFileName);
+    
     fs.renameSync(req.file.path, newPath);
     
     const corUrl = `/uploads/${newFileName}`;
     const status = isIrregular === 'true' ? 'Irregular' : 'Regular';
 
-    // 🛡️ STRICT VERIFICATION: Save to "pending_" columns! Do NOT overwrite active class yet.
     await db.query(
       "UPDATE users SET pending_year = ?, pending_section = ?, pending_status = ?, cor_image_url = ?, cor_status = 'Pending' WHERE id = ?",
       [manualYear, manualSection, status, corUrl, userId]
@@ -725,6 +732,9 @@ app.post('/promote-student', upload.single('corImage'), async (req, res) => {
 
     res.json({ success: true, message: "Promotion requested successfully!" });
   } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -763,6 +773,15 @@ app.put('/admin/promotions/mass-approve', async (req, res) => {
 // SINGLE REJECT
 app.put('/admin/promotions/:id/reject', async (req, res) => {
   try {
+    const [users] = await db.query("SELECT cor_image_url FROM users WHERE id = ?", [req.params.id]);
+    
+    if (users.length > 0 && users[0].cor_image_url) {
+        const filePath = path.join(__dirname, users[0].cor_image_url);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath); 
+        }
+    }
+
     await db.query("UPDATE users SET cor_status = 'Rejected', cor_image_url = NULL, pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
