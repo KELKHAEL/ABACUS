@@ -4,12 +4,11 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import multer from 'multer';       // NEW: For handling file uploads
-import path from 'path';           // NEW: For file paths
-import fs from 'fs';               // NEW: For deleting files
-import { fileURLToPath } from 'url'; // NEW: For getting the directory name in ES modules
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// --- Fix for __dirname in ES Modules ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,24 +19,19 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// --- NEW: Serve the 'uploads' folder statically so files can be downloaded via URL ---
+app.use(express.json());
+app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// --- NEW: Multer Configuration for PDF Uploads ---
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/'); // Saves files in the uploads folder
-  },
+  destination: (req, file, cb) => { cb(null, 'uploads/'); },
   filename: (req, file, cb) => {
-    // Generates a unique filename (timestamp + random number + original extension)
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 const upload = multer({ storage: storage });
 
-
-// 2. Create Database Connection Pool
 const db = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -48,7 +42,6 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
-// Test Connection on Start
 (async () => {
   try {
     const connection = await db.getConnection();
@@ -59,72 +52,52 @@ const db = mysql.createPool({
   }
 })();
 
+// --- NEW: HELPER TO GET THE CURRENT ACTIVE ACADEMIC TERM ---
+const getActiveTermId = async () => {
+  try {
+    const [rows] = await db.query("SELECT id FROM academic_terms WHERE is_active = 1 LIMIT 1");
+    return rows.length > 0 ? rows[0].id : 1;
+  } catch(e) {
+    return 1;
+  }
+};
+
 // ==========================
 // AUTHENTICATION ROUTES
 // ==========================
-
-// 1. LOGIN (Universal)
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-
   try {
-    // Find User (Must be active)
     const [users] = await db.query("SELECT * FROM users WHERE email = ? AND is_deleted = 0", [email]);
-    
-    if (users.length === 0) {
-      return res.status(401).json({ success: false, error: "User not found or account disabled." });
-    }
+    if (users.length === 0) return res.status(401).json({ success: false, error: "User not found or account disabled." });
 
     const user = users[0];
-
-    // Check Password
     const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(401).json({ success: false, error: "Incorrect password." });
-    }
+    if (!match) return res.status(401).json({ success: false, error: "Incorrect password." });
 
-    // Generate Token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role }, 
       'abacus_secret_key_2026', 
       { expiresIn: '30d' }
     );
 
-    // --- FIX: PARSE ASSIGNED CLASSES ---
     let assignedClasses = [];
     if (user.assigned_classes) {
         try {
-            assignedClasses = typeof user.assigned_classes === 'string' 
-                ? JSON.parse(user.assigned_classes) 
-                : user.assigned_classes;
-                
-            if (typeof assignedClasses === 'string') {
-                assignedClasses = JSON.parse(assignedClasses);
-            }
-        } catch(e) {
-            console.error("Error parsing assigned classes for login:", e);
-            assignedClasses = [];
-        }
+            assignedClasses = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
+            if (typeof assignedClasses === 'string') assignedClasses = JSON.parse(assignedClasses);
+        } catch(e) { assignedClasses = []; }
     }
 
-    // Send back info (exclude password!)
     res.json({
       success: true,
       token,
       user: {
-        id: user.id,
-        fullName: user.full_name,
-        email: user.email,
-        studentId: user.student_id,
-        role: user.role,
-        yearLevel: user.year_level,
-        section: user.section,
-        assigned_classes: assignedClasses 
+        id: user.id, fullName: user.full_name, email: user.email, studentId: user.student_id,
+        role: user.role, yearLevel: user.year_level, section: user.section, assigned_classes: assignedClasses 
       }
     });
-
   } catch (err) {
-    console.error("Login Error:", err);
     res.status(500).json({ success: false, error: "Server: " + err.message });
   }
 });
@@ -132,235 +105,214 @@ app.post('/login', async (req, res) => {
 // ==========================
 // ADMIN: USER MANAGEMENT 
 // ==========================
-
-// 1. GET ACTIVE USERS 
 app.get('/users', async (req, res) => {
   const { role } = req.query; 
   try {
     let query = "SELECT * FROM users WHERE is_deleted = 0";
     let params = [];
-    
-    if (role) {
-      query += " AND role = ?"; 
-      params.push(role);
-    }
+    if (role) { query += " AND role = ?"; params.push(role); }
     query += " ORDER BY full_name ASC";
-    
     const [users] = await db.query(query, params);
     res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. GET TRASHED USERS 
 app.get('/trash/students', async (req, res) => {
   try {
-    const [rows] = await db.query(
-      "SELECT * FROM users WHERE role = 'STUDENT' AND is_deleted = 1 ORDER BY full_name ASC"
-    );
+    const [rows] = await db.query("SELECT * FROM users WHERE role = 'STUDENT' AND is_deleted = 1 ORDER BY full_name ASC");
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. CREATE USER 
 app.post('/users', async (req, res) => {
-  const { 
-    fullName, email, password, role,
-    studentId, yearLevel, section, program, status, 
-    employeeId, department, assignedClasses 
-  } = req.body;
-
+  const { fullName, email, password, role, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses } = req.body;
   try {
     const [existing] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
     if (existing.length > 0) return res.status(400).json({ error: "Email already in use" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
     const uniqueId = studentId || employeeId; 
     const classesStr = assignedClasses ? JSON.stringify(assignedClasses) : null;
 
     await db.query(
-      `INSERT INTO users 
-      (full_name, email, password_hash, role, student_id, year_level, section, program, status, department, assigned_classes, is_deleted) 
+      `INSERT INTO users (full_name, email, password_hash, role, student_id, year_level, section, program, status, department, assigned_classes, is_deleted) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [fullName, email, hashedPassword, role, uniqueId, yearLevel, section, program || 'BSIT', status || 'Regular', department, classesStr]
     );
-
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 4. UPDATE USER
 app.put('/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { 
-    fullName, studentId, yearLevel, section, program, status,
-    employeeId, department, assignedClasses 
-  } = req.body;
-
+  const { fullName, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses } = req.body;
   try {
     const uniqueId = studentId || employeeId;
     const classesStr = assignedClasses ? JSON.stringify(assignedClasses) : null;
-
     await db.query(
-      `UPDATE users SET 
-       full_name = ?, student_id = ?, year_level = ?, section = ?, 
-       program = ?, status = ?, department = ?, assigned_classes = ?
-       WHERE id = ?`,
+      `UPDATE users SET full_name = ?, student_id = ?, year_level = ?, section = ?, program = ?, status = ?, department = ?, assigned_classes = ? WHERE id = ?`,
       [fullName, uniqueId, yearLevel, section, program, status, department, classesStr, id]
     );
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 5. SOFT DELETE 
 app.put('/users/:id/soft-delete', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE users SET is_deleted = 1 WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("UPDATE users SET is_deleted = 1 WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 6. RESTORE USER
 app.put('/users/:id/restore', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE users SET is_deleted = 0 WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("UPDATE users SET is_deleted = 0 WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 7. PERMANENT DELETE 
 app.delete('/users/:id/permanent', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("DELETE FROM users WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("DELETE FROM users WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- UPDATE STUDENT STATUS ---
 app.patch('/users/:id/student-status', async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-  try {
-    await db.query("UPDATE users SET status = ? WHERE id = ?", [status, id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("UPDATE users SET status = ? WHERE id = ?", [req.body.status, req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ADMIN RESET PASSWORD ROUTE ---
 app.post('/admin-reset-password', async (req, res) => {
   const { uid, new_password } = req.body;
-
-  if (!uid || !new_password) {
-    return res.status(400).json({ success: false, error: "Missing User ID or Password" });
-  }
-
+  if (!uid || !new_password) return res.status(400).json({ success: false, error: "Missing User ID or Password" });
   try {
     const hashedPassword = await bcrypt.hash(new_password, 10);
-    const [result] = await db.query(
-      "UPDATE users SET password_hash = ? WHERE id = ?",
-      [hashedPassword, uid]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: "User not found" });
-    }
-
+    const [result] = await db.query("UPDATE users SET password_hash = ? WHERE id = ?", [hashedPassword, uid]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, error: "User not found" });
     res.json({ success: true, message: "Password updated successfully" });
-
-  } catch (err) {
-    console.error("Reset Password Error:", err);
-    res.status(500).json({ success: false, error: "Database error" });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: "Database error" }); }
 });
 
-// --- GET TRASHED INSTRUCTORS ---
 app.get('/trash/instructors', async (req, res) => {
   try {
-    const [rows] = await db.query(
-      "SELECT * FROM users WHERE role = 'INSTRUCTOR' AND is_deleted = 1 ORDER BY full_name ASC"
-    );
+    const [rows] = await db.query("SELECT * FROM users WHERE role = 'INSTRUCTOR' AND is_deleted = 1 ORDER BY full_name ASC");
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// ACADEMIC SETUP & CLASS MANAGEMENT (ADMIN)
+// ==========================================
+app.get('/academic-setup', async (req, res) => {
+  try {
+    const [programs] = await db.query("SELECT * FROM programs ORDER BY id ASC");
+    const [sections] = await db.query("SELECT * FROM sections ORDER BY id ASC");
+    const [yearLevels] = await db.query("SELECT * FROM year_levels ORDER BY id ASC");
+    const [terms] = await db.query("SELECT * FROM academic_terms ORDER BY id DESC");
+    res.json({ programs, sections, yearLevels, terms });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/academic-setup/:type', async (req, res) => {
+  const { type } = req.params;
+  const { value, semester } = req.body; 
+  try {
+    if (type === 'program') await db.query("INSERT INTO programs (name) VALUES (?)", [value]);
+    else if (type === 'section') await db.query("INSERT INTO sections (section_name) VALUES (?)", [value]);
+    else if (type === 'year') await db.query("INSERT INTO year_levels (year_name) VALUES (?)", [value]);
+    else if (type === 'term') await db.query("INSERT INTO academic_terms (school_year, semester, is_active) VALUES (?, ?, 0)", [value, semester]);
+    else return res.status(400).json({error: "Invalid type"});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/academic-setup/:type/:id', async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    if (type === 'program') await db.query("DELETE FROM programs WHERE id = ?", [id]);
+    else if (type === 'section') await db.query("DELETE FROM sections WHERE id = ?", [id]);
+    else if (type === 'year') await db.query("DELETE FROM year_levels WHERE id = ?", [id]);
+    else if (type === 'term') await db.query("DELETE FROM academic_terms WHERE id = ?", [id]);
+    else return res.status(400).json({error: "Invalid type"});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/academic-setup/term/active/:id', async (req, res) => {
+  const { id } = req.params;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query("UPDATE academic_terms SET is_active = 0"); 
+    await connection.query("UPDATE academic_terms SET is_active = 1 WHERE id = ?", [id]); 
+    await connection.commit();
+    res.json({ success: true });
   } catch (err) {
+    await connection.rollback();
     res.status(500).json({ error: err.message });
-  }
+  } finally { connection.release(); }
+});
+app.put('/academic-setup/:type/:id', async (req, res) => {
+  const { type, id } = req.params;
+  const { value } = req.body; 
+  try {
+    if (type === 'program') await db.query("UPDATE programs SET name = ? WHERE id = ?", [value, id]);
+    else if (type === 'section') await db.query("UPDATE sections SET section_name = ? WHERE id = ?", [value, id]);
+    else if (type === 'year') await db.query("UPDATE year_levels SET year_name = ? WHERE id = ?", [value, id]);
+    else return res.status(400).json({error: "Invalid update type"});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
 // INSTRUCTOR: QUIZ MANAGEMENT
 // ==========================
-
-// 1. GET ALL QUIZZES
 app.get('/quizzes', async (req, res) => {
   try {
+    const activeTermId = await getActiveTermId();
+    // ✅ Include all statuses so the frontend Gradebook and App can disable them appropriately
     const [quizzes] = await db.query(`
-      SELECT quizzes.*, users.full_name as author 
+      SELECT quizzes.*, users.full_name as author, IF(quizzes.term_id = ?, 0, 1) as is_archived
       FROM quizzes 
       JOIN users ON quizzes.created_by = users.id 
-      WHERE quizzes.status = 'active' 
       ORDER BY created_at DESC
-    `);
+    `, [activeTermId]);
     res.json(quizzes);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. DELETE QUIZ
 app.delete('/quizzes/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("DELETE FROM quizzes WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 3. CREATE QUIZ
-app.post('/quizzes', async (req, res) => {
-  const { title, description, targetYear, targetSection, difficulty, questions, createdBy } = req.body;
-  
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
+    // ✅ Cascade the delete to wipe out grades associated with this quiz permanently
+    await connection.query("DELETE FROM student_grades WHERE quiz_id = ?", [req.params.id]);
+    await connection.query("DELETE FROM quizzes WHERE id = ?", [req.params.id]);
+    await connection.commit();
+    res.json({ success: true });
+  } catch (err) { 
+    await connection.rollback();
+    res.status(500).json({ error: err.message }); 
+  } finally {
+    connection.release();
+  }
+});
 
-    // A. Insert Quiz
+app.post('/quizzes', async (req, res) => {
+  const { title, description, targetYear, targetSection, dueDate, createdBy, questions } = req.body;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
+
     const [quizResult] = await connection.query(
-      `INSERT INTO quizzes (title, description, target_year, target_section, difficulty, created_by) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [title, description, targetYear, targetSection, difficulty, createdBy]
+      `INSERT INTO quizzes (title, description, target_year, target_section, due_date, created_by, term_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [title, description, targetYear, targetSection, dueDate, createdBy, activeTermId]
     );
     const quizId = quizResult.insertId;
 
-    // B. Insert Questions
     for (const q of questions) {
       const [qResult] = await connection.query(
-        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) VALUES (?, ?, ?, ?, ?, ?)`,
         [quizId, q.questionText, q.type, q.correctIndex || 0, q.correctAnswerText || '', q.required]
       );
       const qId = qResult.insertId;
 
-      // C. Insert Options
       if (q.options && q.options.length > 0) {
         for (let i = 0; i < q.options.length; i++) {
           await connection.query(
@@ -370,161 +322,105 @@ app.post('/quizzes', async (req, res) => {
         }
       }
     }
-
     await connection.commit();
     res.json({ success: true, quizId });
-
   } catch (err) {
     await connection.rollback();
-    console.error(err);
     res.status(500).json({ error: err.message });
-  } finally {
-    connection.release();
-  }
+  } finally { connection.release(); }
 });
 
 app.patch('/quizzes/:id/status', async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body; // 'active' or 'deleted'
-
   try {
-    const [result] = await db.query(
-      "UPDATE quizzes SET status = ? WHERE id = ?",
-      [status, id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: "Quiz not found" });
-    }
-
-    res.json({ success: true, message: `Quiz status updated to ${status}` });
-  } catch (err) {
-    console.error("Error updating quiz status:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
+    const [result] = await db.query("UPDATE quizzes SET status = ? WHERE id = ?", [req.body.status, req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, error: "Quiz not found" });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// --- UPDATE QUIZ DETAILS ONLY ---
 app.patch('/quizzes/:id/details', async (req, res) => {
-  const { id } = req.params;
-  const { title, description, difficulty, targetClasses } = req.body;
-  
+  const { title, description, targetYear, targetSection, dueDate } = req.body;
   try {
-    const targetClassesStr = Array.isArray(targetClasses) ? JSON.stringify(targetClasses) : '[]';
-
     await db.query(
-      `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, difficulty=? WHERE id=?`,
-      [title, description, targetClassesStr, 'JSON', difficulty, id]
+      `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, due_date=? WHERE id=?`,
+      [title, description, targetYear, targetSection, dueDate, req.params.id]
     );
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
 // INSTRUCTOR DASHBOARD
 // ==========================
-
-// 1. GET INSTRUCTOR DASHBOARD DATA
 app.get('/instructor/dashboard/:id', async (req, res) => {
   const instructorId = req.params.id;
-
   try {
-    // A. Get Instructor Info
     const [instructors] = await db.query("SELECT assigned_classes FROM users WHERE id = ?", [instructorId]);
-    
     if (instructors.length === 0) return res.status(404).json({ error: "Instructor not found" });
     
-    const assignedClasses = instructors[0].assigned_classes 
-      ? JSON.parse(instructors[0].assigned_classes) 
-      : [];
+    const assignedClasses = instructors[0].assigned_classes ? JSON.parse(instructors[0].assigned_classes) : [];
 
-    // B. Get My Students (Filter by Year/Section)
     let myStudents = [];
     if (assignedClasses.length > 0) {
       const conditions = assignedClasses.map(() => `(year_level = ? AND section = ?)`).join(' OR ');
       const params = assignedClasses.flatMap(c => [c.year, c.section]);
-      
       const [students] = await db.query(
-        `SELECT id, full_name, student_id, program, year_level, section, status 
-         FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND (${conditions})`,
+        `SELECT id, full_name, student_id, program, year_level, section, status FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND (${conditions})`,
         params
       );
       myStudents = students;
     }
 
-    // C. Get My Quizzes
+    const activeTermId = await getActiveTermId();
+    // ✅ Calculate is_archived for the dashboard
     const [quizzes] = await db.query(
-      `SELECT * FROM quizzes WHERE created_by = ? ORDER BY created_at DESC`,
-      [instructorId]
+      `SELECT *, IF(term_id = ?, 0, 1) as is_archived FROM quizzes WHERE created_by = ? ORDER BY created_at DESC`,
+      [activeTermId, instructorId]
     );
 
-    res.json({
-      students: myStudents,
-      quizzes: quizzes
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+    res.json({ students: myStudents, quizzes: quizzes });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. UPDATE QUIZ (Full replacement logic)
+// UPDATE QUIZ
 app.put('/quizzes/:id', async (req, res) => {
   const { id } = req.params;
-  const { title, description, targetYear, targetSection, difficulty, questions } = req.body;
-
+  const { title, description, targetYear, targetSection, dueDate, questions } = req.body;
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-
     await connection.query(
-      `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, difficulty=? WHERE id=?`,
-      [title, description, targetYear, targetSection, difficulty, id]
+      `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, due_date=? WHERE id=?`,
+      [title, description, targetYear, targetSection, dueDate, id]
     );
-
     await connection.query(`DELETE FROM quiz_questions WHERE quiz_id = ?`, [id]);
 
     for (const q of questions) {
       const [qResult] = await connection.query(
-        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) VALUES (?, ?, ?, ?, ?, ?)`,
         [id, q.questionText, q.type, q.correctIndex || 0, q.correctAnswerText || '', q.required]
       );
       const qId = qResult.insertId;
-
       if (q.options && q.options.length > 0) {
         for (let i = 0; i < q.options.length; i++) {
-          await connection.query(
-            `INSERT INTO question_options (question_id, option_text, option_order) VALUES (?, ?, ?)`,
-            [qId, q.options[i], i]
-          );
+          await connection.query(`INSERT INTO question_options (question_id, option_text, option_order) VALUES (?, ?, ?)`, [qId, q.options[i], i]);
         }
       }
     }
-
     await connection.commit();
     res.json({ success: true });
-
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });
-  } finally {
-    connection.release();
-  }
+  } finally { connection.release(); }
 });
 
-// GET SINGLE QUIZ WITH QUESTIONS
 app.get('/quizzes/:id', async (req, res) => {
-  const { id } = req.params;
   try {
-    const [quiz] = await db.query("SELECT * FROM quizzes WHERE id = ?", [id]);
+    const [quiz] = await db.query("SELECT * FROM quizzes WHERE id = ?", [req.params.id]);
     if (quiz.length === 0) return res.status(404).json({ error: "Quiz not found" });
 
-    const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [id]);
-
+    const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [req.params.id]);
     for (const q of questions) {
       const [options] = await db.query("SELECT option_text FROM question_options WHERE question_id = ? ORDER BY option_order ASC", [q.id]);
       q.options = options.map(o => o.option_text);
@@ -533,497 +429,345 @@ app.get('/quizzes/:id', async (req, res) => {
       q.questionText = q.question_text;
       q.type = q.question_type;
     }
-
     res.json({ ...quiz[0], questions });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// STUDENT: SUBMIT GRADE
 app.post('/grades', async (req, res) => {
-  const { userId, quizId, score, subjectTitle } = req.body;
+  const { userId, quizId, score, totalItems, subjectTitle } = req.body;
   try {
-    // Check if a grade already exists for this user and quiz
-    const [existing] = await db.query(
-      "SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?",
-      [userId, quizId]
-    );
+    const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
+    if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
-    if (existing.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "You have already submitted this quiz." 
-      });
-    }
-
+    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
     await db.query(
-      `INSERT INTO student_grades (user_id, quiz_id, score, subject_title) VALUES (?, ?, ?, ?)`,
-      [userId, quizId, score, subjectTitle]
+      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, quizId, score, totalItems || 100, subjectTitle, activeTermId]
     );
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==========================
-// GRADEBOOK MANAGEMENT
-// ==========================
-
-// 1. GET ALL GRADES
 app.get('/grades', async (req, res) => {
   try {
+    const activeTermId = await getActiveTermId();
+    // ✅ Attach is_archived to grades
     const [grades] = await db.query(`
-      SELECT id, user_id, quiz_id, score as grade, subject_title as subjectTitle, date_taken as dateTaken 
-      FROM student_grades 
-      ORDER BY date_taken DESC
-    `);
+      SELECT id, user_id, quiz_id, score as grade, total_items, subject_title as subjectTitle, date_taken as dateTaken, IF(term_id = ?, 0, 1) as is_archived
+      FROM student_grades ORDER BY date_taken DESC
+    `, [activeTermId]);
     res.json(grades);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. UPDATE A GRADE
 app.put('/grades/:id', async (req, res) => {
-  const { id } = req.params;
-  const { score } = req.body;
   try {
-    await db.query("UPDATE student_grades SET score = ? WHERE id = ?", [score, id]);
+    await db.query("UPDATE student_grades SET score = ?, total_items = ? WHERE id = ?", [req.body.score, req.body.total_items, req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. DELETE A GRADE
 app.delete('/grades/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("DELETE FROM student_grades WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("DELETE FROM student_grades WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // --- ANNOUNCEMENT ROUTES ---
-
 app.put('/announcements/:id', async (req, res) => {
-  const { id } = req.params;
   const { title, content, targetYear, targetSection } = req.body;
-
   try {
-    await db.query(
-      "UPDATE announcements SET title = ?, content = ?, target_year = ?, target_section = ? WHERE id = ?",
-      [title, content, targetYear, targetSection, id]
-    );
+    await db.query("UPDATE announcements SET title = ?, content = ?, target_year = ?, target_section = ? WHERE id = ?", [title, content, targetYear, targetSection, req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET ANNOUNCEMENTS FOR A STUDENT
 app.get('/announcements/student/:id', async (req, res) => {
-  const studentId = req.params.id;
   try {
-    const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [studentId]);
+    const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     
-    const { year_level, section } = students[0];
-
+    const activeTermId = await getActiveTermId();
     const [announcements] = await db.query(`
       SELECT * FROM announcements 
-      WHERE is_deleted = 0 
+      WHERE is_deleted = 0 AND term_id = ? 
       AND (
-        author_role = 'ADMIN' 
-        OR target_year = 'ALL'
-        OR (target_year = ? AND target_section = ?)
-      )
-      ORDER BY created_at DESC
-    `, [year_level, section]);
-
+          (author_role = 'ADMIN' AND target_year != 'INSTRUCTORS') 
+          OR target_year = 'ALL' 
+          OR (target_year = ? AND target_section = ?)
+      ) ORDER BY created_at DESC
+    `, [activeTermId, students[0].year_level, students[0].section]);
     res.json(announcements);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- GET ACTIVE ANNOUNCEMENTS (ADMIN) ---
+// ✅ Admin Only Fetches Admin Announcements
 app.get('/announcements/all', async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 ORDER BY created_at DESC");
+    const activeTermId = await getActiveTermId();
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND term_id = ? AND author_role = 'ADMIN' ORDER BY created_at DESC", [activeTermId]);
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- GET ACTIVE ANNOUNCEMENTS (INSTRUCTOR) ---
+app.get('/announcements/admin-to-instructor/:instructorId', async (req, res) => {
+  try {
+    const activeTermId = await getActiveTermId();
+    const instructorId = req.params.instructorId;
+    
+    const [rows] = await db.query(`
+      SELECT * FROM announcements 
+      WHERE is_deleted = 0 AND term_id = ? AND author_role = 'ADMIN' 
+      AND (
+        target_year = 'ALL' 
+        OR (target_year = 'INSTRUCTORS' AND (target_section = 'ALL' OR target_section = ?))
+      ) 
+      ORDER BY created_at DESC
+    `, [activeTermId, instructorId]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/announcements/instructor/:id', async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [req.params.id]);
+    const activeTermId = await getActiveTermId();
+    const [rows] = await db.query("SELECT *, IF(term_id = ?, 0, 1) as is_archived FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [activeTermId, req.params.id]);
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- GET TRASHED ANNOUNCEMENTS (ADMIN) ---
-app.get('/trash/announcements', async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 ORDER BY deleted_at DESC");
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- GET TRASHED ANNOUNCEMENTS (INSTRUCTOR) ---
-app.get('/trash/announcements/instructor/:id', async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 AND author_id = ? ORDER BY deleted_at DESC", [req.params.id]);
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- SOFT DELETE ---
+// Skip trash functions to keep clean
 app.put('/announcements/:id/soft-delete', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE announcements SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("UPDATE announcements SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- RESTORE ---
-app.put('/announcements/:id/restore', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE announcements SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- PERMANENT DELETE ---
-app.delete('/announcements/:id/permanent', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("DELETE FROM announcements WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- CREATE ANNOUNCEMENT (Updated to accept authorId) ---
 app.post('/announcements', async (req, res) => {
-    const { title, content, authorRole, authorName, authorId, targetYear, targetSection } = req.body;
+    // We now accept 'targets' (Array) for multiple posts, OR targetYear/targetSection for single posts
+    const { title, content, authorRole, authorName, authorId, targets, targetYear, targetSection } = req.body;
+    const connection = await db.getConnection();
+    
     try {
-        await db.query(
-            "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [title, content, authorRole, authorName, authorId || null, targetYear, targetSection]
-        );
+        await connection.beginTransaction();
+        const activeTermId = await getActiveTermId(); 
+
+        if (targets && Array.isArray(targets) && targets.length > 0) {
+            // ✅ Loop through the array and post to multiple classes/instructors at once
+            for (const t of targets) {
+                await connection.query(
+                    "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section, term_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [title, content, authorRole, authorName, authorId || null, t.targetYear, t.targetSection, activeTermId]
+                );
+            }
+        } else {
+            // ✅ Single insert (Used for backward compatibility and Editing)
+            await connection.query(
+                "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section, term_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [title, content, authorRole, authorName, authorId || null, targetYear, targetSection, activeTermId]
+            );
+        }
+        
+        await connection.commit();
         res.json({success: true});
-    } catch(err) {
-        res.status(500).json({error: err.message});
+    } catch(err) { 
+        await connection.rollback();
+        res.status(500).json({error: err.message}); 
+    } finally {
+        connection.release();
     }
 });
 
 // ----------------------------------------------------
 // WHITELIST MANAGEMENT
 // ----------------------------------------------------
-
 app.post('/upload-allowed-students', async (req, res) => {
   const { students } = req.body;
-
-  if (!students || !Array.isArray(students)) {
-    return res.status(400).json({ error: "Invalid data format" });
-  }
-
+  if (!students || !Array.isArray(students)) return res.status(400).json({ error: "Invalid data format" });
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    const query = `INSERT IGNORE INTO allowed_students (student_id, email) VALUES ?`;
     const values = students.map(s => [s.studentId, s.email]);
-
-    if (values.length > 0) {
-      await connection.query(query, [values]);
-    }
-
+    if (values.length > 0) await connection.query(`INSERT IGNORE INTO allowed_students (student_id, email) VALUES ?`, [values]);
     await connection.commit();
     res.json({ success: true, message: `Processed ${values.length} entries.` });
-
   } catch (err) {
     await connection.rollback();
-    console.error(err);
     res.status(500).json({ error: err.message });
-  } finally {
-    connection.release();
-  }
+  } finally { connection.release(); }
 });
 
-// 1. GET ALL ALLOWED STUDENTS
 app.get('/allowed-students', async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM allowed_students ORDER BY created_at DESC");
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { const [rows] = await db.query("SELECT * FROM allowed_students ORDER BY created_at DESC"); res.json(rows); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. DELETE FROM WHITELIST
 app.delete('/allowed-students/:id', async (req, res) => {
-  const { id } = req.params;
+  try { await db.query("DELETE FROM allowed_students WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/allowed-students/:id', async (req, res) => {
+  const { studentId, email } = req.body;
   try {
-    await db.query("DELETE FROM allowed_students WHERE id = ?", [id]);
+    await db.query("UPDATE allowed_students SET student_id = ?, email = ? WHERE id = ?", [studentId, email, req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ----------------------------------------------------
-// UPDATED REGISTER ROUTE (With Whitelist Check)
-// ----------------------------------------------------
 app.post('/register', async (req, res) => {
   const { fullName, studentId, email, password, yearLevel, section, program } = req.body;
-
-  if (!email || !password || !fullName || !studentId) {
-    return res.status(400).json({ success: false, error: "Missing fields" });
-  }
-
   try {
-    // 1. Check Whitelist
-    const [allowed] = await db.query(
-      "SELECT * FROM allowed_students WHERE student_id = ? AND email = ?", 
-      [studentId, email]
-    );
+    const [allowed] = await db.query("SELECT * FROM allowed_students WHERE student_id = ? AND email = ?", [studentId, email]);
+    if (allowed.length === 0) return res.status(403).json({ success: false, error: "Access Denied. Your Student ID or Email is not in the allowed list." });
 
-    if (allowed.length === 0) {
-      return res.status(403).json({ 
-        success: false, 
-        error: "Access Denied. Your Student ID or Email is not in the allowed list." 
-      });
-    }
-
-    // 2. Check Existing User
     const [existing] = await db.query("SELECT * FROM users WHERE email = ? OR student_id = ?", [email, studentId]);
-    if (existing.length > 0) {
-      return res.status(409).json({ success: false, error: "Account already exists." });
-    }
+    if (existing.length > 0) return res.status(409).json({ success: false, error: "Account already exists." });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3. Create User (Default is_deleted = 0)
     const [result] = await db.query(
-      `INSERT INTO users (full_name, student_id, email, password_hash, year_level, section, role, program, status, is_deleted) 
-       VALUES (?, ?, ?, ?, ?, ?, 'STUDENT', ?, 'Regular', 0)`,
+      `INSERT INTO users (full_name, student_id, email, password_hash, year_level, section, role, program, status, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 'STUDENT', ?, 'Regular', 0)`,
       [fullName, studentId, email, hashedPassword, yearLevel, section, program]
     );
-
     res.status(201).json({ success: true, message: "Account created!", userId: result.insertId });
-
-  } catch (err) {
-    console.error("Register Error:", err);
-    res.status(500).json({ success: false, error: "Server Error" });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: "Server Error" }); }
 });
 
 // ==========================
-// NEW: UPLOAD MODULES ROUTES
+// UPLOAD MODULES ROUTES
 // ==========================
-
-// 1. UPLOAD A MODULE
-// Expects: FormData containing 'pdfFile' and fields (title, description, targetClasses, uploadedBy)
 app.post('/modules', upload.single('pdfFile'), async (req, res) => {
   const { title, description, targetClasses, uploadedBy } = req.body;
-  
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const fileName = req.file.filename;
-  // We store the relative path. The frontend/mobile app will prepend their API_URL to this.
   const fileUrl = `/uploads/${fileName}`; 
 
   try {
-    // Validate targetClasses is a valid JSON string (defaults to empty array if missing)
     let classesJSON = '[]';
-    if (targetClasses) {
-        try {
-            // Attempt to parse to ensure it's valid, then stringify back
-            classesJSON = JSON.stringify(JSON.parse(targetClasses)); 
-        } catch(e) {
-            console.warn("Invalid targetClasses JSON, defaulting to empty.");
-        }
-    }
+    if (targetClasses) { try { classesJSON = JSON.stringify(JSON.parse(targetClasses)); } catch(e) {} }
 
+    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
     await db.query(
-      `INSERT INTO modules (title, description, file_name, file_url, target_classes, uploaded_by) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [title, description, fileName, fileUrl, classesJSON, uploadedBy]
+      `INSERT INTO modules (title, description, file_name, file_url, target_classes, uploaded_by, term_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [title, description, fileName, fileUrl, classesJSON, uploadedBy, activeTermId]
     );
     res.json({ success: true });
   } catch (err) {
-    // Clean up the uploaded file if database insertion fails
     fs.unlinkSync(req.file.path); 
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- UPDATE: GET INSTRUCTOR'S ACTIVE MODULES ---
 app.get('/modules/instructor/:id', async (req, res) => {
   try {
+    const activeTermId = await getActiveTermId();
     const [modules] = await db.query(
-      "SELECT * FROM modules WHERE uploaded_by = ? AND is_deleted = 0 ORDER BY created_at DESC", 
-      [req.params.id]
+      "SELECT *, IF(term_id = ?, 0, 1) as is_archived FROM modules WHERE uploaded_by = ? AND is_deleted = 0 ORDER BY created_at DESC", 
+      [activeTermId, req.params.id]
     );
     res.json(modules);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- NEW: TRASH BIN MODULES ROUTES ---
-
-// 1. GET TRASHED MODULES
-app.get('/trash/modules/instructor/:id', async (req, res) => {
-  try {
-    const [modules] = await db.query(
-      "SELECT * FROM modules WHERE uploaded_by = ? AND is_deleted = 1 ORDER BY deleted_at DESC",
-      [req.params.id]
-    );
-    res.json(modules);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 2. SOFT DELETE (Move to Trash)
 app.put('/modules/:id/soft-delete', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE modules SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { await db.query("UPDATE modules SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. RESTORE MODULE
-app.put('/modules/:id/restore', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await db.query("UPDATE modules SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 4. PERMANENT DELETE (Includes File Deletion)
-app.delete('/modules/:id/permanent', async (req, res) => {
-  try {
-    const [mod] = await db.query("SELECT file_name FROM modules WHERE id = ?", [req.params.id]);
-    
-    if (mod.length > 0) {
-      const filePath = path.join(__dirname, 'uploads', mod[0].file_name);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-    
-    await db.query("DELETE FROM modules WHERE id = ?", [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- AUTO-CLEANUP FUNCTION (30 DAYS) ---
-const cleanOldTrash = async () => {
-  try {
-    // 1. Clean old Modules
-    const [oldModules] = await db.query(
-      "SELECT id, file_name FROM modules WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY"
-    );
-    for (const mod of oldModules) {
-      const filePath = path.join(__dirname, 'uploads', mod.file_name);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      await db.query("DELETE FROM modules WHERE id = ?", [mod.id]);
-    }
-    
-    // 2. Clean old Announcements
-    const [oldAnnouncements] = await db.query(
-      "SELECT id FROM announcements WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY"
-    );
-    for (const ann of oldAnnouncements) {
-      await db.query("DELETE FROM announcements WHERE id = ?", [ann.id]);
-    }
-
-    if(oldModules.length > 0 || oldAnnouncements.length > 0) {
-        console.log(`🧹 Auto-cleaned ${oldModules.length} modules and ${oldAnnouncements.length} announcements from trash.`);
-    }
-  } catch (error) {
-    console.error("Error auto-cleaning trash:", error);
-  }
-};
-
-cleanOldTrash();
-
-// 3. GET MODULES FOR STUDENT (Filtered by Class)
 app.get('/modules/student/:id', async (req, res) => {
-  const studentId = req.params.id;
   try {
-    const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [studentId]);
+    const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
-    
     const { year_level, section } = students[0];
 
-    // Fetch all modules and join the author's name
-    const [modules] = await db.query(`
-      SELECT modules.*, users.full_name as author 
-      FROM modules 
-      JOIN users ON modules.uploaded_by = users.id 
-      ORDER BY created_at DESC
-    `);
+    const activeTermId = await getActiveTermId();
+    const [modules] = await db.query(`SELECT modules.*, users.full_name as author FROM modules JOIN users ON modules.uploaded_by = users.id WHERE modules.term_id = ? ORDER BY created_at DESC`, [activeTermId]);
     
-    // Filter modules manually based on JSON matching
     const relevantModules = modules.filter(mod => {
       try {
         const targets = JSON.parse(mod.target_classes);
-        // If targets is empty, treat it as a "Global" module (available to all)
         if (!targets || targets.length === 0) return true; 
-        
-        // Otherwise, check if the student's year and section match ANY of the targets
-        // (Using == instead of === just in case of string/number mismatches)
         return targets.some(t => t.year == year_level && t.section == section);
-      } catch (e) {
-        return true; // Fallback: if parsing fails, show it just in case
-      }
+      } catch (e) { return true; }
     });
-
     res.json(relevantModules);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// STUDENT PROMOTION & COR OCR UPLOAD
+// ==========================================
+app.post('/promote-student', upload.single('corImage'), async (req, res) => {
+  const { userId, manualYear, manualSection, isIrregular } = req.body;
+  if (!req.file) return res.status(400).json({ error: "No COR image uploaded" });
+
+  try {
+    const [userRows] = await db.query("SELECT full_name, student_id FROM users WHERE id = ?", [userId]);
+    const student = userRows[0];
+    
+    const safeName = student.full_name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const safeId = student.student_id.replace(/[^a-zA-Z0-9]/g, '');
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    
+    const newFileName = `${safeName}_${safeId}${ext}`;
+    const newPath = path.join(__dirname, 'uploads', newFileName);
+    fs.renameSync(req.file.path, newPath);
+    
+    const corUrl = `/uploads/${newFileName}`;
+    const status = isIrregular === 'true' ? 'Irregular' : 'Regular';
+
+    // 🛡️ STRICT VERIFICATION: Save to "pending_" columns! Do NOT overwrite active class yet.
+    await db.query(
+      "UPDATE users SET pending_year = ?, pending_section = ?, pending_status = ?, cor_image_url = ?, cor_status = 'Pending' WHERE id = ?",
+      [manualYear, manualSection, status, corUrl, userId]
+    );
+
+    res.json({ success: true, message: "Promotion requested successfully!" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-
-
-// ==========================
-// START SERVER
-// ==========================
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+// ==========================================
+// ADMIN: PROMOTION VALIDATION ROUTES
+// ==========================================
+app.get('/admin/promotions/pending', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, full_name, student_id, program, year_level, section, status, pending_year, pending_section, pending_status, cor_image_url, cor_status FROM users WHERE cor_status = 'Pending' ORDER BY full_name ASC"
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// SINGLE APPROVE
+app.put('/admin/promotions/:id/approve', async (req, res) => {
+  try {
+    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 🚀 NEW: MASS APPROVE
+app.put('/admin/promotions/mass-approve', async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || ids.length === 0) return res.status(400).json({ error: "No IDs provided" });
+  try {
+    // Updates all selected students at once!
+    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id IN (?)", [ids]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// SINGLE REJECT
+app.put('/admin/promotions/:id/reject', async (req, res) => {
+  try {
+    await db.query("UPDATE users SET cor_status = 'Rejected', cor_image_url = NULL, pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => { console.log(`🚀 Server running on http://localhost:${PORT}`); });

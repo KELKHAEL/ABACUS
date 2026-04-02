@@ -3,7 +3,7 @@ import {
   Search, Filter, Eye, Edit3, 
   Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2 
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // Need this to check auth
+import { useNavigate } from 'react-router-dom';
 import './Instructor.css';
 
 export default function Gradebook() {
@@ -12,20 +12,38 @@ export default function Gradebook() {
   const [loading, setLoading] = useState(true);
   const [quizStatusMap, setQuizStatusMap] = useState({}); 
 
-  // Filters
   const [search, setSearch] = useState("");
   const [programFilter, setProgramFilter] = useState("All");
   const [yearFilter, setYearFilter] = useState("All");
   const [sectionFilter, setSectionFilter] = useState("All");
 
-  // Modal State
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editGrades, setEditGrades] = useState([]);
 
   const navigate = useNavigate();
 
-  // --- 1. FETCH DATA (MySQL) ---
+  // ✅ HELPER: Calculate True Average, actively ignoring Soft-Deleted quizzes
+  const calculateAverage = (gradesList, currentStatusMap) => {
+    if (!gradesList || gradesList.length === 0) return "N/A";
+    let totalScore = 0;
+    let totalItems = 0;
+    let validGradesCount = 0;
+    
+    gradesList.forEach(g => {
+      // Exclude grades linked to a deleted quiz
+      if (currentStatusMap[g.quiz_id] !== 'deleted') {
+        totalScore += parseFloat(g.grade || 0);
+        totalItems += parseFloat(g.total_items || 100); 
+        validGradesCount++;
+      }
+    });
+
+    if (validGradesCount === 0) return "N/A";
+    if (totalItems === 0) return "0.0";
+    return ((totalScore / totalItems) * 100).toFixed(1);
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -34,36 +52,23 @@ export default function Gradebook() {
         if (!userStr) { navigate('/login'); return; }
         const user = JSON.parse(userStr);
 
-        // A. Fetch Instructor's Dashboard Data (Contains ONLY assigned students)
         const dashboardRes = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
         const dashboardData = await dashboardRes.json();
-        
         if (dashboardData.error) throw new Error(dashboardData.error);
-        
         const assignedStudents = dashboardData.students || [];
 
-        // B. Fetch All Grades
         const gradesRes = await fetch('http://localhost:5000/grades');
         const gradesData = await gradesRes.json();
 
-        // C. Fetch Quizzes (for status map)
         const quizRes = await fetch('http://localhost:5000/quizzes');
         const quizData = await quizRes.json();
 
-        // --- PROCESSING ---
-        
-        // 1. Map Quiz Status
         const statusMap = {};
-        quizData.forEach(q => {
-            statusMap[q.id] = q.status;
-        });
+        quizData.forEach(q => { statusMap[q.id] = q.status; });
         setQuizStatusMap(statusMap);
 
-        // 2. Combine Assigned Students with their Grades
         const mergedData = assignedStudents.map(student => {
-            // Find all grades belonging to this student
             const studentGrades = gradesData.filter(g => g.user_id === student.id);
-            
             return {
                 id: student.id,
                 fullName: student.full_name,
@@ -87,7 +92,6 @@ export default function Gradebook() {
     fetchData();
   }, [navigate]);
 
-  // --- FILTER LOGIC ---
   useEffect(() => {
     let result = students;
 
@@ -99,20 +103,13 @@ export default function Gradebook() {
       );
     }
 
-    if (programFilter !== "All") {
-      result = result.filter(s => s.program === programFilter);
-    }
-    if (yearFilter !== "All") {
-      result = result.filter(s => s.yearLevel === yearFilter);
-    }
-    if (sectionFilter !== "All") {
-      result = result.filter(s => s.section === sectionFilter);
-    }
+    if (programFilter !== "All") result = result.filter(s => s.program === programFilter);
+    if (yearFilter !== "All") result = result.filter(s => s.yearLevel === yearFilter);
+    if (sectionFilter !== "All") result = result.filter(s => s.section === sectionFilter);
 
     setFilteredStudents(result);
   }, [search, programFilter, yearFilter, sectionFilter, students]);
 
-  // --- MODAL ACTIONS ---
   const openStudentModal = (student, editMode = false) => {
     setSelectedStudent(student);
     setEditGrades(JSON.parse(JSON.stringify(student.gradesList))); 
@@ -128,13 +125,10 @@ export default function Gradebook() {
   const handleDeleteGrade = async (index) => {
     if(window.confirm("Are you sure you want to delete this grade permanently?")) {
         const gradeToDelete = editGrades[index];
-        
-        // Optimistic UI Update
         const updated = [...editGrades];
         updated.splice(index, 1); 
         setEditGrades(updated);
 
-        // API Call
         try {
             await fetch(`http://localhost:5000/grades/${gradeToDelete.id}`, { method: 'DELETE' });
         } catch(e) {
@@ -143,16 +137,17 @@ export default function Gradebook() {
     }
   };
 
-  // --- SAVE GRADES ---
   const saveGrades = async () => {
     if (!selectedStudent) return;
-    
     try {
       const updatePromises = editGrades.map(grade => {
           return fetch(`http://localhost:5000/grades/${grade.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ score: grade.grade })
+              body: JSON.stringify({ 
+                score: grade.grade, 
+                total_items: grade.total_items || 100 
+              })
           });
       });
 
@@ -167,7 +162,6 @@ export default function Gradebook() {
       setSelectedStudent(null);
       setIsEditing(false); 
       alert("Grades updated successfully!");
-
     } catch (error) {
       console.error("Error saving grades:", error);
       alert("Failed to save grades.");
@@ -176,8 +170,6 @@ export default function Gradebook() {
 
   return (
     <div className="gradebook-wrapper">
-      
-      {/* --- FILTERS BAR --- */}
       <div className="gb-filters-card">
         <div className="filter-title">
             <Filter size={18} color="#eab308"/> 
@@ -219,7 +211,6 @@ export default function Gradebook() {
         </div>
       </div>
 
-      {/* --- STUDENTS TABLE --- */}
       <div className="gb-table-card">
         <div className="table-header-accent">
             <div className="th-content">
@@ -246,9 +237,7 @@ export default function Gradebook() {
               <tr><td colSpan="5" className="text-center p-4">No students assigned to your classes yet.</td></tr>
             ) : (
               filteredStudents.map(student => {
-                const avg = student.gradesList.length > 0 
-                  ? (student.gradesList.reduce((acc, curr) => acc + parseFloat(curr.grade || 0), 0) / student.gradesList.length).toFixed(1)
-                  : "N/A";
+                const avg = calculateAverage(student.gradesList, quizStatusMap);
 
                 return (
                   <tr key={student.id}>
@@ -267,7 +256,7 @@ export default function Gradebook() {
                     </td>
                     <td className="text-center">
                       <span className={`grade-avg ${avg >= 75 ? 'pass' : (avg === "N/A" ? 'neutral' : 'fail')}`}>
-                        {avg}%
+                        {avg === "N/A" ? avg : `${avg}%`}
                       </span>
                     </td>
                     <td className="text-right">
@@ -288,7 +277,6 @@ export default function Gradebook() {
         </table>
       </div>
 
-      {/* --- ASSESSMENT RECORD MODAL --- */}
       {selectedStudent && (
         <div className="modal-overlay" onClick={() => setSelectedStudent(null)}>
           <div className="modal-content large" onClick={e => e.stopPropagation()}>
@@ -322,24 +310,28 @@ export default function Gradebook() {
                   <thead>
                     <tr>
                       <th width="35%">Quiz Title / Subject</th>
-                      <th width="20%">Date Taken</th>
-                      <th width="20%">Score / Grade</th>
-                      <th width="15%">Status</th>
-                      {isEditing && <th width="10%">Action</th>}
+                      <th width="15%">Date Taken</th>
+                      <th width="15%" className="text-center">Score</th>
+                      <th width="15%" className="text-center">Total</th>
+                      <th width="10%" className="text-center">Status</th>
+                      {isEditing && <th width="10%" className="text-center">Action</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {editGrades.length === 0 ? (
-                      <tr><td colSpan="5" className="text-center p-4">No quiz records found.</td></tr>
+                      <tr><td colSpan="6" className="text-center p-4">No quiz records found.</td></tr>
                     ) : (
                       editGrades.map((grade, idx) => {
                         const isDeleted = quizStatusMap[grade.quiz_id] === 'deleted';
+                        const currentScore = parseFloat(grade.grade || 0);
+                        const currentTotal = parseFloat(grade.total_items || 100);
+                        const percentage = currentTotal > 0 ? ((currentScore / currentTotal) * 100) : 0;
                         
                         return (
                           <tr key={idx} style={isDeleted ? {backgroundColor: '#f9f9f9', color: '#999'} : {}}>
                             <td>
                               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                                <span style={{fontWeight: isDeleted ? 'normal' : '600', color: isDeleted ? '#999' : '#333'}}>
+                                <span style={{fontWeight: isDeleted ? 'normal' : '600', color: isDeleted ? '#999' : '#333', textDecoration: isDeleted ? 'line-through' : 'none'}}>
                                     {grade.subjectTitle}
                                 </span>
                                 {isDeleted && (
@@ -352,16 +344,21 @@ export default function Gradebook() {
                             <td style={{color: isDeleted ? '#bbb' : '#666', fontSize: '13px'}}>
                               {grade.dateTaken ? new Date(grade.dateTaken).toLocaleDateString() : "-"}
                             </td>
-                            <td>
-                              {isEditing ? (
-                                <div className="score-input-wrapper">
-                                  <input type="number" className="sheet-input-score" value={grade.grade} onChange={(e) => handleGradeChange(idx, 'grade', e.target.value)}/>
-                                  <span style={{fontSize:'14px', color:'#666', fontWeight:'bold'}}>%</span>
-                                </div>
-                              ) : <span className="score-display" style={{color: isDeleted ? '#999' : '#111'}}>{grade.grade}%</span>}
+                            
+                            <td className="text-center">
+                              {isEditing && !isDeleted ? (
+                                <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.grade} onChange={(e) => handleGradeChange(idx, 'grade', e.target.value)}/>
+                              ) : <span className="score-display" style={{color: isDeleted ? '#999' : '#111'}}>{currentScore}</span>}
                             </td>
-                            <td>
-                              {parseFloat(grade.grade) >= 75 ? (
+
+                            <td className="text-center">
+                              {isEditing && !isDeleted ? (
+                                <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.total_items || 100} onChange={(e) => handleGradeChange(idx, 'total_items', e.target.value)}/>
+                              ) : <span style={{color: isDeleted ? '#999' : '#666'}}>{currentTotal}</span>}
+                            </td>
+
+                            <td className="text-center">
+                              {percentage >= 75 ? (
                                 <span className={`status-badge ${isDeleted ? '' : 'pass'}`} style={isDeleted ? {background:'#eee', color:'#888'} : {}}>
                                     <CheckCircle size={12}/> Passed
                                 </span>
@@ -385,6 +382,15 @@ export default function Gradebook() {
                           </tr>
                         );
                       })
+                    )}
+                    {editGrades.length > 0 && (
+                        <tr style={{backgroundColor: '#f0fdf4', borderTop: '2px solid #bbf7d0'}}>
+                            <td colSpan="2" className="text-right" style={{fontWeight: 'bold', color: '#166534'}}>Overall Average (Active):</td>
+                            <td colSpan="2" className="text-center" style={{fontWeight: '900', color: '#15803d', fontSize: '16px'}}>
+                                {calculateAverage(editGrades, quizStatusMap)} {calculateAverage(editGrades, quizStatusMap) !== "N/A" && "%"}
+                            </td>
+                            <td colSpan={isEditing ? 2 : 1}></td>
+                        </tr>
                     )}
                   </tbody>
                 </table>

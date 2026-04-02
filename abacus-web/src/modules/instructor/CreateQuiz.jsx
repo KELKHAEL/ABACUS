@@ -4,7 +4,7 @@ import {
   Trash2, Plus, X, Check, 
   AlignLeft, CheckSquare, 
   Circle, MoreVertical, Save,
-  Target, BarChart
+  Target, BarChart, Clock
 } from 'lucide-react';
 import './Instructor.css';
 
@@ -14,20 +14,23 @@ export default function CreateQuiz({ setActiveTab }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuizId, setEditQuizId] = useState(null);
 
-  // Instructor's Assigned Classes (Fetched from local storage or API)
   const [myClasses, setMyClasses] = useState([]);
-  
-  // Selected Target Class (Combined Year & Section)
-  // We'll store it as a string like "1-1" (Year-Section) for easier handling in a single select
-  const [selectedClassStr, setSelectedClassStr] = useState(""); 
+  const [selectedClassStr, setSelectedClassStr] = useState("ALL-ALL"); 
 
-  // Form State
-  const [quizTitle, setQuizTitle] = useState("Untitled Quiz");
+  const [quizTitle, setQuizTitle] = useState("");
   const [quizDesc, setQuizDesc] = useState("");
-  const [difficulty, setDifficulty] = useState("Easy");
+  const [dueDate, setDueDate] = useState("");
 
   const [questions, setQuestions] = useState([
-    { id: Date.now(), questionText: "", options: ["Option 1"], correctIndex: 0, correctAnswerText: "", type: "multiple-choice", required: true }
+    { 
+      id: Date.now(), 
+      questionText: "", 
+      options: [""], 
+      correctIndex: 0, 
+      correctIndices: [],
+      correctAnswerText: "", 
+      type: "multiple-choice" 
+    }
   ]);
   const [activeQuestion, setActiveQuestion] = useState(null);
 
@@ -37,29 +40,16 @@ export default function CreateQuiz({ setActiveTab }) {
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        // Ensure assignedClasses exists and is an array
         let classes = [];
         
-        // Check for different possible property names/structures
         if (user.assigned_classes) {
-            // If it came from MySQL login as a JSON string or object
             classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
         } else if (user.assignedClasses) {
-            // If it came from Firebase or pre-parsed object
             classes = user.assignedClasses;
         }
 
-        // Ensure classes is an array
-        if (!Array.isArray(classes)) {
-            classes = [];
-        }
-
+        if (!Array.isArray(classes)) classes = [];
         setMyClasses(classes);
-        
-        // Default to the first class if available and nothing selected yet
-        if (classes.length > 0 && !selectedClassStr) {
-          setSelectedClassStr(`${classes[0].year}-${classes[0].section}`);
-        }
       } catch (e) {
         console.error("Error parsing user classes:", e);
         setMyClasses([]);
@@ -73,18 +63,30 @@ export default function CreateQuiz({ setActiveTab }) {
       const q = location.state.quizToEdit;
       setIsEditing(true);
       setEditQuizId(q.id);
-      setQuizTitle(q.title);
+      setQuizTitle(q.title || "");
       setQuizDesc(q.description || "");
       
-      // Set the dropdown to match the quiz's target
       if (q.target_year && q.target_section) {
           setSelectedClassStr(`${q.target_year}-${q.target_section}`);
       }
       
-      setDifficulty(q.difficulty || "Easy");
+      if (q.due_date) {
+         const dateObj = new Date(q.due_date);
+         dateObj.setMinutes(dateObj.getMinutes() - dateObj.getTimezoneOffset());
+         setDueDate(dateObj.toISOString().slice(0, 16));
+      }
       
       if (q.questions && q.questions.length > 0) {
-          setQuestions(q.questions);
+          const hydratedQuestions = q.questions.map(question => {
+            if (question.type === 'checkbox') {
+              return { 
+                ...question, 
+                correctIndices: question.correct_answer_text ? question.correct_answer_text.split(',').map(Number) : [] 
+              };
+            }
+            return { ...question, correctIndices: [] };
+          });
+          setQuestions(hydratedQuestions);
       }
     }
   }, [location.state]);
@@ -95,11 +97,11 @@ export default function CreateQuiz({ setActiveTab }) {
     setQuestions([...questions, { 
       id: newId, 
       questionText: "", 
-      options: ["Option 1"], 
+      options: [""], 
       correctIndex: 0, 
+      correctIndices: [],
       correctAnswerText: "", 
-      type: "multiple-choice", 
-      required: false 
+      type: "multiple-choice"
     }]);
     setActiveQuestion(newId);
   };
@@ -107,6 +109,14 @@ export default function CreateQuiz({ setActiveTab }) {
   const updateQuestion = (idx, field, value) => {
     const newQ = [...questions];
     newQ[idx][field] = value;
+    
+    // ✅ FIX: Clear out the text string to prevent "1,2,0" from appearing in Identification
+    if (field === 'type') {
+      newQ[idx].correctIndex = 0;
+      newQ[idx].correctIndices = [];
+      newQ[idx].correctAnswerText = ""; 
+    }
+    
     setQuestions(newQ);
   };
 
@@ -118,7 +128,7 @@ export default function CreateQuiz({ setActiveTab }) {
 
   const addOption = (qIdx) => {
     const newQ = [...questions];
-    newQ[qIdx].options.push(`Option ${newQ[qIdx].options.length + 1}`);
+    newQ[qIdx].options.push("");
     setQuestions(newQ);
   };
 
@@ -126,13 +136,35 @@ export default function CreateQuiz({ setActiveTab }) {
     const newQ = [...questions];
     if (newQ[qIdx].options.length <= 1) return;
     newQ[qIdx].options.splice(oIdx, 1);
+    
     if (newQ[qIdx].correctIndex >= newQ[qIdx].options.length) newQ[qIdx].correctIndex = 0;
+    
+    if (newQ[qIdx].type === 'checkbox') {
+      newQ[qIdx].correctIndices = newQ[qIdx].correctIndices
+        .filter(i => i !== oIdx)
+        .map(i => i > oIdx ? i - 1 : i);
+    }
+    
     setQuestions(newQ);
   };
 
-  const setCorrectIndex = (qIdx, oIdx) => {
+  const toggleCorrectAnswer = (qIdx, oIdx) => {
     const newQ = [...questions];
-    newQ[qIdx].correctIndex = oIdx;
+    const q = newQ[qIdx];
+    
+    if (q.type === 'checkbox') {
+      if (!q.correctIndices) q.correctIndices = [];
+      if (q.correctIndices.includes(oIdx)) {
+        q.correctIndices = q.correctIndices.filter(i => i !== oIdx);
+      } else {
+        q.correctIndices.push(oIdx);
+      }
+      q.correctAnswerText = q.correctIndices.join(',');
+      q.correctIndex = 0; 
+    } else {
+      q.correctIndex = oIdx;
+    }
+    
     setQuestions(newQ);
   };
 
@@ -148,11 +180,11 @@ export default function CreateQuiz({ setActiveTab }) {
     if (!quizTitle.trim()) return alert("Please enter a Quiz Title.");
     if (!selectedClassStr) return alert("Please select a target class.");
 
-    // Validation
     for (let i = 0; i < questions.length; i++) {
       if (!questions[i].questionText.trim()) return alert(`Question ${i + 1} is missing text.`);
       if (questions[i].type === 'short' && !questions[i].correctAnswerText.trim()) return alert(`Question ${i + 1} needs a correct answer key.`);
       if (questions[i].type !== 'short' && questions[i].options.some(o => !o.trim())) return alert(`Question ${i + 1} has empty options.`);
+      if (questions[i].type === 'checkbox' && (!questions[i].correctIndices || questions[i].correctIndices.length === 0)) return alert(`Question ${i + 1} needs at least one correct checkbox selected.`);
     }
 
     try {
@@ -160,7 +192,6 @@ export default function CreateQuiz({ setActiveTab }) {
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return alert("You must be logged in.");
 
-      // Parse the "Year-Section" string back into separate values
       const [tYear, tSection] = selectedClassStr.split('-');
 
       const payload = {
@@ -168,9 +199,9 @@ export default function CreateQuiz({ setActiveTab }) {
         description: quizDesc,
         targetYear: tYear,
         targetSection: tSection,
-        difficulty: difficulty,
+        dueDate: dueDate,
         createdBy: user.id,
-        questions: questions // Send the whole array
+        questions: questions 
       };
 
       let url = 'http://localhost:5000/quizzes';
@@ -192,7 +223,7 @@ export default function CreateQuiz({ setActiveTab }) {
       if (data.success) {
         alert(isEditing ? "Quiz Updated!" : "Quiz Published Successfully!");
         if (setActiveTab) setActiveTab('dashboard');
-        else navigate('/instructor/InstructorDashboard'); // Safer navigation
+        else navigate('/instructor/InstructorDashboard'); 
       } else {
         throw new Error(data.error);
       }
@@ -226,45 +257,41 @@ export default function CreateQuiz({ setActiveTab }) {
           {/* TARGET SETTINGS */}
           <div style={{marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
             
-            {/* Target Class Selector */}
             <div style={{flex: 1, minWidth: '250px'}}>
                 <label style={{fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px'}}>
                     <Target size={14}/> TARGET CLASS
                 </label>
                 
-                {myClasses.length > 0 ? (
-                    <select 
-                        style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9fafb'}}
-                        value={selectedClassStr}
-                        onChange={(e) => setSelectedClassStr(e.target.value)}
-                    >
-                        {myClasses.map((cls, idx) => (
-                            <option key={idx} value={`${cls.year}-${cls.section}`}>
-                                Year {cls.year} - Section {cls.section}
-                            </option>
-                        ))}
-                    </select>
-                ) : (
-                    <div style={{fontSize:'13px', color:'#ef4444', padding:'8px', background:'#fee2e2', borderRadius:'4px'}}>
-                        No classes assigned to your account. Contact Admin.
+                <select 
+                    style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9fafb'}}
+                    value={selectedClassStr}
+                    onChange={(e) => setSelectedClassStr(e.target.value)}
+                >
+                    <option value="ALL-ALL" style={{fontWeight: 'bold'}}>All Assigned Classes</option>
+                    {myClasses.map((cls, idx) => (
+                        <option key={idx} value={`${cls.year}-${cls.section}`}>
+                            Year {cls.year} - Section {cls.section}
+                        </option>
+                    ))}
+                </select>
+                {myClasses.length === 0 && (
+                    <div style={{fontSize:'13px', color:'#ef4444', padding:'8px', marginTop:'5px', background:'#fee2e2', borderRadius:'4px'}}>
+                        Warning: No classes assigned to your account.
                     </div>
                 )}
             </div>
 
-            {/* Difficulty */}
-            <div style={{flex: 1, minWidth: '150px'}}>
-                <label style={{fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px'}}>
-                    <BarChart size={14}/> DIFFICULTY
+            <div style={{flex: 1, minWidth: '200px'}}>
+                <label style={{fontSize: '12px', fontWeight: 'bold', color: '#ef4444', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px'}}>
+                    <Clock size={14}/> DEADLINE / DUE DATE
                 </label>
-                <select 
-                    style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd'}}
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value)}
-                >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                </select>
+                <input 
+                    type="datetime-local"
+                    style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ef4444', color: '#111', fontWeight: 'bold'}}
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    required
+                />
             </div>
 
           </div>
@@ -299,13 +326,13 @@ export default function CreateQuiz({ setActiveTab }) {
                 >
                   <option value="multiple-choice">Multiple choice</option>
                   <option value="checkbox">Checkboxes</option>
-                  <option value="short">Short answer</option>
+                  <option value="short">Identification</option>
                 </select>
               </div>
             </div>
 
             <div className="q-body">
-              {/* SHORT ANSWER */}
+              {/* IDENTIFICATION (SHORT ANSWER) */}
               {q.type === 'short' && (
                 <div className="short-answer-box">
                   <div className="short-label">Correct Answer Key:</div>
@@ -320,38 +347,44 @@ export default function CreateQuiz({ setActiveTab }) {
                 </div>
               )}
 
-              {/* OPTIONS */}
+              {/* OPTIONS (MULTIPLE CHOICE & CHECKBOX) */}
               {(q.type === 'multiple-choice' || q.type === 'checkbox') && (
                 <div className="options-container">
-                  {q.options.map((opt, oIdx) => (
-                    <div key={oIdx} className="option-line">
-                      
-                      {/* SELECTION MARKER */}
-                      <div 
-                        className={`selector-icon ${q.correctIndex === oIdx ? 'correct' : ''}`}
-                        onClick={() => setCorrectIndex(qIdx, oIdx)}
-                        title="Click to mark as Correct Answer"
-                      >
-                        {q.correctIndex === oIdx ? <Check size={14} color="white" /> : null}
-                      </div>
+                  {q.options.map((opt, oIdx) => {
+                    const isCorrect = q.type === 'checkbox' 
+                        ? q.correctIndices?.includes(oIdx) 
+                        : q.correctIndex === oIdx;
 
-                      <input 
-                        className={`input-option ${q.correctIndex === oIdx ? 'correct-text' : ''}`}
-                        value={opt} 
-                        onChange={(e) => updateOption(qIdx, oIdx, e.target.value)} 
-                        placeholder={`Option ${oIdx + 1}`} 
-                      />
+                    return (
+                        <div key={oIdx} className="option-line">
+                        
+                        <div 
+                            className={`selector-icon ${isCorrect ? 'correct' : ''}`}
+                            style={{ borderRadius: q.type === 'checkbox' ? '4px' : '50%' }}
+                            onClick={() => toggleCorrectAnswer(qIdx, oIdx)}
+                            title={q.type === 'checkbox' ? "Click to toggle correct answer" : "Click to mark as Correct Answer"}
+                        >
+                            {isCorrect ? <Check size={14} color="white" /> : null}
+                        </div>
 
-                      {q.options.length > 1 && (
-                        <button className="btn-remove-opt" onClick={() => removeOption(qIdx, oIdx)}>
-                          <X size={18} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                        <input 
+                            className={`input-option ${isCorrect ? 'correct-text' : ''}`}
+                            value={opt} 
+                            onChange={(e) => updateOption(qIdx, oIdx, e.target.value)} 
+                            placeholder={`Option ${oIdx + 1}`} 
+                        />
+
+                        {q.options.length > 1 && (
+                            <button className="btn-remove-opt" onClick={() => removeOption(qIdx, oIdx)}>
+                            <X size={18} />
+                            </button>
+                        )}
+                        </div>
+                    );
+                  })}
                   
                   <div className="add-option-line" onClick={() => addOption(qIdx)}>
-                    <div className="selector-icon placeholder"></div>
+                    <div className="selector-icon placeholder" style={{ borderRadius: q.type === 'checkbox' ? '4px' : '50%' }}></div>
                     <span>Add option</span>
                   </div>
                 </div>
@@ -362,27 +395,15 @@ export default function CreateQuiz({ setActiveTab }) {
               <div className="footer-start">
                 {(q.type === 'multiple-choice' || q.type === 'checkbox') && (
                   <span className="correct-answer-hint">
-                    <Check size={14} /> Mark the correct answer using the circle/box on the left.
+                    <Check size={14} /> Mark the correct answer(s) using the indicator on the left.
                   </span>
                 )}
               </div>
 
               <div className="footer-actions">
-                <button className="icon-action-btn" onClick={() => deleteQuestion(qIdx)} title="Delete">
+                <button className="icon-action-btn" onClick={() => deleteQuestion(qIdx)} title="Delete Question">
                   <Trash2 size={20} />
                 </button>
-                <div className="v-divider"></div>
-                <div className="toggle-wrapper">
-                  <span className="toggle-label">Required</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={q.required} 
-                      onChange={() => updateQuestion(qIdx, 'required', !q.required)} 
-                    />
-                    <span className="slider round"></span>
-                  </label>
-                </div>
               </div>
             </div>
           </div>

@@ -10,6 +10,8 @@ import AdminDashboard from './modules/admin/AdminDashboard';
 import ManageStudents from './modules/admin/ManageStudents';
 import ManageInstructors from './modules/admin/ManageInstructors';
 import ManageAnnouncements from './modules/admin/ManageAnnouncements';
+import ManageAcademicSetup from './modules/admin/ManageAcademicSetup';
+import ManagePromotions from './modules/admin/ManagePromotions';
 
 // Pages - INSTRUCTOR
 import InstructorDashboard from './modules/instructor/InstructorDashboard';
@@ -70,6 +72,8 @@ function App() {
           <Route path="/admin/ManageStudents" element={<ManageStudents />} />
           <Route path="/admin/ManageInstructors" element={<ManageInstructors />} />
           <Route path="/admin/ManageAnnouncements" element={<ManageAnnouncements />} />
+          <Route path="/admin/ManageAcademicSetup" element={<ManageAcademicSetup />} />
+          <Route path="/admin/ManagePromotions" element={<ManagePromotions />} />
         </Route>
 
         {/* --- INSTRUCTOR ROUTES --- */}

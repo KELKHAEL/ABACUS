@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, SafeAreaView, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import { 
+  View, Text, TouchableOpacity, Alert, StyleSheet, 
+  SafeAreaView, ScrollView, TextInput, ActivityIndicator, 
+  AppState, BackHandler 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
+import * as ScreenCapture from 'expo-screen-capture'; 
 
 // ❗ REPLACE THIS WITH YOUR PC'S IP ADDRESS
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
@@ -21,6 +26,10 @@ export default function QuizScreen({ route, navigation }) {
   // Inputs
   const [textAnswer, setTextAnswer] = useState(""); 
   const [selectedChecks, setSelectedChecks] = useState([]); 
+
+  // Security Refs
+  const appState = useRef(AppState.currentState);
+  const isCheating = useRef(false);
 
   // --- FETCH QUIZ DETAILS ---
   useEffect(() => {
@@ -44,20 +53,82 @@ export default function QuizScreen({ route, navigation }) {
     fetchQuizDetails();
   }, [quizId]);
 
+  // ==========================================
+  // 🛡️ ANTI-CHEAT SECURITY MODULE 🛡️
+  // ==========================================
+  useEffect(() => {
+    if (loading || quizFinished) return;
+
+    // 1. Block Android Screenshots Native Level
+    ScreenCapture.preventScreenCaptureAsync();
+
+    // 2. Listen for iOS Screenshots (or bypassed Androids)
+    const screenshotSubscription = ScreenCapture.addScreenshotListener(() => {
+      handleCheatDetection("Screenshot or Screen Recording detected!");
+    });
+
+    // 3. Listen for App Backgrounding (Googling answers)
+    const appStateSubscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        handleCheatDetection("App moved to background. You cannot leave the quiz to search for answers.");
+      }
+      appState.current = nextAppState;
+    });
+
+    // 4. Intercept Android Hardware Back Button
+    const onBackPress = () => {
+      promptLeaveWarning();
+      return true; // Prevents default back behavior
+    };
+    // ✅ FIXED: Storing the subscription to call .remove() later
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    // 5. Intercept UI Back Button (React Navigation)
+    const navUnsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (quizFinished || isCheating.current) return; 
+      e.preventDefault();
+      promptLeaveWarning();
+    });
+
+    return () => {
+      // ✅ FIXED: Modern cleanup routine using .remove() on all subscriptions
+      ScreenCapture.allowScreenCaptureAsync();
+      if (screenshotSubscription) screenshotSubscription.remove();
+      if (appStateSubscription) appStateSubscription.remove();
+      if (backSubscription) backSubscription.remove(); 
+      if (navUnsubscribe) navUnsubscribe();
+    };
+  }, [loading, quizFinished, navigation]);
+
+  const promptLeaveWarning = () => {
+    Alert.alert(
+      "⚠️ Warning!",
+      "You cannot leave an active quiz. Leaving now will submit your quiz with a score of 0.",
+      [
+        { text: "Stay & Continue", style: "cancel" },
+        { text: "Leave & Fail", style: "destructive", onPress: () => handleCheatDetection("Exited the quiz early.") }
+      ]
+    );
+  };
+
+  const handleCheatDetection = (reason) => {
+    if (isCheating.current || quizFinished) return;
+    isCheating.current = true;
+    finishQuiz(0, reason); // Auto-submit with 0
+  };
+  // ==========================================
+
   if (loading || !quizData) {
       return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#104a28"/></View>;
   }
 
   const currentQ = quizData.questions[currentQuestionIndex];
 
-  // --- HANDLER: MULTIPLE CHOICE ---
   const handleMultipleChoice = (selectedIndex) => {
-    // Note: Database stores correct_index, backend maps it to correctIndex
     let isCorrect = selectedIndex === currentQ.correctIndex;
     processAnswer(isCorrect);
   };
 
-  // --- HANDLER: SHORT ANSWER ---
   const handleTextSubmit = () => {
     if (!textAnswer.trim()) return Alert.alert("Required", "Please type an answer.");
     let isCorrect = textAnswer.trim().toLowerCase() === currentQ.correctAnswerText?.trim().toLowerCase();
@@ -65,7 +136,6 @@ export default function QuizScreen({ route, navigation }) {
     setTextAnswer(""); 
   };
 
-  // --- HANDLER: CHECKBOXES ---
   const toggleCheckbox = (index) => {
     if (selectedChecks.includes(index)) {
       setSelectedChecks(selectedChecks.filter(i => i !== index));
@@ -76,13 +146,11 @@ export default function QuizScreen({ route, navigation }) {
 
   const submitCheckbox = () => {
     if (selectedChecks.length === 0) return Alert.alert("Required", "Select at least one option.");
-    // Simplified logic: Check if selected matches correct index (Single correct for now)
     let isCorrect = selectedChecks.includes(currentQ.correctIndex) && selectedChecks.length === 1;
     processAnswer(isCorrect);
     setSelectedChecks([]); 
   };
 
-  // --- CORE LOGIC ---
   const processAnswer = (isCorrect) => {
     let newScore = score;
     if (isCorrect) {
@@ -98,35 +166,45 @@ export default function QuizScreen({ route, navigation }) {
   };
 
   // --- SAVE RESULTS ---
-  const finishQuiz = async (finalScore) => {
+  const finishQuiz = async (finalScore, cheatReason = null) => {
     setQuizFinished(true);
     setSaving(true);
     
-    const percentage = (finalScore / quizData.questions.length) * 100;
-    const finalGrade = percentage.toFixed(2);
+    const totalItems = quizData ? quizData.questions.length : 100;
+    const percentage = totalItems > 0 ? ((finalScore / totalItems) * 100).toFixed(1) : 0;
 
     try {
-      // ✅ SAVE TO MYSQL
       await fetch(`${API_URL}/grades`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             userId: user.id,
             quizId: quizId,
-            score: finalGrade,
+            score: finalScore,
+            totalItems: totalItems,
             subjectTitle: quizTitle
         })
       });
 
       setSaving(false);
-      Alert.alert("Quiz Complete!", `You scored ${finalGrade}%`, [
-        { text: "Back to Home", onPress: () => navigation.navigate("StudentHome") }
-      ]);
+      
+      // Show different alerts based on if they finished normally or cheated
+      if (cheatReason) {
+         Alert.alert("🚨 Quiz Terminated", `Violation: ${cheatReason}\n\nYour score has been recorded as 0.`, [
+          { text: "Understood", onPress: () => navigation.navigate("StudentHome") }
+         ]);
+      } else {
+         Alert.alert("Quiz Complete!", `You scored ${finalScore} out of ${totalItems} (${percentage}%)`, [
+          { text: "Back to Home", onPress: () => navigation.navigate("StudentHome") }
+         ]);
+      }
 
     } catch (error) {
       setSaving(false);
       console.error(error);
-      Alert.alert("Error", "Could not save grade. Check internet connection.");
+      Alert.alert("Error", "Could not save grade. Returning home.", [
+         { text: "OK", onPress: () => navigation.navigate("StudentHome") }
+      ]);
     }
   };
 

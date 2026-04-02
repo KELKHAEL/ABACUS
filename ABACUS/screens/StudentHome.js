@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { 
   View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, 
-  Alert, RefreshControl, ActivityIndicator, Platform
+  Alert, RefreshControl, ActivityIndicator, Platform, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
@@ -66,7 +66,13 @@ export default function StudentHome({ navigation }) {
   const [loadingAnnounce, setLoadingAnnounce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 1. Initialize the Copilot Hook!
+  // --- FILTER STATES ---
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filterSender, setFilterSender] = useState('ALL'); // ALL, ADMIN, INSTRUCTOR
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterMonth, setFilterMonth] = useState('ALL');
+  const [filterDay, setFilterDay] = useState('ALL');
+
   const { start } = useCopilot();
 
   const getGreetingName = (fullName) => {
@@ -112,40 +118,44 @@ export default function StudentHome({ navigation }) {
     fetchAnnouncements().finally(() => setRefreshing(false));
   }, []);
 
-  const handleProfileClick = () => {
-    navigation.navigate('ProfileScreen');
-  };
+  const handleProfileClick = () => { navigation.navigate('ProfileScreen'); };
 
-  // --- TRIGGER COPILOT SAFELY ---
   const handleStartTour = () => {
-      // Step 1: Force the app to switch back to the Home tab
       setActiveTab('Home');
-      
-      // Step 2: Wait just a millisecond for React to render the Home tab buttons, then start
-      setTimeout(() => {
-          start();
-      }, 100);
+      setTimeout(() => { start(); }, 100);
   };
 
-  // Automatically trigger it for first time users
   useEffect(() => {
       const checkTutorial = async () => {
         try {
-          // Bumped to v5 to force the new tour to show up on your device
           const hasSeenTutorial = await AsyncStorage.getItem('hasSeenTour_v5');
           if (hasSeenTutorial !== 'true') {
             handleStartTour();
             await AsyncStorage.setItem('hasSeenTour_v5', 'true');
           }
-        } catch (error) {
-          console.error('Error checking tutorial state', error);
-        }
+        } catch (error) {}
       };
-      
-      setTimeout(() => {
-          checkTutorial();
-      }, 1500);
+      setTimeout(() => { checkTutorial(); }, 1500);
     }, []);
+
+  // --- FILTER LOGIC ---
+  const filteredAnnouncements = announcements.filter(item => {
+    const d = new Date(item.created_at);
+    if (filterYear !== 'ALL' && d.getFullYear().toString() !== filterYear) return false;
+    if (filterMonth !== 'ALL' && (d.getMonth() + 1).toString() !== filterMonth) return false;
+    if (filterDay !== 'ALL' && d.getDate().toString() !== filterDay) return false;
+    if (filterSender !== 'ALL' && item.author_role !== filterSender) return false;
+    return true;
+  });
+
+  const clearFilters = () => {
+      setFilterSender('ALL'); setFilterYear('ALL'); setFilterMonth('ALL'); setFilterDay('ALL');
+  };
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length: 5}, (_, i) => (currentYear - i).toString());
+  const months = Array.from({length: 12}, (_, i) => (i + 1).toString());
+  const days = Array.from({length: 31}, (_, i) => (i + 1).toString());
 
   // --- MODULES DATA ---
   const allModules = [
@@ -286,18 +296,14 @@ export default function StudentHome({ navigation }) {
     <ScrollView contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>
-            Hello, {studentName}
-          </Text>
+          <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Hello, {studentName}</Text>
           <Text style={styles.subText}>Ready to learn Discrete Math?</Text>
         </View>
 
-        {/* --- MANUAL TOUR TRIGGER BUTTON --- */}
         <TouchableOpacity style={styles.tourBtn} onPress={handleStartTour}>
            <Ionicons name="help-circle-outline" size={30} color="#104a28" />
         </TouchableOpacity>
 
-        {/* COPILOT STEP 1 */}
         <CopilotStep text="Tap here to view your profile details or to log out." order={1} name="profile">
           <WalkthroughableTouchableOpacity style={styles.profileBtn} onPress={handleProfileClick}>
             <Ionicons name="person-circle-outline" size={36} color="#104a28" />
@@ -306,7 +312,6 @@ export default function StudentHome({ navigation }) {
       </View>
 
       <View style={styles.actionRow}>
-        {/* COPILOT STEP 2 */}
         <CopilotStep text="Take your assigned quizzes and tests right here." order={2} name="quizzes">
           <WalkthroughableTouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('QuizListScreen')}>
             <Ionicons name="clipboard-outline" size={20} color="#333" />
@@ -314,7 +319,6 @@ export default function StudentHome({ navigation }) {
           </WalkthroughableTouchableOpacity>
         </CopilotStep>
         
-        {/* COPILOT STEP 3 */}
         <CopilotStep text="Track your academic progress and quiz scores here." order={3} name="grades">
           <WalkthroughableTouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('MyGradesScreen')}>
             <Ionicons name="stats-chart-outline" size={20} color="#333" />
@@ -328,15 +332,8 @@ export default function StudentHome({ navigation }) {
       <View style={styles.listContainer}>
         {allModules.map((item) => (
           <ModuleCard 
-            key={item.id} 
-            title={item.title} 
-            category={item.category} 
-            color={item.color} 
-            onPress={() => navigation.navigate('ModuleDetail', { 
-                moduleTitle: item.title, 
-                moduleColor: item.color,
-                topics: item.topics 
-            })} 
+            key={item.id} title={item.title} category={item.category} color={item.color} 
+            onPress={() => navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics })} 
           />
         ))}
       </View>
@@ -378,33 +375,110 @@ export default function StudentHome({ navigation }) {
     </ScrollView>
   );
 
-  const renderAnnouncements = () => (
-    <ScrollView 
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <Text style={styles.headerTitle}>Announcements</Text>
-      <Text style={styles.subText}>Updates from your Instructors & Registrar</Text>
+  const renderAnnouncements = () => {
+    const isFiltered = filterYear !== 'ALL' || filterMonth !== 'ALL' || filterDay !== 'ALL' || filterSender !== 'ALL';
+    
+    return (
+      <View style={{flex: 1}}>
+        <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+            <View>
+              <Text style={styles.headerTitle}>Announcements</Text>
+              <Text style={styles.subText}>Updates from your Instructors & Registrar</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, isFiltered && styles.filterBtnActive]}>
+                <Ionicons name="filter" size={20} color={isFiltered ? "white" : "#104a28"} />
+            </TouchableOpacity>
+          </View>
 
-      <View style={{marginTop: 20, gap: 15}}>
-        {loadingAnnounce ? (
-           <ActivityIndicator size="large" color="#104a28" style={{marginTop: 20}} />
-        ) : announcements.length === 0 ? (
-           <View style={styles.emptyState}>
-             <Ionicons name="notifications-off-outline" size={50} color="#ccc" />
-             <Text style={styles.emptyText}>No announcements yet.</Text>
-           </View>
-        ) : (
-           announcements.map((item) => (
-             <AnnouncementCard key={item.id} item={item} />
-           ))
-        )}
+          <View style={{marginTop: 20, gap: 15}}>
+            {loadingAnnounce ? (
+                <ActivityIndicator size="large" color="#104a28" style={{marginTop: 20}} />
+            ) : filteredAnnouncements.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="notifications-off-outline" size={50} color="#ccc" />
+                  <Text style={styles.emptyText}>No announcements found.</Text>
+                </View>
+            ) : (
+                filteredAnnouncements.map((item) => (
+                  <AnnouncementCard key={item.id} item={item} />
+                ))
+            )}
+          </View>
+          <View style={styles.spacer} />
+        </ScrollView>
+
+        {/* --- FILTER MODAL --- */}
+        <Modal visible={showFilterModal} transparent={true} animationType="fade">
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Filter Announcements</Text>
+                        <TouchableOpacity onPress={() => setShowFilterModal(false)}><Ionicons name="close" size={24} color="#666"/></TouchableOpacity>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        <Text style={styles.filterLabel}>Sender</Text>
+                        <View style={styles.chipRow}>
+                            {['ALL', 'ADMIN', 'INSTRUCTOR'].map(type => (
+                                <TouchableOpacity key={type} style={[styles.chip, filterSender === type && styles.chipActive]} onPress={() => setFilterSender(type)}>
+                                    <Text style={[styles.chipText, filterSender === type && styles.chipTextActive]}>{type === 'ADMIN' ? 'Registrar' : type === 'INSTRUCTOR' ? 'Instructors' : 'Everyone'}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.filterLabel}>Year</Text>
+                        <View style={styles.chipRow}>
+                            <TouchableOpacity style={[styles.chip, filterYear === 'ALL' && styles.chipActive]} onPress={() => setFilterYear('ALL')}>
+                                <Text style={[styles.chipText, filterYear === 'ALL' && styles.chipTextActive]}>Any</Text>
+                            </TouchableOpacity>
+                            {years.map(y => (
+                                <TouchableOpacity key={y} style={[styles.chip, filterYear === y && styles.chipActive]} onPress={() => setFilterYear(y)}>
+                                    <Text style={[styles.chipText, filterYear === y && styles.chipTextActive]}>{y}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.filterLabel}>Month</Text>
+                        <View style={styles.chipRow}>
+                            <TouchableOpacity style={[styles.chip, filterMonth === 'ALL' && styles.chipActive]} onPress={() => setFilterMonth('ALL')}>
+                                <Text style={[styles.chipText, filterMonth === 'ALL' && styles.chipTextActive]}>Any</Text>
+                            </TouchableOpacity>
+                            {months.map(m => (
+                                <TouchableOpacity key={m} style={[styles.chip, filterMonth === m && styles.chipActive]} onPress={() => setFilterMonth(m)}>
+                                    <Text style={[styles.chipText, filterMonth === m && styles.chipTextActive]}>{new Date(0, m - 1).toLocaleString('default', { month: 'short' })}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.filterLabel}>Day</Text>
+                        <View style={styles.chipRow}>
+                            <TouchableOpacity style={[styles.chip, filterDay === 'ALL' && styles.chipActive]} onPress={() => setFilterDay('ALL')}>
+                                <Text style={[styles.chipText, filterDay === 'ALL' && styles.chipTextActive]}>Any</Text>
+                            </TouchableOpacity>
+                            {days.map(d => (
+                                <TouchableOpacity key={d} style={[styles.chip, filterDay === d && styles.chipActive]} onPress={() => setFilterDay(d)}>
+                                    <Text style={[styles.chipText, filterDay === d && styles.chipTextActive]}>{d}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </ScrollView>
+
+                    <View style={styles.modalFooter}>
+                        <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
+                            <Text style={styles.clearBtnText}>Reset All</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilterModal(false)}>
+                            <Text style={styles.applyBtnText}>Apply Filters</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
       </View>
-      <View style={styles.spacer} />
-    </ScrollView>
-  );
+    );
+  };
 
-  // 🔴 IMPORTANT CHANGE: Replaced <SafeAreaView> with standard <View> and handled padding manually
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFAFA" translucent={true} />
@@ -424,31 +498,21 @@ export default function StudentHome({ navigation }) {
           </TouchableOpacity>
 
           <CopilotStep text="Download and read PDF lecture materials provided by your instructors." order={4} name="modules">
-            <WalkthroughableTouchableOpacity 
-              style={styles.menuCard} 
-              onPress={() => navigation.navigate('ModulesScreen')}
-            >
+            <WalkthroughableTouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('ModulesScreen')}>
               <Ionicons name={activeTab === 'ModulesScreen' ? "document-text" : "document-text-outline"} size={22} color={activeTab === 'ModulesScreen' ? "white" : "#666"} />
               {activeTab === 'ModulesScreen' && <Text style={styles.navTextActive}>Modules</Text>}
             </WalkthroughableTouchableOpacity>
           </CopilotStep>
 
           <CopilotStep text="Experiment with interactive computational tools and Discrete Math labs!" order={5} name="simulations">
-            <WalkthroughableTouchableOpacity 
-              style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]}
-              onPress={() => setActiveTab('Simulations')}
-            >
+            <WalkthroughableTouchableOpacity style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]} onPress={() => setActiveTab('Simulations')}>
               <Ionicons name={activeTab === 'Simulations' ? "cube" : "cube-outline"} size={22} color={activeTab === 'Simulations' ? "white" : "#666"} />
               {activeTab === 'Simulations' && <Text style={styles.navTextActive}>Labs</Text>}
             </WalkthroughableTouchableOpacity>
           </CopilotStep>
 
-          {/* --- NEW: COPILOT STEP 6 FOR ANNOUNCEMENTS --- */}
           <CopilotStep text="Check here for the latest news and updates from your instructors or the registrar." order={6} name="announcements">
-            <WalkthroughableTouchableOpacity 
-              style={[styles.navItem, activeTab === 'Announcements' && styles.navItemActive]}
-              onPress={() => setActiveTab('Announcements')}
-            >
+            <WalkthroughableTouchableOpacity style={[styles.navItem, activeTab === 'Announcements' && styles.navItemActive]} onPress={() => setActiveTab('Announcements')}>
               <Ionicons name={activeTab === 'Announcements' ? "notifications" : "notifications-outline"} size={22} color={activeTab === 'Announcements' ? "white" : "#666"} />
               {activeTab === 'Announcements' && <Text style={styles.navTextActive}>News</Text>}
             </WalkthroughableTouchableOpacity>
@@ -471,6 +535,9 @@ const styles = StyleSheet.create({
   profileBtn: { padding: 0 }, 
   tourBtn: { padding: 5, marginRight: 10 }, 
 
+  filterBtn: { backgroundColor: '#e5e7eb', padding: 8, borderRadius: 8 },
+  filterBtnActive: { backgroundColor: '#104a28' },
+
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
   actionButton: { 
     width: '48%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', borderRadius: 12, 
@@ -480,53 +547,21 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 15 },
   listContainer: { gap: 15 },
   
-  card: { 
-    backgroundColor: '#fff', borderRadius: 12, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1
-  },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   cardTitle: { fontSize: 16, fontWeight: '600', color: '#333', flexWrap: 'wrap' },
   cardCategory: { fontSize: 11, color: '#888', marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
-  simCard: {
-    backgroundColor: 'white', padding: 20, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1
-  },
+  simCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   simTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   simDesc: { fontSize: 13, color: '#666', marginTop: 4 },
 
-  announceCard: {
-    backgroundColor: 'white', borderRadius: 12, padding: 16, 
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    borderLeftWidth: 4
-  },
+  announceCard: { backgroundColor: 'white', borderRadius: 12, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, borderLeftWidth: 4 },
   adminBorder: { borderLeftColor: '#d32f2f' }, 
   instructorBorder: { borderLeftColor: '#104a28' }, 
   
-  announceHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start', 
-    marginBottom: 8 
-  },
-  authorRow: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start', 
-    gap: 6,
-    flex: 1, 
-    marginRight: 8 
-  },
-  authorText: { 
-    fontSize: 12, 
-    fontWeight: '700', 
-    textTransform: 'uppercase',
-    flexShrink: 1, 
-    flexWrap: 'wrap', 
-    lineHeight: 16 
-  },
-  dateText: { 
-    fontSize: 10, 
-    color: '#999',
-    marginTop: 2
-  },
+  announceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  authorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, flex: 1, marginRight: 8 },
+  authorText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', flexShrink: 1, flexWrap: 'wrap', lineHeight: 16 },
+  dateText: { fontSize: 10, color: '#999', marginTop: 2 },
   divider: { height: 1, backgroundColor: '#eee', marginBottom: 8 },
   announceTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 6 },
   announceContent: { fontSize: 14, color: '#555', lineHeight: 22 }, 
@@ -537,13 +572,26 @@ const styles = StyleSheet.create({
   spacer: { height: 80 }, 
 
   bottomNavContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center' },
-  bottomNav: { 
-    flexDirection: 'row', backgroundColor: '#fff', width: '90%', paddingVertical: 12, paddingHorizontal: 20, 
-    borderRadius: 35, justifyContent: 'space-around', alignItems: 'center', 
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 
-  },
+  bottomNav: { flexDirection: 'row', backgroundColor: '#fff', width: '90%', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 35, justifyContent: 'space-around', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   navItem: { padding: 5, alignItems: 'center' },
   navItemActive: { backgroundColor: '#104a28', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   navTextActive: { color: '#fff', fontWeight: '600', fontSize: 13 },
-  menuCard: { padding: 5, alignItems: 'center' }
+  menuCard: { padding: 5, alignItems: 'center' },
+
+  // Modal styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  filterLabel: { fontSize: 14, fontWeight: 'bold', color: '#666', marginTop: 15, marginBottom: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
+  chipActive: { backgroundColor: '#e6f4ea', borderColor: '#104a28' },
+  chipText: { fontSize: 13, color: '#4b5563', fontWeight: '500' },
+  chipTextActive: { color: '#104a28', fontWeight: 'bold' },
+  modalFooter: { flexDirection: 'row', gap: 10, marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderColor: '#eee' },
+  clearBtn: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#fef2f2', alignItems: 'center' },
+  clearBtnText: { color: '#dc2626', fontWeight: 'bold' },
+  applyBtn: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#104a28', alignItems: 'center' },
+  applyBtnText: { color: 'white', fontWeight: 'bold' }
 });

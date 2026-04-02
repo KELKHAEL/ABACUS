@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, RefreshCw, User, Mail, Key, Upload, Eye, RotateCcw } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, RefreshCw, User, Mail, Key, Upload, Eye, RotateCcw, X, Save, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx'; 
 import './ManageStudents.css';
 
@@ -12,6 +12,13 @@ export default function ManageStudents() {
   const [allowedList, setAllowedList] = useState([]);
   const [showWhitelistModal, setShowWhitelistModal] = useState(false);
   const [whitelistLoading, setWhitelistLoading] = useState(false);
+  
+  // Whitelist Editing State
+  const [editingWhitelistId, setEditingWhitelistId] = useState(null);
+  const [whitelistEditData, setWhitelistEditData] = useState({ studentId: '', email: '' });
+  
+  // Whitelist Filter State
+  const [whitelistFilterYear, setWhitelistFilterYear] = useState('ALL');
 
   const [trashList, setTrashList] = useState([]);
   const [showTrashModal, setShowTrashModal] = useState(false);
@@ -84,6 +91,8 @@ export default function ManageStudents() {
 
   const openWhitelist = () => {
       setShowWhitelistModal(true);
+      setEditingWhitelistId(null);
+      setWhitelistFilterYear('ALL'); // Reset filter on open
       fetchWhitelist();
   };
 
@@ -96,6 +105,43 @@ export default function ManageStudents() {
           alert("Failed to delete");
       }
   };
+
+  const startEditingWhitelist = (item) => {
+      setEditingWhitelistId(item.id);
+      setWhitelistEditData({ studentId: item.student_id, email: item.email });
+  };
+
+  const saveWhitelistEdit = async (id) => {
+      if (!whitelistEditData.studentId || !whitelistEditData.email) return alert("Fields cannot be empty.");
+      try {
+          const res = await fetch(`http://localhost:5000/allowed-students/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(whitelistEditData)
+          });
+          const data = await res.json();
+          if (data.success) {
+              setEditingWhitelistId(null);
+              fetchWhitelist();
+          } else {
+              alert("Failed to update: " + data.error);
+          }
+      } catch (e) {
+          alert("Server Error.");
+      }
+  };
+
+  // ✅ DYNAMIC BATCH FILTERING FOR WHITELIST
+  const batchYears = [...new Set(
+      allowedList
+        .map(item => item.student_id ? String(item.student_id).substring(0, 4) : null)
+        .filter(year => year && year.startsWith('20')) 
+  )].sort((a, b) => b.localeCompare(a)); // Sort descending (newest first)
+
+  const filteredWhitelist = allowedList.filter(item => {
+      if (whitelistFilterYear === 'ALL') return true;
+      return item.student_id && String(item.student_id).startsWith(whitelistFilterYear);
+  });
 
   // --- 3. TRASH BIN LOGIC ---
   const fetchTrash = async () => {
@@ -147,16 +193,9 @@ export default function ManageStudents() {
   const [editId, setEditId] = useState(null);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    middleName: '',
-    lastName: '',
-    email: '',
-    studentId: '',
+    firstName: '', middleName: '', lastName: '', email: '', studentId: '',
     program: 'Bachelor of Science in Information Technology',
-    yearLevel: '1',
-    section: '1',
-    status: 'Regular',
-    password: ''
+    yearLevel: '1', section: '1', status: 'Regular', password: ''
   });
 
   const generatePassword = () => {
@@ -169,7 +208,6 @@ export default function ManageStudents() {
     return `${randomLetters}${randomNum}`;
   };
 
-  // --- FETCH MAIN STUDENTS ---
   const fetchStudents = async () => {
     setLoading(true);
     try {
@@ -177,15 +215,9 @@ export default function ManageStudents() {
       const data = await res.json();
       
       const formatted = data.map(user => ({
-        id: user.id,
-        fullName: user.full_name,
-        email: user.email,
-        studentId: user.student_id,
+        id: user.id, fullName: user.full_name, email: user.email, studentId: user.student_id,
         program: user.program || 'Bachelor of Science in Information Technology',
-        yearLevel: user.year_level,
-        section: user.section,
-        status: user.status || 'Regular',
-        defaultPassword: '' 
+        yearLevel: user.year_level, section: user.section, status: user.status || 'Regular', defaultPassword: '' 
       }));
 
       const sortedList = formatted.sort((a, b) => {
@@ -197,25 +229,18 @@ export default function ManageStudents() {
       });
 
       setStudents(sortedList);
-    } catch (error) {
-      console.error("Error fetching students:", error);
-    }
+    } catch (error) { console.error("Error fetching students:", error); }
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  useEffect(() => { fetchStudents(); }, []);
 
-  // --- MODAL HELPERS ---
   const openAddModal = () => {
     setIsEditing(false);
     setEditId(null);
     setFormData({ 
-      firstName: '', middleName: '', lastName: '', 
-      email: '', studentId: '', 
-      program: 'Bachelor of Science in Information Technology', 
-      yearLevel: '1', section: '1', 
+      firstName: '', middleName: '', lastName: '', email: '', studentId: '', 
+      program: 'Bachelor of Science in Information Technology', yearLevel: '1', section: '1', 
       status: 'Regular', password: generatePassword()
     });
     setShowModal(true);
@@ -226,41 +251,22 @@ export default function ManageStudents() {
     setEditId(student.id);
     const cleanStudentId = (!student.studentId || student.studentId === "To be assigned") ? "" : student.studentId;
     
-    // --- FIX: UNIVERSAL PARSING LOGIC ---
     let fName = '', mName = '', lName = '';
-    
     if (student.fullName) {
       const commaSplit = student.fullName.split(','); 
-      
-      if (commaSplit.length > 0) {
-        lName = commaSplit[0].trim(); 
-      }
-      
+      if (commaSplit.length > 0) lName = commaSplit[0].trim(); 
       if (commaSplit.length > 1) {
         const parts = commaSplit[1].trim().split(' ');
-        
-        // If there are multiple words, ALWAYS treat the last word as the middle name/initial
-        // We remove any dots just in case it already has one.
         if (parts.length > 1) {
-            mName = parts.pop().replace('.', ''); // Pop takes the last item out of the array
-            fName = parts.join(' '); // The rest is the first name
-        } else {
-            fName = parts[0]; 
-        }
+            mName = parts.pop().replace('.', ''); 
+            fName = parts.join(' '); 
+        } else { fName = parts[0]; }
       }
     }
 
     setFormData({
-      firstName: fName,
-      middleName: mName,
-      lastName: lName,
-      email: student.email,
-      studentId: cleanStudentId,
-      program: student.program,
-      yearLevel: student.yearLevel,
-      section: student.section,
-      status: student.status || 'Regular',
-      password: ''
+      firstName: fName, middleName: mName, lastName: lName, email: student.email, studentId: cleanStudentId,
+      program: student.program, yearLevel: student.yearLevel, section: student.section, status: student.status || 'Regular', password: ''
     });
     setShowModal(true);
   };
@@ -270,60 +276,36 @@ export default function ManageStudents() {
     if(!formData.lastName || !formData.firstName) return alert("Name fields required.");
     if (!formData.email.endsWith('@cvsu.edu.ph')) return alert("Invalid Email! Use @cvsu.edu.ph");
 
-    // ENFORCE UPPERCASE AND MIDDLE INITIAL
     const finalLastName = formData.lastName.toUpperCase().trim();
     const finalFirstName = formData.firstName.toUpperCase().trim();
-    
     let finalMiddleName = '';
     if (formData.middleName && formData.middleName.trim() !== '') {
-        // Automatically turns a full word like "VILLAFUERTE" into "V."
         finalMiddleName = formData.middleName.trim().charAt(0).toUpperCase() + '.';
     }
-    
-    const fullNameCombined = finalMiddleName 
-        ? `${finalLastName}, ${finalFirstName} ${finalMiddleName}` 
-        : `${finalLastName}, ${finalFirstName}`;
+    const fullNameCombined = finalMiddleName ? `${finalLastName}, ${finalFirstName} ${finalMiddleName}` : `${finalLastName}, ${finalFirstName}`;
 
     const payload = { ...formData, fullName: fullNameCombined, role: 'STUDENT' };
 
     try {
-      let url = 'http://localhost:5000/users';
-      let method = 'POST';
+      let url = isEditing ? `http://localhost:5000/users/${editId}` : 'http://localhost:5000/users';
+      let method = isEditing ? 'PUT' : 'POST';
 
-      if (isEditing) {
-        url = `http://localhost:5000/users/${editId}`;
-        method = 'PUT';
-      }
-
-      const res = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
+      const res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
 
       if (data.success) {
         alert(isEditing ? "Updated!" : "Created!");
-        setShowModal(false);
-        fetchStudents();
-      } else {
-        alert("Error: " + data.error);
-      }
-    } catch (error) {
-      alert("Server connection failed.");
-    }
+        setShowModal(false); fetchStudents();
+      } else { alert("Error: " + data.error); }
+    } catch (error) { alert("Server connection failed."); }
   };
 
-  // --- HANDLE SOFT DELETE ---
   const handleSoftDelete = async (id) => {
     if (window.confirm("Move this student to the Trash Bin? They can be restored later.")) {
       try {
         await fetch(`http://localhost:5000/users/${id}/soft-delete`, { method: 'PUT' });
         fetchStudents(); 
-      } catch (error) {
-        alert("Delete failed.");
-      }
+      } catch (error) { alert("Delete failed."); }
     }
   };
 
@@ -332,32 +314,23 @@ export default function ManageStudents() {
     if (!newPassword) return;
     try {
       const response = await fetch('http://localhost:5000/admin-reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: student.id, new_password: newPassword })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: student.id, new_password: newPassword })
       });
       const data = await response.json();
       if (data.success) alert("Password reset successful.");
-    } catch (error) {
-      alert("Failed to reset password.");
-    }
+    } catch (error) { alert("Failed to reset password."); }
   };
 
-  // --- FILTERING ---
   const filteredStudents = students.filter(student => {
-    const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          student.studentId?.includes(searchTerm);
+    const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || student.studentId?.includes(searchTerm);
     const matchesYear = filterYear ? student.yearLevel === filterYear : true;
     const matchesSection = filterSection ? student.section === filterSection : true;
     const matchesStatus = filterStatus ? student.status === filterStatus : true;
     return matchesSearch && matchesYear && matchesSection && matchesStatus;
   });
 
-  const clearFilters = () => {
-    setSearchTerm(''); setFilterYear(''); setFilterSection(''); setFilterStatus('');
-  };
+  const clearFilters = () => { setSearchTerm(''); setFilterYear(''); setFilterSection(''); setFilterStatus(''); };
 
-  // Helper for Status Badge Class
   const getStatusClass = (status) => {
       if (status === 'Irregular') return 'badge-irregular';
       if (status === 'Dropped') return 'badge-dropped';
@@ -371,18 +344,10 @@ export default function ManageStudents() {
         <h1 className="page-title">Manage Students</h1>
         
         <div style={{display: 'flex', gap: '10px'}}>
-            <input 
-              type="file" 
-              accept=".xlsx, .xls" 
-              ref={fileInputRef} 
-              style={{display: 'none'}} 
-              onChange={handleFileUpload} 
-            />
-            
+            <input type="file" accept=".xlsx, .xls" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileUpload} />
             <button className="btn-secondary" style={{backgroundColor: '#ef4444'}} onClick={openTrash}>
               <Trash2 size={20} /> Trash Bin
             </button>
-
             <button className="btn-secondary" style={{backgroundColor: '#6b7280'}} onClick={openWhitelist}>
               <Eye size={20} /> Whitelist
             </button>
@@ -402,17 +367,10 @@ export default function ManageStudents() {
           <input className="search-input" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <select className="filter-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-          <option value="">All Years</option>
-          <option value="1">1st Year</option>
-          <option value="2">2nd Year</option>
-          <option value="3">3rd Year</option>
-          <option value="4">4th Year</option>
+          <option value="">All Years</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option>
         </select>
         <select className="filter-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-          <option value="">All Sections</option>
-          <option value="1">Section 1</option>
-          <option value="2">Section 2</option>
-          <option value="3">Section 3</option>
+          <option value="">All Sections</option><option value="1">Section 1</option><option value="2">Section 2</option><option value="3">Section 3</option>
         </select>
         <button className="btn-reset" onClick={clearFilters}>Reset</button>
       </div>
@@ -422,12 +380,7 @@ export default function ManageStudents() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Student Name</th>
-              <th>Program</th>
-              <th>Status</th>
-              <th>Student ID</th>
-              <th>Year/Sec</th>
-              <th style={{textAlign: 'right'}}>Actions</th>
+              <th>Student Name</th><th>Program</th><th>Status</th><th>Student ID</th><th>Year/Sec</th><th style={{textAlign: 'right'}}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -441,29 +394,17 @@ export default function ManageStudents() {
                 return (
                   <tr key={student.id}>
                     <td>
-                      <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                        <User size={16} color="#104a28"/> {student.fullName}
-                      </div>
-                      <div style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px'}}>
-                        <Mail size={12}/> {student.email}
-                      </div>
+                      <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}><User size={16} color="#104a28"/> {student.fullName}</div>
+                      <div style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px'}}><Mail size={12}/> {student.email}</div>
                     </td>
                     <td><span style={{fontSize: '12px', fontWeight: '500', color: '#555'}}>{student.program.replace('Bachelor of Science in', 'BS')}</span></td>
-                    <td>
-                      {isNew ? <span className="badge badge-new">Verification</span> : 
-                        <span className={`badge ${getStatusClass(student.status)}`}>{student.status || 'Regular'}</span>
-                      }
-                    </td>
+                    <td>{isNew ? <span className="badge badge-new">Verification</span> : <span className={`badge ${getStatusClass(student.status)}`}>{student.status || 'Regular'}</span>}</td>
                     <td style={{fontFamily: 'monospace'}}>{student.studentId || 'N/A'}</td>
                     <td>{student.yearLevel}-{student.section}</td>
                     <td>
                       <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
-                        {!isNew && (
-                          <button className="btn-icon" style={{color: '#d97706', background: '#fef3c7', marginRight: '5px'}} onClick={() => handleAdminReset(student)} title="Reset Password"><Key size={18} /></button>
-                        )}
-                        <button className={`btn-icon ${isNew ? 'btn-verify' : 'btn-edit'}`} onClick={() => openEditModal(student)}>
-                           {isNew ? "Verify" : <Edit size={18} />}
-                        </button>
+                        {!isNew && <button className="btn-icon" style={{color: '#d97706', background: '#fef3c7', marginRight: '5px'}} onClick={() => handleAdminReset(student)} title="Reset Password"><Key size={18} /></button>}
+                        <button className={`btn-icon ${isNew ? 'btn-verify' : 'btn-edit'}`} onClick={() => openEditModal(student)}>{isNew ? "Verify" : <Edit size={18} />}</button>
                         <button className="btn-icon btn-delete" onClick={() => handleSoftDelete(student.id)} title="Move to Trash"><Trash2 size={18} /></button>
                       </div>
                     </td>
@@ -475,58 +416,131 @@ export default function ManageStudents() {
         </table>
       </div>
 
-      {/* --- WHITELIST MODAL --- */}
+      {/* --- RE-DESIGNED WHITELIST MODAL --- */}
       {showWhitelistModal && (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{width: '600px'}}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Allowed Students (Whitelist)</h2>
+        <div className="modal-overlay" onClick={() => setShowWhitelistModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '800px', maxWidth: '95vw', padding: 0, overflow: 'hidden'}}>
+                
+                <div style={{background: '#104a28', padding: '20px 24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Eye size={22}/> Allowed Students (Whitelist)</h2>
+                    <button onClick={() => setShowWhitelistModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
                 </div>
-                <div style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
-                    {whitelistLoading ? <p>Loading...</p> : allowedList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>No data.</p> : (
-                        <table className="data-table">
-                            <thead><tr><th>Student ID</th><th>Email</th><th style={{textAlign: 'right'}}>Action</th></tr></thead>
+
+                {/* ✅ FILTER BAR FOR WHITELIST */}
+                <div style={{padding: '15px 24px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                    <Filter size={16} color="#6b7280"/>
+                    <span style={{fontSize: '13px', fontWeight: 'bold', color: '#4b5563'}}>Filter by Batch:</span>
+                    <select
+                        value={whitelistFilterYear}
+                        onChange={(e) => setWhitelistFilterYear(e.target.value)}
+                        style={{padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none', cursor: 'pointer', minWidth: '150px'}}
+                    >
+                        <option value="ALL">All Batches</option>
+                        {batchYears.map(year => (
+                            <option key={year} value={year}>Batch {year}</option>
+                        ))}
+                    </select>
+                    <span style={{marginLeft: 'auto', fontSize: '12px', color: '#6b7280', fontWeight: '500'}}>
+                        Showing {filteredWhitelist.length} students
+                    </span>
+                </div>
+
+                <div style={{padding: '0 24px 24px 24px', maxHeight: '60vh', overflowY: 'auto'}}>
+                    {whitelistLoading ? <p style={{textAlign: 'center', color: '#666', padding: '20px'}}>Loading whitelist...</p> : filteredWhitelist.length === 0 ? <p style={{color: '#888', textAlign:'center', padding: '20px'}}>No students found.</p> : (
+                        <table className="data-table" style={{width: '100%', borderCollapse: 'collapse'}}>
+                            <thead style={{background: '#ffffff', position: 'sticky', top: 0, zIndex: 10}}>
+                                <tr>
+                                    <th style={{padding: '16px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Student ID</th>
+                                    <th style={{padding: '16px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Email Address</th>
+                                    <th style={{padding: '16px 12px', textAlign: 'right', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Actions</th>
+                                </tr>
+                            </thead>
                             <tbody>
-                                {allowedList.map((item) => (
-                                    <tr key={item.id}>
-                                        <td style={{fontWeight:'bold'}}>{item.student_id}</td>
-                                        <td>{item.email}</td>
-                                        <td style={{textAlign: 'right'}}>
-                                            <button className="btn-icon btn-delete" style={{marginLeft: 'auto'}} onClick={() => deleteFromWhitelist(item.id)}><Trash2 size={16}/></button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {filteredWhitelist.map((item) => {
+                                    const isItemEditing = editingWhitelistId === item.id;
+                                    return (
+                                        <tr key={item.id} style={{borderBottom: '1px solid #f3f4f6', background: isItemEditing ? '#f0fdf4' : 'transparent'}}>
+                                            {isItemEditing ? (
+                                                <>
+                                                    <td style={{padding: '8px 12px'}}>
+                                                        <input 
+                                                            autoFocus
+                                                            style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontFamily: 'monospace', fontSize: '13px'}} 
+                                                            value={whitelistEditData.studentId} 
+                                                            onChange={(e) => setWhitelistEditData({...whitelistEditData, studentId: e.target.value})} 
+                                                        />
+                                                    </td>
+                                                    <td style={{padding: '8px 12px'}}>
+                                                        <input 
+                                                            style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontSize: '13px'}} 
+                                                            value={whitelistEditData.email} 
+                                                            onChange={(e) => setWhitelistEditData({...whitelistEditData, email: e.target.value})} 
+                                                        />
+                                                    </td>
+                                                    <td style={{padding: '8px 12px', textAlign: 'right'}}>
+                                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px'}}>
+                                                            <button onClick={() => saveWhitelistEdit(item.id)} style={{background: '#10b981', color: 'white', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold'}}><Save size={14}/> Save</button>
+                                                            <button onClick={() => setEditingWhitelistId(null)} style={{background: '#f3f4f6', color: '#4b5563', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold'}}>Cancel</button>
+                                                        </div>
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <td style={{padding: '12px', fontWeight:'600', fontFamily: 'monospace', color: '#111'}}>{item.student_id}</td>
+                                                    <td style={{padding: '12px', color: '#4b5563', fontSize: '14px'}}>{item.email}</td>
+                                                    <td style={{padding: '12px', textAlign: 'right'}}>
+                                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '8px'}}>
+                                                            <button className="btn-icon btn-edit" style={{background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#0ea5e9'}} onClick={() => startEditingWhitelist(item)} title="Edit Entry">
+                                                                <Edit size={16}/>
+                                                            </button>
+                                                            <button className="btn-icon btn-delete" style={{background: '#fee2e2', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#dc2626'}} onClick={() => deleteFromWhitelist(item.id)} title="Remove from Whitelist">
+                                                                <Trash2 size={16}/>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </>
+                                            )}
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     )}
                 </div>
-                <div className="modal-actions"><button className="btn-cancel" onClick={() => setShowWhitelistModal(false)}>Close</button></div>
             </div>
         </div>
       )}
 
       {/* --- TRASH BIN MODAL --- */}
       {showTrashModal && (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{width: '700px'}}>
-                <div className="modal-header">
-                    <h2 className="modal-title" style={{color: '#dc2626'}}>Trash Bin (Deleted Students)</h2>
+        <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px', padding: 0, overflow: 'hidden'}}>
+                <div style={{background: '#dc2626', padding: '20px 24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Trash2 size={22}/> Trash Bin</h2>
+                    <button onClick={() => setShowTrashModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#fecaca'}}><X size={24}/></button>
                 </div>
-                <div style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
-                    {trashLoading ? <p style={{textAlign:'center'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>Trash bin is empty.</p> : (
-                        <table className="data-table">
-                            <thead><tr><th>Name</th><th>Student ID</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
+                
+                <div style={{maxHeight: '400px', overflowY: 'auto', padding: '24px'}}>
+                    {trashLoading ? <p style={{textAlign:'center', color: '#666'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>Trash bin is empty.</p> : (
+                        <table className="data-table" style={{width: '100%', borderCollapse: 'collapse'}}>
+                            <thead style={{background: '#f9fafb'}}>
+                                <tr>
+                                    <th style={{padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb'}}>Name</th>
+                                    <th style={{padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb'}}>Student ID</th>
+                                    <th style={{padding: '12px', textAlign: 'right', borderBottom: '2px solid #e5e7eb'}}>Actions</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 {trashList.map((item) => (
-                                    <tr key={item.id}>
-                                        <td style={{fontWeight:'bold', color: '#666'}}>{item.full_name}</td>
-                                        <td>{item.student_id}</td>
-                                        <td style={{textAlign: 'right'}}>
+                                    <tr key={item.id} style={{borderBottom: '1px solid #f3f4f6'}}>
+                                        <td style={{padding: '12px', fontWeight:'bold', color: '#4b5563'}}>{item.full_name}</td>
+                                        <td style={{padding: '12px', fontFamily: 'monospace', color: '#666'}}>{item.student_id}</td>
+                                        <td style={{padding: '12px', textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981'}} onClick={() => handleRestore(item.id)}>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}>
                                                     <RotateCcw size={14} style={{marginRight: 5}}/> Restore
                                                 </button>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626'}} onClick={() => handlePermanentDelete(item.id)}>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}>
                                                     <Trash2 size={14} style={{marginRight: 5}}/> Delete
                                                 </button>
                                             </div>
@@ -537,7 +551,6 @@ export default function ManageStudents() {
                         </table>
                     )}
                 </div>
-                <div className="modal-actions"><button className="btn-cancel" onClick={() => setShowTrashModal(false)}>Close</button></div>
             </div>
         </div>
       )}

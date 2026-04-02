@@ -6,7 +6,9 @@ import {
   GraduationCap, 
   Megaphone, // Changed to Megaphone for Announcements
   LogOut, 
-  Triangle 
+  Triangle,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 import './AdminSidebar.css';
 
@@ -43,6 +45,15 @@ export default function AdminSidebar() {
           <span>Dashboard</span>
         </Link>
 
+        {/* MANAGE ACADEMIC SETUP LINK */}
+        <Link 
+          to="/admin/ManageAcademicSetup" 
+          className={`nav-item ${isActive('/admin/ManageAcademicSetup') ? 'active' : ''}`}
+        >
+          <Settings size={20} />
+          <span>Academic Setup</span>
+        </Link>
+
         {/* MANAGE INSTRUCTORS LINK */}
         <Link 
           to="/admin/ManageInstructors" 
@@ -68,6 +79,15 @@ export default function AdminSidebar() {
         >
           <Megaphone size={20} /> 
           <span>Manage Announcements</span>
+        </Link>
+
+        {/* MANAGE PROMOTIONS LINK */}
+        <Link 
+          to="/admin/ManagePromotions" 
+          className={`nav-item ${isActive('/admin/ManagePromotions') ? 'active' : ''}`}
+        >
+          <ShieldCheck size={20} />
+          <span>Verify Promotions</span>
         </Link>
       </nav>
 

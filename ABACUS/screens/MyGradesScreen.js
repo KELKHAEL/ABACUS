@@ -20,16 +20,12 @@ export default function MyGradesScreen({ navigation }) {
     try {
       if (!user) return;
 
-      // 1. Fetch All Grades (Ideally, backend should filter, but we filter here for now)
       const gradesResponse = await fetch(`${API_URL}/grades`);
       const allGrades = await gradesResponse.json();
 
-      // Filter for THIS student only
-      // Note: Our API returns snake_case (user_id), context has camelCase (user.id)
       const myGrades = allGrades.filter(g => g.user_id === user.id);
       setGrades(myGrades);
 
-      // 2. Fetch Quiz Statuses (to check for disabled/deleted ones)
       const quizzesResponse = await fetch(`${API_URL}/quizzes`);
       const allQuizzes = await quizzesResponse.json();
       
@@ -47,8 +43,12 @@ export default function MyGradesScreen({ navigation }) {
   };
 
   const renderGradeItem = ({ item }) => {
-    const score = parseFloat(item.grade);
-    const isPassing = score >= 75;
+    const score = parseFloat(item.grade || 0);
+    const total = parseFloat(item.total_items || 100);
+    
+    // Calculate percentage to determine if they passed (>= 75%)
+    const percentage = total > 0 ? (score / total) * 100 : 0;
+    const isPassing = percentage >= 75;
     
     // Check if quiz is deleted
     const isDisabled = quizStatusMap[item.quiz_id] === 'deleted';
@@ -64,7 +64,6 @@ export default function MyGradesScreen({ navigation }) {
             {item.subjectTitle}
           </Text>
           <Text style={styles.date}>
-             {/* Handle MySQL date string */}
              {item.dateTaken ? new Date(item.dateTaken).toDateString() : "Just now"}
           </Text>
         </View>
@@ -74,7 +73,7 @@ export default function MyGradesScreen({ navigation }) {
               styles.gradeText, 
               isDisabled ? styles.disabledText : { color: isPassing ? '#104a28' : '#d32f2f' }
             ]}>
-            {item.grade}%
+            {score} / {total}
           </Text>
           
           {/* Badge */}
@@ -170,9 +169,5 @@ const styles = StyleSheet.create({
   cardRight: { alignItems: 'flex-end' },
   gradeText: { fontSize: 22, fontWeight: '900', marginBottom: 5 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeText: { fontSize: 10, fontWeight: 'bold' },
-
-  emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
-  emptyText: { fontSize: 18, fontWeight: 'bold', color: '#555', marginTop: 20 },
-  subEmptyText: { fontSize: 14, color: '#999', marginTop: 5 }
+  badgeText: { fontSize: 10, fontWeight: 'bold' }
 });
