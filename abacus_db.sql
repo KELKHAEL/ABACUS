@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 18, 2026 at 11:58 AM
+-- Generation Time: Apr 02, 2026 at 12:27 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -63,15 +63,45 @@ CREATE TABLE `announcements` (
   `target_year` varchar(10) DEFAULT 'ALL',
   `target_section` varchar(10) DEFAULT 'ALL',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `is_deleted` tinyint(1) DEFAULT 0
+  `is_deleted` tinyint(1) DEFAULT 0,
+  `author_id` int(11) DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `announcements`
 --
 
-INSERT INTO `announcements` (`id`, `title`, `content`, `author_role`, `author_name`, `target_year`, `target_section`, `created_at`, `is_deleted`) VALUES
-(1, 'Welcome to ABACUS', 'Test announcement hee hee\n\n-michael jackson', 'ADMIN', 'Registrar', 'ALL', 'ALL', '2026-02-11 09:17:26', 0);
+INSERT INTO `announcements` (`id`, `title`, `content`, `author_role`, `author_name`, `target_year`, `target_section`, `created_at`, `is_deleted`, `author_id`, `deleted_at`) VALUES
+(1, 'Welcome to ABACUS', 'Test announcement hee hee\n\n-michael jackson', 'ADMIN', 'Registrar', 'ALL', 'ALL', '2026-02-11 09:17:26', 0, NULL, NULL),
+(2, 'sup', 'try lang', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '4', '1', '2026-03-24 20:39:26', 0, 2, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `modules`
+--
+
+CREATE TABLE `modules` (
+  `id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_url` varchar(255) NOT NULL,
+  `target_classes` text DEFAULT NULL,
+  `uploaded_by` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `is_deleted` tinyint(1) DEFAULT 0,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `modules`
+--
+
+INSERT INTO `modules` (`id`, `title`, `description`, `file_name`, `file_url`, `target_classes`, `uploaded_by`, `created_at`, `is_deleted`, `deleted_at`) VALUES
+(1, 'Chapter 1: Try ko lang hehehe', 'ewan, wala akong alam dito hahaha', '1774023431182-365495471.pdf', '/uploads/1774023431182-365495471.pdf', '[{\"year\":\"4\",\"section\":\"1\"}]', 2, '2026-03-20 16:17:11', 0, NULL),
+(2, 'TRYY', 'samplee', '1774512281211-179837229.pdf', '/uploads/1774512281211-179837229.pdf', '[]', 2, '2026-03-26 08:04:41', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -94,7 +124,15 @@ INSERT INTO `question_options` (`id`, `question_id`, `option_text`, `option_orde
 (1, 1, 'Hotdog', 0),
 (2, 1, 'Pusa', 1),
 (3, 1, 'Daga hahaha', 2),
-(4, 1, 'Aso', 3);
+(4, 1, 'Aso', 3),
+(5, 2, 'garcia', 0),
+(6, 2, 'villafuerte', 1),
+(7, 2, 'jha', 2),
+(8, 2, 'oranda', 3),
+(9, 3, 'Option 1', 0),
+(10, 3, 'Option 2', 1),
+(11, 3, 'Option 3', 2),
+(12, 3, 'Option 4', 3);
 
 -- --------------------------------------------------------
 
@@ -119,7 +157,8 @@ CREATE TABLE `quizzes` (
 --
 
 INSERT INTO `quizzes` (`id`, `title`, `description`, `target_year`, `target_section`, `difficulty`, `status`, `created_by`, `created_at`) VALUES
-(1, 'Quiz #1', 'NAPAKA IMPORTANT NA QUIZ! hahaha', '4', '1', 'Easy', 'active', 2, '2026-02-11 07:48:30');
+(1, 'Quiz 1', 'Try Testing.', '4', '1', 'Easy', 'active', 2, '2026-02-11 07:48:30'),
+(2, 'tryy ', 'samplee', '4', '1', 'Easy', 'active', 2, '2026-03-26 08:10:13');
 
 -- --------------------------------------------------------
 
@@ -142,7 +181,9 @@ CREATE TABLE `quiz_questions` (
 --
 
 INSERT INTO `quiz_questions` (`id`, `quiz_id`, `question_text`, `question_type`, `correct_answer_text`, `correct_index`, `is_required`) VALUES
-(1, 1, 'What is tagalog of dog', 'multiple-choice', '', 0, 1);
+(1, 1, 'What is tagalog of dog', 'multiple-choice', '', 0, 1),
+(2, 2, 'mikhael v __', 'multiple-choice', '', 0, 1),
+(3, 2, 'cabeca', 'multiple-choice', '', 3, 0);
 
 -- --------------------------------------------------------
 
@@ -167,11 +208,8 @@ CREATE TABLE `student_grades` (
 INSERT INTO `student_grades` (`id`, `user_id`, `quiz_id`, `score`, `subject_title`, `semester`, `date_taken`) VALUES
 (2, 3, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-11 07:49:01'),
 (3, 4, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-11 11:14:19'),
-(4, 3, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-11 18:19:54'),
-(5, 3, 1, 0.00, 'Quiz #1', '1st Sem', '2026-02-11 18:20:03'),
-(6, 3, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-11 18:20:16'),
-(7, 4, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-11 20:44:34'),
-(8, 4, 1, 100.00, 'Quiz #1', '1st Sem', '2026-02-16 15:36:35');
+(9, 4, 2, 100.00, 'tryy ', '1st Sem', '2026-03-26 08:10:28'),
+(10, 3, 2, 50.00, 'tryy ', '1st Sem', '2026-03-28 13:25:05');
 
 -- --------------------------------------------------------
 
@@ -202,11 +240,9 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `student_id`, `full_name`, `email`, `password_hash`, `year_level`, `section`, `role`, `created_at`, `department`, `assigned_classes`, `program`, `status`, `is_deleted`) VALUES
 (1, 'ADMIN-001', 'Super Admin', 'admin@cvsu.edu.ph', '$2b$10$5e4Yh68d3VQL0ZsTFFs/xe3GcXl.rVwA4WmzN5nODBhKhVkYNGXAm', '1', '1', 'ADMIN', '2026-02-10 15:57:58', NULL, NULL, 'BSIT', 'Regular', 0),
-(2, '202218637', 'Garcia, Mikhael V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"}]', NULL, NULL, 0),
-(3, '202218715', 'SAMAR, JHANZY O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$KoM5G5mUvaQf0l7XjM0GAOb03uyjOjAKxcHz/PYRpGNTvPK.WbeH6', '4', '1', 'STUDENT', '2026-02-11 07:16:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0),
+(2, '202218637', 'GARCIA, MIKHAEL V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"}]', NULL, NULL, 0),
+(3, '202218715', 'SAMAR, JHANZY O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$KoM5G5mUvaQf0l7XjM0GAOb03uyjOjAKxcHz/PYRpGNTvPK.WbeH6', '4', '1', 'STUDENT', '2026-02-11 07:16:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Dropped', 0),
 (4, '202218859', 'PAGOTA, MARY ANNE A.', 'tc.maryanne.pagota@cvsu.edu.ph', '$2b$10$k2EzHhs/TtT3Crtfx.kVd.g6.Rchxs6RNLZFS6lLzjzIOJIq7v4E.', '4', '1', 'STUDENT', '2026-02-11 08:25:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0),
-(5, '202301760', 'GARCIA, GABRIEL V.', 'gabriel.garcia@cvsu.edu.ph', '$2b$10$AH.eL1FHoOlP3fbQbRm1Qemmu23guKoHiPLmUwzvCDjP533jpiZWC', '3', '2', 'STUDENT', '2026-02-11 21:01:20', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0),
-(6, '202302625', 'NATNAT, JENNIFER', 'jennifer.natnat@cvsu.edu.ph', '$2b$10$Fd2wQwwfcn2GgBAMQt2v4.j.lbQydRD58i5F1c1pCiyMkAO5GPvma', '3', '2', 'STUDENT', '2026-02-12 04:09:59', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0),
 (7, '202315307', 'BROSAS, JOHN GABRIEL H.', 'johngabriel.brosas@cvsu.edu.ph', '$2b$10$WRw4SOh4cQY.vA4LWI60HO9sqiBGWui1/JTpLLurKl0u/8gigfTiq', '3', '1', 'STUDENT', '2026-02-12 13:40:43', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0);
 
 --
@@ -225,6 +261,13 @@ ALTER TABLE `allowed_students`
 --
 ALTER TABLE `announcements`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `modules`
+--
+ALTER TABLE `modules`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_module_uploader` (`uploaded_by`);
 
 --
 -- Indexes for table `question_options`
@@ -270,37 +313,43 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `allowed_students`
 --
 ALTER TABLE `allowed_students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `announcements`
 --
 ALTER TABLE `announcements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT for table `modules`
+--
+ALTER TABLE `modules`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `question_options`
 --
 ALTER TABLE `question_options`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `quizzes`
 --
 ALTER TABLE `quizzes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `quiz_questions`
 --
 ALTER TABLE `quiz_questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `student_grades`
 --
 ALTER TABLE `student_grades`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -311,6 +360,12 @@ ALTER TABLE `users`
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `modules`
+--
+ALTER TABLE `modules`
+  ADD CONSTRAINT `fk_module_uploader` FOREIGN KEY (`uploaded_by`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `question_options`

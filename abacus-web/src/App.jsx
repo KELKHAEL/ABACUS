@@ -18,6 +18,7 @@ import Gradebook from './modules/instructor/Gradebook';
 import MyClassList from './modules/instructor/MyClassList';
 import UploadModules from './modules/instructor/UploadModules';
 import InstructorAnnouncements from './modules/instructor/InstructorAnnouncements';
+import ManageQuizzes from './modules/instructor/ManageQuizzes';
 
 // Auth
 import Login from './auth/Login';
@@ -75,6 +76,7 @@ function App() {
         <Route element={role === 'INSTRUCTOR' || role === 'TEACHER' ? <InstructorLayout /> : <Navigate to="/login" />}>
            <Route path="/instructor/InstructorDashboard" element={<InstructorDashboard />} />
            <Route path="/instructor/CreateQuiz" element={<CreateQuiz />} />
+           <Route path="/instructor/ManageQuizzes" element={<ManageQuizzes />} />
            <Route path="/instructor/Gradebook" element={<Gradebook />} />
            <Route path="/instructor/MyClassList" element={<MyClassList />} />
            <Route path="/instructor/UploadModules" element={<UploadModules />} />
