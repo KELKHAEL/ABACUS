@@ -259,6 +259,49 @@ app.put('/academic-setup/:type/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==========================================
+// TERM ROLLOVER / TRANSITION SYSTEM
+// ==========================================
+app.put('/academic-setup/term/active/:id', async (req, res) => {
+  const { id } = req.params;
+  const { resetInstructors, resetStudents } = req.body; 
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // 1. Switch the active term (This automatically archives all old Quizzes, Modules, etc.)
+    await connection.query("UPDATE academic_terms SET is_active = 0"); 
+    await connection.query("UPDATE academic_terms SET is_active = 1 WHERE id = ?", [id]); 
+    
+    // 2. Term Rollover: Clear Instructor Assigned Classes for the new semester
+    if (resetInstructors) {
+        await connection.query("UPDATE users SET assigned_classes = '[]' WHERE role = 'INSTRUCTOR'");
+    }
+    
+    // 3. Term Rollover: Reset Students so they must upload a new COR via the mobile app
+    if (resetStudents) {
+        await connection.query(`
+            UPDATE users 
+            SET section = 'To be assigned', 
+                cor_status = 'Pending', 
+                cor_image_url = NULL, 
+                pending_year = NULL, 
+                pending_section = NULL 
+            WHERE role = 'STUDENT' AND is_deleted = 0
+        `);
+    }
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
+  } finally { 
+    connection.release(); 
+  }
+});
+
 // ==========================
 // INSTRUCTOR: QUIZ MANAGEMENT
 // ==========================
