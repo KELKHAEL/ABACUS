@@ -6,6 +6,11 @@ export default function ManageInstructors() {
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // --- DYNAMIC ACADEMIC SETUP STATES ---
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
+  const [academicSections, setAcademicSections] = useState([]);
+  
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('All');
@@ -26,7 +31,7 @@ export default function ManageInstructors() {
     middleName: '',
     email: '',
     employeeId: '',
-    department: 'Department of Information Technology',
+    department: '',
     password: '',
     assignedClasses: [] 
   });
@@ -42,11 +47,22 @@ export default function ManageInstructors() {
   };
 
   // --- 1. FETCH FROM MYSQL ---
-  const fetchInstructors = async () => {
+  const fetchInstructorsAndSetup = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/users?role=INSTRUCTOR');
-      const data = await res.json();
+      const [instRes, setupRes] = await Promise.all([
+        fetch('http://localhost:5000/users?role=INSTRUCTOR'),
+        fetch('http://localhost:5000/academic-setup')
+      ]);
+      
+      const data = await instRes.json();
+      const setupData = await setupRes.json();
+
+      if (!setupData.error) {
+        setAcademicPrograms(setupData.programs || []);
+        setAcademicYears(setupData.yearLevels || []);
+        setAcademicSections(setupData.sections || []);
+      }
       
       const formattedList = data.map(user => {
         let parsedClasses = [];
@@ -79,13 +95,13 @@ export default function ManageInstructors() {
 
       setInstructors(formattedList);
     } catch (error) {
-      console.error("Error fetching instructors:", error);
+      console.error("Error fetching data:", error);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchInstructors();
+    fetchInstructorsAndSetup();
   }, []);
 
   // --- TRASH BIN FUNCTIONS ---
@@ -111,7 +127,7 @@ export default function ManageInstructors() {
     try {
         await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
         fetchTrash(); 
-        fetchInstructors(); 
+        fetchInstructorsAndSetup(); 
     } catch (e) {
         alert("Failed to restore");
     }
@@ -131,12 +147,18 @@ export default function ManageInstructors() {
   const openAddModal = () => {
     setIsEditing(false);
     setEditId(null);
+    
+    // Set defaults based on dynamic data
+    const defaultDept = academicPrograms.length > 0 ? academicPrograms[0].name : '';
+    const defaultYear = academicYears.length > 0 ? academicYears[0].year_name : '1';
+    const defaultSection = academicSections.length > 0 ? academicSections[0].section_name : '1';
+
     setFormData({ 
       lastName: '', firstName: '', middleName: '', 
       email: '', employeeId: '', 
-      department: 'Department of Information Technology', 
+      department: defaultDept, 
       password: generatePassword(),
-      assignedClasses: [{ year: '1', section: '1' }]
+      assignedClasses: [{ year: defaultYear, section: defaultSection }]
     });
     setShowModal(true);
   };
@@ -145,7 +167,6 @@ export default function ManageInstructors() {
     setIsEditing(true);
     setEditId(instructor.id);
     
-    // --- SMART PARSING LOGIC ---
     let fName = '', mName = '', lName = '';
     
     if (instructor.fullName) {
@@ -156,10 +177,9 @@ export default function ManageInstructors() {
         const parts = commaSplit[1].trim().split(' ');
         const lastPart = parts[parts.length - 1];
         
-        // If it ends with a dot OR is a single letter, assume it's a middle initial
         if (parts.length > 1 && (lastPart.endsWith('.') || lastPart.length === 1)) {
-            mName = parts.pop().replace('.', ''); // Extract the initial
-            fName = parts.join(' '); // The rest is the first name
+            mName = parts.pop().replace('.', ''); 
+            fName = parts.join(' '); 
         } else {
             fName = parts.join(' ');
         }
@@ -172,7 +192,7 @@ export default function ManageInstructors() {
       middleName: mName,
       email: instructor.email,
       employeeId: instructor.employeeId || '',
-      department: instructor.department || 'Department of Information Technology',
+      department: instructor.department || (academicPrograms.length > 0 ? academicPrograms[0].name : ''),
       password: '', 
       assignedClasses: Array.isArray(instructor.assignedClasses) ? instructor.assignedClasses : []
     });
@@ -181,7 +201,9 @@ export default function ManageInstructors() {
 
   // --- CLASS ASSIGNMENT LOGIC ---
   const addClassRow = () => {
-    setFormData({ ...formData, assignedClasses: [...formData.assignedClasses, { year: '1', section: '1' }] });
+    const defaultYear = academicYears.length > 0 ? academicYears[0].year_name : '1';
+    const defaultSection = academicSections.length > 0 ? academicSections[0].section_name : '1';
+    setFormData({ ...formData, assignedClasses: [...formData.assignedClasses, { year: defaultYear, section: defaultSection }] });
   };
 
   const removeClassRow = (index) => {
@@ -203,7 +225,6 @@ export default function ManageInstructors() {
     if(!formData.lastName || !formData.firstName) return alert("Please enter First and Last Name.");
     if(!formData.email.endsWith("@cvsu.edu.ph")) return alert("Email must end with @cvsu.edu.ph");
 
-    // ENFORCE UPPERCASE AND MIDDLE INITIAL
     const finalLastName = formData.lastName.toUpperCase().trim();
     const finalFirstName = formData.firstName.toUpperCase().trim();
     let finalMiddleName = '';
@@ -245,7 +266,7 @@ export default function ManageInstructors() {
       if (data.success) {
         alert(isEditing ? "Instructor Updated!" : "Instructor Created!");
         setShowModal(false);
-        fetchInstructors();
+        fetchInstructorsAndSetup();
       } else {
         alert("Error: " + data.error);
       }
@@ -260,7 +281,7 @@ export default function ManageInstructors() {
     if (window.confirm("Move this instructor to Trash?")) {
       try {
         await fetch(`http://localhost:5000/users/${id}/soft-delete`, { method: 'PUT' });
-        fetchInstructors();
+        fetchInstructorsAndSetup();
       } catch (error) {
         alert("Error deleting user.");
       }
@@ -314,10 +335,9 @@ export default function ManageInstructors() {
             onChange={(e) => setFilterDept(e.target.value)}
           >
             <option value="All">All Departments</option>
-            <option value="Department of Information Technology">Information Technology</option>
-            <option value="Department of Teacher Education">Teacher Education</option>
-            <option value="Department of Management">Management</option>
-            <option value="Department of Arts and Sciences">Arts and Sciences</option>
+            {academicPrograms.map(p => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -350,14 +370,14 @@ export default function ManageInstructors() {
                       <Mail size={12}/> {inst.email}
                     </div>
                   </td>
-                  <td>{inst.employeeId || 'N/A'}</td>
+                  <td style={{fontFamily: 'monospace', color: '#555'}}>{inst.employeeId || 'N/A'}</td>
                   <td><span className="dept-badge">{inst.department}</span></td>
                   <td>
                     <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
                         {inst.assignedClasses && inst.assignedClasses.length > 0 ? (
                             inst.assignedClasses.map((cls, idx) => (
-                                <span key={idx} style={{fontSize:'12px', background:'#f3f4f6', padding:'2px 6px', borderRadius:'4px', border:'1px solid #e5e7eb', width:'fit-content'}}>
-                                    Year {cls.year} - Sec {cls.section}
+                                <span key={idx} style={{fontSize:'11px', background:'#f3f4f6', padding:'3px 8px', borderRadius:'4px', border:'1px solid #e5e7eb', width:'fit-content', fontWeight: 'bold', color: '#4b5563'}}>
+                                    Yr {cls.year} - Sec {cls.section}
                                 </span>
                             ))
                         ) : (
@@ -380,21 +400,28 @@ export default function ManageInstructors() {
 
       {/* --- TRASH BIN MODAL --- */}
       {showTrashModal && (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{width: '700px'}}>
-                <div className="modal-header">
-                    <h2 className="modal-title" style={{color: '#dc2626'}}>Trash Bin (Deleted Instructors)</h2>
+        <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px', padding: 0, overflow: 'hidden'}}>
+                <div style={{background: '#dc2626', padding: '20px 24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Trash2 size={22}/> Trash Bin (Deleted Instructors)</h2>
+                    <button onClick={() => setShowTrashModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#fecaca'}}><X size={24}/></button>
                 </div>
-                <div style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
-                    {trashLoading ? <p style={{textAlign:'center'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>Trash bin is empty.</p> : (
-                        <table className="data-table">
-                            <thead><tr><th>Name</th><th>ID</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
+                <div style={{maxHeight: '400px', overflowY: 'auto', padding: '24px'}}>
+                    {trashLoading ? <p style={{textAlign:'center', color: '#666'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>Trash bin is empty.</p> : (
+                        <table className="data-table" style={{width: '100%', borderCollapse: 'collapse'}}>
+                            <thead style={{background: '#f9fafb'}}>
+                                <tr>
+                                    <th style={{padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563'}}>Name</th>
+                                    <th style={{padding: '12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563'}}>ID</th>
+                                    <th style={{padding: '12px', textAlign: 'right', borderBottom: '2px solid #e5e7eb', color: '#4b5563'}}>Actions</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 {trashList.map((item) => (
-                                    <tr key={item.id}>
-                                        <td style={{fontWeight:'bold', color: '#666'}}>{item.full_name}</td>
-                                        <td>{item.student_id}</td>
-                                        <td style={{textAlign: 'right'}}>
+                                    <tr key={item.id} style={{borderBottom: '1px solid #f3f4f6'}}>
+                                        <td style={{padding: '12px', fontWeight:'bold', color: '#4b5563'}}>{item.full_name}</td>
+                                        <td style={{padding: '12px', fontFamily: 'monospace', color: '#666'}}>{item.student_id}</td>
+                                        <td style={{padding: '12px', textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
                                                 <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color:'white', border:'none'}} onClick={() => handleRestore(item.id)}>
                                                     <RotateCcw size={14} style={{marginRight: 5}}/> Restore
@@ -410,104 +437,124 @@ export default function ManageInstructors() {
                         </table>
                     )}
                 </div>
-                <div className="modal-actions"><button className="btn-cancel" onClick={() => setShowTrashModal(false)}>Close</button></div>
             </div>
         </div>
       )}
 
-      {/* ADD/EDIT MODAL */}
+      {/* ADD/EDIT MODAL (Modernized) */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{maxWidth: '600px'}}>
-            <div className="modal-header">
-              <h2 className="modal-title">{isEditing ? 'Edit Instructor' : 'Add New Instructor'}</h2>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', padding: 0, overflow: 'hidden'}}>
+            
+            <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <User size={22}/> {isEditing ? 'Edit Instructor' : 'Add New Instructor'}
+                </h2>
+                <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
             </div>
             
             <form onSubmit={handleSave}>
-              <div style={{display:'flex', gap:'10px'}}>
-                  <div className="form-group" style={{flex:1}}>
-                    <label className="form-label">Last Name</label>
-                    <input className="form-input" required value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} placeholder="e.g. Dela Cruz"/>
-                  </div>
-                  <div className="form-group" style={{flex:1}}>
-                    <label className="form-label">First Name</label>
-                    <input className="form-input" required value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} placeholder="e.g. Juan"/>
-                  </div>
-                  <div className="form-group" style={{width:'80px'}}>
-                    <label className="form-label">M.I.</label>
-                    <input className="form-input" value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value})} placeholder="A"/>
-                  </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Employee ID</label>
-                <input className="form-input" required value={formData.employeeId} onChange={e => setFormData({...formData, employeeId: e.target.value})} placeholder="e.g. 2023-TEACH-01" />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">CvSU Email</label>
-                <input 
-                    className="form-input" 
-                    type="email" 
-                    required 
-                    value={formData.email} 
-                    onChange={e => setFormData({...formData, email: e.target.value})} 
-                    disabled={isEditing} 
-                    placeholder="name@cvsu.edu.ph"
-                    style={{background: isEditing ? '#f3f4f6' : 'white'}} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <div style={{display: 'flex', gap: '8px'}}>
-                  <input className="form-input" value={formData.password} readOnly={isEditing} placeholder={isEditing ? "Unchanged" : ""} style={{background: isEditing ? '#f3f4f6' : '#f0fdf4'}} />
-                  {!isEditing && (
-                    <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '8px', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '6px', background: 'white'}}><RefreshCw size={16} /></button>
-                  )}
-                </div>
-              </div>
-
-              <div className="form-group">
-                  <label className="form-label">Department</label>
-                  <select className="form-input" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
-                    <option>Department of Information Technology</option>
-                    <option>Department of Teacher Education</option>
-                    <option>Department of Management</option>
-                    <option>Department of Arts and Sciences</option>
-                  </select>
-              </div>
-
-              <div className="form-group" style={{background:'#fafafa', padding:'15px', borderRadius:'8px', border:'1px solid #eee'}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px'}}>
-                    <label className="form-label" style={{marginBottom:0, display:'flex', alignItems:'center', gap:'6px'}}>
-                        <BookOpen size={16}/> Assigned Classes
-                    </label>
-                    <button type="button" onClick={addClassRow} style={{fontSize:'12px', color:'#104a28', fontWeight:'bold', background:'none', border:'none', cursor:'pointer'}}>+ Add Class</button>
-                  </div>
+              <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
                   
-                  {formData.assignedClasses.map((cls, idx) => (
-                      <div key={idx} style={{display:'flex', gap:'10px', marginBottom:'8px', alignItems:'center'}}>
-                          <select className="form-input" style={{padding:'8px', fontSize:'13px'}} value={cls.year} onChange={(e) => updateClassRow(idx, 'year', e.target.value)}>
-                              <option value="1">1st Year</option>
-                              <option value="2">2nd Year</option>
-                              <option value="3">3rd Year</option>
-                              <option value="4">4th Year</option>
-                          </select>
-                          <select className="form-input" style={{padding:'8px', fontSize:'13px'}} value={cls.section} onChange={(e) => updateClassRow(idx, 'section', e.target.value)}>
-                              <option value="1">Section 1</option>
-                              <option value="2">Section 2</option>
-                              <option value="3">Section 3</option>
-                              <option value="4">Section 4</option>
-                          </select>
-                          <button type="button" onClick={() => removeClassRow(idx)} style={{color:'#dc2626', background:'none', border:'none', cursor:'pointer'}}><X size={18}/></button>
+                  {/* Name Row */}
+                  <div style={{display:'flex', gap:'10px'}}>
+                      <div className="form-group" style={{flex:1, margin: 0}}>
+                        <label className="form-label">Last Name</label>
+                        <input className="form-input" required value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} placeholder="e.g. Dela Cruz"/>
                       </div>
-                  ))}
+                      <div className="form-group" style={{flex:1, margin: 0}}>
+                        <label className="form-label">First Name</label>
+                        <input className="form-input" required value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} placeholder="e.g. Juan"/>
+                      </div>
+                      <div className="form-group" style={{width:'80px', margin: 0}}>
+                        <label className="form-label">M.I.</label>
+                        <input className="form-input" value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value})} placeholder="A"/>
+                      </div>
+                  </div>
+
+                  {/* ID and Dept Row */}
+                  <div style={{display: 'flex', gap: '10px'}}>
+                      <div className="form-group" style={{flex: 1, margin: 0}}>
+                        <label className="form-label">Employee ID</label>
+                        <input className="form-input" required value={formData.employeeId} onChange={e => setFormData({...formData, employeeId: e.target.value})} placeholder="e.g. 2023-TEACH-01" />
+                      </div>
+                      <div className="form-group" style={{flex: 1, margin: 0}}>
+                          <label className="form-label">Department</label>
+                          <select className="form-input" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
+                            {academicPrograms.map(p => (
+                                <option key={p.id} value={p.name}>{p.name}</option>
+                            ))}
+                          </select>
+                      </div>
+                  </div>
+
+                  {/* Credentials Row */}
+                  <div style={{display: 'flex', gap: '10px'}}>
+                      <div className="form-group" style={{flex: 1, margin: 0}}>
+                        <label className="form-label">CvSU Email</label>
+                        <input 
+                            className="form-input" 
+                            type="email" 
+                            required 
+                            value={formData.email} 
+                            onChange={e => setFormData({...formData, email: e.target.value})} 
+                            disabled={isEditing} 
+                            placeholder="name@cvsu.edu.ph"
+                            style={{background: isEditing ? '#f3f4f6' : 'white'}} 
+                        />
+                      </div>
+                      <div className="form-group" style={{flex: 1, margin: 0}}>
+                        <label className="form-label">Password</label>
+                        <div style={{display: 'flex', gap: '8px'}}>
+                          <input className="form-input" value={formData.password} readOnly={isEditing} placeholder={isEditing ? "Unchanged" : ""} style={{background: isEditing ? '#f3f4f6' : '#f0fdf4'}} />
+                          {!isEditing && (
+                            <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '8px', cursor: 'pointer', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white'}} title="Generate new password"><RefreshCw size={16} color="#4b5563" /></button>
+                          )}
+                        </div>
+                      </div>
+                  </div>
+
+                  {/* Dynamic Assigned Classes */}
+                  <div style={{background:'#fafafa', padding:'15px', borderRadius:'8px', border:'1px solid #eee', marginTop: '10px'}}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px'}}>
+                        <label style={{display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', margin: 0}}>
+                            <BookOpen size={16}/> Assigned Classes
+                        </label>
+                        <button type="button" onClick={addClassRow} style={{fontSize:'12px', color:'#104a28', fontWeight:'bold', background:'none', border:'none', cursor:'pointer', display: 'flex', alignItems: 'center', gap: '4px'}}>
+                            <Plus size={14}/> Add Class
+                        </button>
+                      </div>
+                      
+                      <div style={{maxHeight: '160px', overflowY: 'auto', paddingRight: '5px'}}>
+                          {formData.assignedClasses.length === 0 ? (
+                              <div style={{fontSize: '12px', color: '#888', fontStyle: 'italic', padding: '10px 0'}}>No classes assigned yet. Click "Add Class" to assign one.</div>
+                          ) : (
+                              formData.assignedClasses.map((cls, idx) => (
+                                  <div key={idx} style={{display:'flex', gap:'10px', marginBottom:'8px', alignItems:'center', background: 'white', padding: '8px', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
+                                      <select className="form-input" style={{padding:'8px', fontSize:'13px', margin: 0}} value={cls.year} onChange={(e) => updateClassRow(idx, 'year', e.target.value)}>
+                                          {academicYears.map(y => (
+                                              <option key={y.id} value={y.year_name}>Year {y.year_name}</option>
+                                          ))}
+                                      </select>
+                                      <select className="form-input" style={{padding:'8px', fontSize:'13px', margin: 0}} value={cls.section} onChange={(e) => updateClassRow(idx, 'section', e.target.value)}>
+                                          {academicSections.map(s => (
+                                              <option key={s.id} value={s.section_name}>Section {s.section_name}</option>
+                                          ))}
+                                      </select>
+                                      <button type="button" onClick={() => removeClassRow(idx)} style={{color:'#dc2626', background:'#fee2e2', border:'none', padding: '8px', borderRadius: '6px', cursor:'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                          <X size={16}/>
+                                      </button>
+                                  </div>
+                              ))
+                          )}
+                      </div>
+                  </div>
+
               </div>
 
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn-save">{isEditing ? 'Save Changes' : 'Create Instructor'}</button>
+              <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
+                  <button type="button" onClick={() => setShowModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: 'pointer'}}>Cancel</button>
+                  <button type="submit" style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'}}>{isEditing ? 'Save Changes' : 'Create Instructor'}</button>
               </div>
             </form>
           </div>

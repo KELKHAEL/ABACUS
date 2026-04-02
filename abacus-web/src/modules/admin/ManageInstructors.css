@@ -128,17 +128,6 @@
   font-weight: 600;
 }
 
-.password-box {
-  font-family: 'Courier New', monospace;
-  background: #f3f4f6;
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: #374151;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 1px;
-}
-
 /* Action Buttons */
 .action-buttons {
   display: flex;
@@ -178,7 +167,7 @@
   transform: translateY(-2px);
 }
 
-/* Modal Styles */
+/* Modal Core Overlays */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -190,27 +179,14 @@
   backdrop-filter: blur(4px);
 }
 
-.modal-content {
-  background: white;
-  padding: 32px;
-  border-radius: 16px;
-  width: 450px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
-.modal-header { margin-bottom: 24px; }
-.modal-title { font-size: 20px; font-weight: 700; color: #104a28; margin: 0; }
-
-.form-group { margin-bottom: 16px; }
-.form-label { display: block; font-size: 13px; font-weight: 600; color: #4b5563; margin-bottom: 6px; }
-
+/* Inputs within modals */
 .form-input {
   width: 100%;
   padding: 10px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font-size: 14px;
-  box-sizing: border-box; /* Important for inputs */
+  box-sizing: border-box;
 }
 
 .form-input:focus {
@@ -218,22 +194,3 @@
   outline: none;
   box-shadow: 0 0 0 2px rgba(16, 74, 40, 0.1);
 }
-
-.modal-actions { display: flex; gap: 12px; margin-top: 24px; }
-
-.btn-cancel {
-  flex: 1; padding: 10px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  color: #374151; font-weight: 600; cursor: pointer;
-}
-
-.btn-save {
-  flex: 1; padding: 10px;
-  background: #fbbf24;
-  border: none;
-  border-radius: 8px;
-  color: #422006; font-weight: 700; cursor: pointer;
-}
-.btn-save:hover { background: #f59e0b; }

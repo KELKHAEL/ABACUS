@@ -2,21 +2,22 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Trash2, PlusCircle, Calendar, Eye, X, HelpCircle,
-  RefreshCcw, LayoutGrid, Target, Clock, Settings, History, Edit, BookOpen
+  RefreshCcw, LayoutGrid, Target, Clock, History, Edit, BookOpen, Search, Filter
 } from 'lucide-react';
 import './Instructor.css';
 
 export default function ManageQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
+  const [assignedClasses, setAssignedClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const [viewingQuiz, setViewingQuiz] = useState(null);
   const [viewMode, setViewMode] = useState('active'); // active, trash, archived
 
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    id: null, title: '', description: '', targetYear: 'ALL', targetSection: 'ALL', dueDate: ''
-  });
+  // --- FILTERS ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterSection, setFilterSection] = useState('ALL');
   
   const navigate = useNavigate();
 
@@ -25,12 +26,21 @@ export default function ManageQuizzes() {
     return new Date(dateString);
   };
 
-  const fetchQuizzes = async () => {
+  const fetchQuizzesAndUser = async () => {
     setLoading(true);
     try {
       const userStr = localStorage.getItem('user');
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
+
+      // Parse Assigned Classes for the filters
+      if (user.assigned_classes) {
+          try {
+              const classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
+              const finalClasses = typeof classes === 'string' ? JSON.parse(classes) : classes;
+              setAssignedClasses(Array.isArray(finalClasses) ? finalClasses : []);
+          } catch(e) {}
+      }
 
       const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
       const data = await res.json();
@@ -43,41 +53,30 @@ export default function ManageQuizzes() {
     }
   };
 
-  useEffect(() => { fetchQuizzes(); }, []);
+  useEffect(() => { fetchQuizzesAndUser(); }, []);
 
-  const openEditModal = (quiz) => {
-    let formattedDate = "";
-    if (quiz.due_date) {
-         const dateObj = new Date(quiz.due_date);
-         dateObj.setMinutes(dateObj.getMinutes() - dateObj.getTimezoneOffset());
-         formattedDate = dateObj.toISOString().slice(0, 16);
-    }
-    setEditFormData({
-      id: quiz.id, title: quiz.title, description: quiz.description || '',
-      targetYear: quiz.target_year || 'ALL', targetSection: quiz.target_section || 'ALL',
-      dueDate: formattedDate
-    });
-    setShowEditModal(true);
-  };
-
-  const handleSaveEdit = async (e) => {
-    e.preventDefault();
+  // ✅ NEW: FETCH FULL QUIZ WITH QUESTIONS AND ROUTE TO EDITOR
+  const handleEditQuiz = async (quizId) => {
+    setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/quizzes/${editFormData.id}/details`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editFormData)
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("Quiz updated successfully!");
-        setShowEditModal(false);
-        fetchQuizzes(); 
-      } else { alert("Failed to update: " + data.error); }
-    } catch (err) { alert("Server error. Ensure backend is running."); }
+      const res = await fetch(`http://localhost:5000/quizzes/${quizId}`);
+      const fullQuiz = await res.json();
+      
+      if (fullQuiz.error) {
+        alert(fullQuiz.error);
+        setLoading(false);
+        return;
+      }
+      
+      // Navigate to CreateQuiz and pass the full quiz data (including questions) via state
+      navigate('/instructor/CreateQuiz', { state: { quizToEdit: fullQuiz } });
+    } catch (error) {
+      console.error("Error fetching full quiz:", error);
+      alert("Failed to load quiz details for editing.");
+      setLoading(false);
+    }
   };
 
-  // ✅ Move to Trash (Soft Delete)
   const handleMoveToTrash = async (quizId, e) => {
     e.stopPropagation();
     if (window.confirm("Move this quiz to the trashbin? Students will no longer see it.")) {
@@ -87,12 +86,11 @@ export default function ManageQuizzes() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'deleted' })
         });
-        if (res.ok) fetchQuizzes();
+        if (res.ok) fetchQuizzesAndUser();
       } catch (error) { alert("Failed to move to trash."); }
     }
   };
 
-  // ✅ Restore from Trash
   const handleRestore = async (quizId, e) => {
     e.stopPropagation();
     try {
@@ -101,11 +99,10 @@ export default function ManageQuizzes() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'active' })
       });
-      if (res.ok) fetchQuizzes();
+      if (res.ok) fetchQuizzesAndUser();
     } catch (error) { alert("Failed to restore quiz."); }
   };
 
-  // ✅ Permanent Delete
   const handlePermanentDelete = async (quizId, e) => {
     e.stopPropagation();
     if (window.confirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.")) {
@@ -116,28 +113,34 @@ export default function ManageQuizzes() {
     }
   };
 
-  // ✅ Dynamic Display Logic
+  // ✅ EXTRACT UNIQUE YEARS & SECTIONS FOR FILTERS
+  const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
+  const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
+
+  // ✅ FILTER LOGIC
   const activeQuizzes = quizzes.filter(q => (q.status === 'active' || !q.status) && !q.is_archived);
   const trashedQuizzes = quizzes.filter(q => q.status === 'deleted' && !q.is_archived);
   const archivedQuizzes = quizzes.filter(q => q.is_archived && q.status !== 'deleted');
   
-  const displayedQuizzes = 
-    viewMode === 'active' ? activeQuizzes : 
-    viewMode === 'trash' ? trashedQuizzes : 
-    archivedQuizzes;
+  const targetQuizzes = viewMode === 'active' ? activeQuizzes : viewMode === 'trash' ? trashedQuizzes : archivedQuizzes;
+
+  const displayedQuizzes = targetQuizzes.filter(q => {
+      const matchSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchYear = filterYear === 'ALL' || q.target_year === 'ALL' || String(q.target_year) === String(filterYear);
+      const matchSection = filterSection === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterSection);
+      return matchSearch && matchYear && matchSection;
+  });
 
   return (
     <div className="instructor-dashboard-container">
       <div className="inst-dashboard-header">
         <div className="header-left">
             <h2>
-              {viewMode === 'active' ? 'Active Quizzes' : 
-               viewMode === 'trash' ? 'Trashbin' : 'Archived History'}
+              {viewMode === 'active' ? 'Active Quizzes' : viewMode === 'trash' ? 'Trashbin' : 'Archived History'}
             </h2>
             <p>
               {viewMode === 'active' ? 'Manage current assessments for this semester.' : 
-               viewMode === 'trash' ? 'Quizzes here are disabled for students. You can restore or permanently delete them.' :
-               'Read-only history of quizzes from past semesters.'}
+               viewMode === 'trash' ? 'Quizzes here are disabled for students.' : 'Read-only history of quizzes from past semesters.'}
             </p>
         </div>
         <div className="header-actions">
@@ -154,15 +157,37 @@ export default function ManageQuizzes() {
         </div>
       </div>
 
+      {/* FILTER BAR */}
+      <div className="gb-filters-card" style={{marginBottom: '25px', flexDirection: 'row', alignItems: 'center'}}>
+        <div className="filter-title" style={{marginRight: '15px'}}>
+            <Filter size={18} color="#eab308"/> 
+            <span>Filters:</span>
+        </div>
+        <div className="filters-content" style={{flex: 1}}>
+            <div className="search-box" style={{flex: 2}}>
+                <Search size={18} color="#666" />
+                <input placeholder="Search Quiz Title..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+            </div>
+            <select className="gb-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+                <option value="ALL">All Years</option>
+                {uniqueYears.map(y => <option key={y} value={y}>Year {y}</option>)}
+            </select>
+            <select className="gb-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
+                <option value="ALL">All Sections</option>
+                {uniqueSections.map(s => <option key={s} value={s}>Section {s}</option>)}
+            </select>
+            {(filterYear !== 'ALL' || filterSection !== 'ALL' || searchTerm !== '') && (
+                <button onClick={() => {setFilterYear('ALL'); setFilterSection('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
+            )}
+        </div>
+      </div>
+
       {loading ? (
         <div className="loading-state"><div className="spinner"></div><p>Loading data...</p></div>
       ) : displayedQuizzes.length === 0 ? (
         <div className="empty-state-modern">
           <div className="empty-icon-bg"><HelpCircle size={40} color="#104a28"/></div>
-          <h3>
-            {viewMode === 'active' ? "No active quizzes found" : 
-             viewMode === 'trash' ? "Your trash is empty" : "No archives found"}
-          </h3>
+          <h3>No quizzes match your filters.</h3>
           {viewMode === 'active' && <button className="btn-text" onClick={() => navigate('/instructor/CreateQuiz')}>Create Quiz Now &rarr;</button>}
         </div>
       ) : (
@@ -173,7 +198,7 @@ export default function ManageQuizzes() {
               <div className="card-content">
                 <h3 className="card-title" style={{textDecoration: viewMode === 'trash' ? 'line-through' : 'none', color: viewMode === 'trash' ? '#6b7280' : '#111'}}>{quiz.title}</h3>
                 <div className="card-tags">
-                    {quiz.target_year && <span className="tag tag-year"><Target size={12}/> Year {quiz.target_year}-{quiz.target_section}</span>}
+                    {quiz.target_year && <span className="tag tag-year"><Target size={12}/> {quiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${quiz.target_year}-${quiz.target_section}`}</span>}
                     {quiz.due_date && (
                         <span style={{fontSize: '11px', background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
                             <Clock size={12}/> Due: {new Date(quiz.due_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -188,7 +213,8 @@ export default function ManageQuizzes() {
                   
                   {viewMode === 'active' && (
                     <>
-                      <button className="btn-action btn-edit" onClick={() => openEditModal(quiz)} title="Edit"><Edit size={16}/></button>
+                      {/* Calls handleEditQuiz directly */}
+                      <button className="btn-action btn-edit" onClick={() => handleEditQuiz(quiz.id)} title="Edit Quiz & Questions"><Edit size={16}/></button>
                       <button className="btn-action btn-delete" onClick={(e) => handleMoveToTrash(quiz.id, e)} title="Move to Trash"><Trash2 size={16}/></button>
                     </>
                   )}
@@ -205,52 +231,55 @@ export default function ManageQuizzes() {
         </div>
       )}
 
-      {/* MODALS */}
+      {/* --- PREVIEW (VIEW) MODAL --- */}
       {viewingQuiz && (
         <div className="modal-overlay" onClick={() => setViewingQuiz(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden'}}>
-            <div style={{backgroundColor: '#f8f9fa', padding: '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '600px', padding: 0, overflow: 'hidden'}}>
+            
+            <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                 <div>
-                    <h2 style={{margin: 0, fontSize: '22px', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}><BookOpen size={24} color="#104a28"/> {viewingQuiz.title}</h2>
+                    <h2 style={{margin: 0, fontSize: '24px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                        <BookOpen size={28} color="#eab308"/> {viewingQuiz.title}
+                    </h2>
+                    <div style={{display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap'}}>
+                        <span style={{fontSize: '12px', background: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                            <Target size={14}/> {viewingQuiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${viewingQuiz.target_year} - Sec ${viewingQuiz.target_section}`}
+                        </span>
+                        {viewingQuiz.due_date ? (
+                            <span style={{fontSize: '12px', background: '#fee2e2', color: '#991b1b', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold'}}>
+                                <Clock size={14}/> Due: {new Date(viewingQuiz.due_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                            </span>
+                        ) : (
+                            <span style={{fontSize: '12px', background: '#e5e7eb', color: '#4b5563', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold'}}>
+                                <Clock size={14}/> No Deadline
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <button onClick={() => setViewingQuiz(null)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af'}}><X size={24}/></button>
+                <button onClick={() => setViewingQuiz(null)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
             </div>
-            <div style={{padding: '24px'}}>
-                <p style={{fontSize: '15px', color: '#374151', lineHeight: '1.6', background: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #f3f4f6'}}>{viewingQuiz.description || "No description provided."}</p>
+
+            <div style={{padding: '30px 24px', backgroundColor: '#f8fafc'}}>
+                <div style={{background: 'white', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
+                    <h3 style={{fontSize: '13px', textTransform: 'uppercase', color: '#64748b', marginTop: 0, marginBottom: '10px', letterSpacing: '0.5px'}}>Quiz Description</h3>
+                    <p style={{fontSize: '15px', color: '#333', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap'}}>
+                        {viewingQuiz.description || <span style={{fontStyle: 'italic', color: '#94a3b8'}}>No description provided.</span>}
+                    </p>
+                </div>
+                
+                <div style={{marginTop: '20px', display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '12px'}}>
+                    <Calendar size={14}/> Created on {new Date(viewingQuiz.created_at).toLocaleDateString()}
+                </div>
             </div>
+
             {viewMode === 'active' && (
-                <div style={{padding: '16px 24px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end'}}>
-                    <button onClick={() => { setViewingQuiz(null); openEditModal(viewingQuiz); }} style={{background: '#104a28', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'}}><Edit size={16}/> Edit Details</button>
+                <div style={{padding: '16px 24px', borderTop: '1px solid #e5e7eb', background: '#fff', display: 'flex', justifyContent: 'flex-end'}}>
+                    <button onClick={() => { setViewingQuiz(null); handleEditQuiz(viewingQuiz.id); }} style={{background: '#104a28', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                        <Edit size={16}/> Edit Quiz & Questions
+                    </button>
                 </div>
             )}
           </div>
-        </div>
-      )}
-
-      {showEditModal && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '500px', padding: 0, overflow: 'hidden'}}>
-                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Settings size={22}/> Edit Quiz Settings</h2>
-                    <button onClick={() => setShowEditModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
-                </div>
-                <form onSubmit={handleSaveEdit}>
-                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
-                        <div>
-                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Quiz Title</label>
-                            <input required value={editFormData.title} onChange={e => setEditFormData({...editFormData, title: e.target.value})} style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px'}}/>
-                        </div>
-                        <div>
-                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Deadline / Due Date</label>
-                            <input type="datetime-local" value={editFormData.dueDate} onChange={e => setEditFormData({...editFormData, dueDate: e.target.value})} style={{width: '100%', padding: '12px', border: '1px solid #ef4444', borderRadius: '8px'}} required />
-                        </div>
-                    </div>
-                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
-                        <button type="button" onClick={() => setShowEditModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer'}}>Cancel</button>
-                        <button type="submit" style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', fontWeight: 'bold', cursor: 'pointer'}}>Save Changes</button>
-                    </div>
-                </form>
-            </div>
         </div>
       )}
     </div>

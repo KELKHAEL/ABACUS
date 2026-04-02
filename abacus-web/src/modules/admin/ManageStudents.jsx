@@ -8,16 +8,17 @@ export default function ManageStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // --- DYNAMIC ACADEMIC SETUP ---
+  const [academicYears, setAcademicYears] = useState([]);
+  const [academicSections, setAcademicSections] = useState([]);
+  
   // --- WHITELIST & TRASH STATE ---
   const [allowedList, setAllowedList] = useState([]);
   const [showWhitelistModal, setShowWhitelistModal] = useState(false);
   const [whitelistLoading, setWhitelistLoading] = useState(false);
   
-  // Whitelist Editing State
   const [editingWhitelistId, setEditingWhitelistId] = useState(null);
   const [whitelistEditData, setWhitelistEditData] = useState({ studentId: '', email: '' });
-  
-  // Whitelist Filter State
   const [whitelistFilterYear, setWhitelistFilterYear] = useState('ALL');
 
   const [trashList, setTrashList] = useState([]);
@@ -72,9 +73,7 @@ export default function ManageStudents() {
     e.target.value = null; 
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
-  };
+  const triggerFileInput = () => { fileInputRef.current.click(); };
 
   // --- 2. WHITELIST LOGIC ---
   const fetchWhitelist = async () => {
@@ -83,16 +82,14 @@ export default function ManageStudents() {
         const res = await fetch('http://localhost:5000/allowed-students');
         const data = await res.json();
         setAllowedList(data);
-    } catch (error) {
-        console.error("Error fetching whitelist:", error);
-    }
+    } catch (error) { console.error("Error fetching whitelist:", error); }
     setWhitelistLoading(false);
   };
 
   const openWhitelist = () => {
       setShowWhitelistModal(true);
       setEditingWhitelistId(null);
-      setWhitelistFilterYear('ALL'); // Reset filter on open
+      setWhitelistFilterYear('ALL'); 
       fetchWhitelist();
   };
 
@@ -101,9 +98,7 @@ export default function ManageStudents() {
       try {
           await fetch(`http://localhost:5000/allowed-students/${id}`, { method: 'DELETE' });
           fetchWhitelist(); 
-      } catch (e) {
-          alert("Failed to delete");
-      }
+      } catch (e) { alert("Failed to delete"); }
   };
 
   const startEditingWhitelist = (item) => {
@@ -123,20 +118,16 @@ export default function ManageStudents() {
           if (data.success) {
               setEditingWhitelistId(null);
               fetchWhitelist();
-          } else {
-              alert("Failed to update: " + data.error);
-          }
-      } catch (e) {
-          alert("Server Error.");
-      }
+          } else { alert("Failed to update: " + data.error); }
+      } catch (e) { alert("Server Error."); }
   };
 
   // ✅ DYNAMIC BATCH FILTERING FOR WHITELIST
-  const batchYears = [...new Set(
+  const whitelistBatchYears = [...new Set(
       allowedList
         .map(item => item.student_id ? String(item.student_id).substring(0, 4) : null)
         .filter(year => year && year.startsWith('20')) 
-  )].sort((a, b) => b.localeCompare(a)); // Sort descending (newest first)
+  )].sort((a, b) => b.localeCompare(a)); 
 
   const filteredWhitelist = allowedList.filter(item => {
       if (whitelistFilterYear === 'ALL') return true;
@@ -150,26 +141,18 @@ export default function ManageStudents() {
         const res = await fetch('http://localhost:5000/trash/students');
         const data = await res.json();
         setTrashList(data);
-    } catch (error) {
-        console.error("Error fetching trash:", error);
-    }
+    } catch (error) { console.error("Error fetching trash:", error); }
     setTrashLoading(false);
   };
 
-  const openTrash = () => {
-    setShowTrashModal(true);
-    fetchTrash();
-  };
+  const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
   const handleRestore = async (id) => {
     if(!window.confirm("Restore this student account?")) return;
     try {
         await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
-        fetchTrash(); 
-        fetchStudents(); 
-    } catch (e) {
-        alert("Failed to restore");
-    }
+        fetchTrash(); fetchStudents(); 
+    } catch (e) { alert("Failed to restore"); }
   };
 
   const handlePermanentDelete = async (id) => {
@@ -177,16 +160,15 @@ export default function ManageStudents() {
     try {
         await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
         fetchTrash();
-    } catch (e) {
-        alert("Failed to delete permanently");
-    }
+    } catch (e) { alert("Failed to delete permanently"); }
   };
 
   // --- EXISTING MANAGE LOGIC ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterYear, setFilterYear] = useState('');
-  const [filterSection, setFilterSection] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterBatch, setFilterBatch] = useState('ALL');
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterSection, setFilterSection] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -201,20 +183,27 @@ export default function ManageStudents() {
   const generatePassword = () => {
     const letters = "abcdefghijklmnopqrstuvwxyz";
     let randomLetters = "";
-    for (let i = 0; i < 8; i++) {
-      randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
-    }
+    for (let i = 0; i < 8; i++) { randomLetters += letters.charAt(Math.floor(Math.random() * letters.length)); }
     const randomNum = Math.floor(Math.random() * 999) + 1;
     return `${randomLetters}${randomNum}`;
   };
 
-  const fetchStudents = async () => {
+  const fetchStudentsAndSetup = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/users?role=STUDENT');
-      const data = await res.json();
+      const [studentsRes, setupRes] = await Promise.all([
+        fetch('http://localhost:5000/users?role=STUDENT'),
+        fetch('http://localhost:5000/academic-setup')
+      ]);
+      const studentData = await studentsRes.json();
+      const setupData = await setupRes.json();
+
+      if (!setupData.error) {
+        setAcademicYears(setupData.yearLevels || []);
+        setAcademicSections(setupData.sections || []);
+      }
       
-      const formatted = data.map(user => ({
+      const formatted = studentData.map(user => ({
         id: user.id, fullName: user.full_name, email: user.email, studentId: user.student_id,
         program: user.program || 'Bachelor of Science in Information Technology',
         yearLevel: user.year_level, section: user.section, status: user.status || 'Regular', defaultPassword: '' 
@@ -229,18 +218,20 @@ export default function ManageStudents() {
       });
 
       setStudents(sortedList);
-    } catch (error) { console.error("Error fetching students:", error); }
+    } catch (error) { console.error("Error fetching students/setup:", error); }
     setLoading(false);
   };
 
-  useEffect(() => { fetchStudents(); }, []);
+  useEffect(() => { fetchStudentsAndSetup(); }, []);
 
   const openAddModal = () => {
     setIsEditing(false);
     setEditId(null);
     setFormData({ 
       firstName: '', middleName: '', lastName: '', email: '', studentId: '', 
-      program: 'Bachelor of Science in Information Technology', yearLevel: '1', section: '1', 
+      program: 'Bachelor of Science in Information Technology', 
+      yearLevel: academicYears.length > 0 ? academicYears[0].year_name : '1', 
+      section: academicSections.length > 0 ? academicSections[0].section_name : '1', 
       status: 'Regular', password: generatePassword()
     });
     setShowModal(true);
@@ -295,7 +286,7 @@ export default function ManageStudents() {
 
       if (data.success) {
         alert(isEditing ? "Updated!" : "Created!");
-        setShowModal(false); fetchStudents();
+        setShowModal(false); fetchStudentsAndSetup();
       } else { alert("Error: " + data.error); }
     } catch (error) { alert("Server connection failed."); }
   };
@@ -304,7 +295,7 @@ export default function ManageStudents() {
     if (window.confirm("Move this student to the Trash Bin? They can be restored later.")) {
       try {
         await fetch(`http://localhost:5000/users/${id}/soft-delete`, { method: 'PUT' });
-        fetchStudents(); 
+        fetchStudentsAndSetup(); 
       } catch (error) { alert("Delete failed."); }
     }
   };
@@ -321,15 +312,23 @@ export default function ManageStudents() {
     } catch (error) { alert("Failed to reset password."); }
   };
 
+  // ✅ DYNAMIC FILTERING LOGIC
+  const mainBatchYears = [...new Set(
+    students
+      .map(item => item.studentId ? String(item.studentId).substring(0, 4) : null)
+      .filter(year => year && year.startsWith('20')) 
+  )].sort((a, b) => b.localeCompare(a));
+
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || student.studentId?.includes(searchTerm);
-    const matchesYear = filterYear ? student.yearLevel === filterYear : true;
-    const matchesSection = filterSection ? student.section === filterSection : true;
-    const matchesStatus = filterStatus ? student.status === filterStatus : true;
-    return matchesSearch && matchesYear && matchesSection && matchesStatus;
+    const matchesBatch = filterBatch !== 'ALL' ? (student.studentId && String(student.studentId).startsWith(filterBatch)) : true;
+    const matchesYear = filterYear !== 'ALL' ? student.yearLevel == filterYear : true; // using == to handle string/int mismatches
+    const matchesSection = filterSection !== 'ALL' ? student.section == filterSection : true;
+    const matchesStatus = filterStatus !== 'ALL' ? student.status === filterStatus : true;
+    return matchesSearch && matchesBatch && matchesYear && matchesSection && matchesStatus;
   });
 
-  const clearFilters = () => { setSearchTerm(''); setFilterYear(''); setFilterSection(''); setFilterStatus(''); };
+  const clearFilters = () => { setSearchTerm(''); setFilterBatch('ALL'); setFilterYear('ALL'); setFilterSection('ALL'); setFilterStatus('ALL'); };
 
   const getStatusClass = (status) => {
       if (status === 'Irregular') return 'badge-irregular';
@@ -360,17 +359,29 @@ export default function ManageStudents() {
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="filter-bar">
-        <div className="search-wrapper">
+      {/* FILTER BAR (Dynamic) */}
+      <div className="filter-bar" style={{flexWrap: 'wrap', gap: '10px'}}>
+        <div className="search-wrapper" style={{minWidth: '200px'}}>
           <Search className="search-icon" size={18} />
-          <input className="search-input" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input className="search-input" placeholder="Search ID or Name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
+        <select className="filter-select" value={filterBatch} onChange={e => setFilterBatch(e.target.value)}>
+          <option value="ALL">All Batches</option>
+          {mainBatchYears.map(y => <option key={y} value={y}>Batch {y}</option>)}
+        </select>
         <select className="filter-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-          <option value="">All Years</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option>
+          <option value="ALL">All Years</option>
+          {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
         </select>
         <select className="filter-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-          <option value="">All Sections</option><option value="1">Section 1</option><option value="2">Section 2</option><option value="3">Section 3</option>
+          <option value="ALL">All Sections</option>
+          {academicSections.map(s => <option key={s.id} value={s.section_name}>Section {s.section_name}</option>)}
+        </select>
+        <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="ALL">All Statuses</option>
+          <option value="Regular">Regular</option>
+          <option value="Irregular">Irregular</option>
+          <option value="Dropped">Dropped</option>
         </select>
         <button className="btn-reset" onClick={clearFilters}>Reset</button>
       </div>
@@ -426,7 +437,6 @@ export default function ManageStudents() {
                     <button onClick={() => setShowWhitelistModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
                 </div>
 
-                {/* ✅ FILTER BAR FOR WHITELIST */}
                 <div style={{padding: '15px 24px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '10px'}}>
                     <Filter size={16} color="#6b7280"/>
                     <span style={{fontSize: '13px', fontWeight: 'bold', color: '#4b5563'}}>Filter by Batch:</span>
@@ -436,7 +446,7 @@ export default function ManageStudents() {
                         style={{padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none', cursor: 'pointer', minWidth: '150px'}}
                     >
                         <option value="ALL">All Batches</option>
-                        {batchYears.map(year => (
+                        {whitelistBatchYears.map(year => (
                             <option key={year} value={year}>Batch {year}</option>
                         ))}
                     </select>
@@ -463,19 +473,10 @@ export default function ManageStudents() {
                                             {isItemEditing ? (
                                                 <>
                                                     <td style={{padding: '8px 12px'}}>
-                                                        <input 
-                                                            autoFocus
-                                                            style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontFamily: 'monospace', fontSize: '13px'}} 
-                                                            value={whitelistEditData.studentId} 
-                                                            onChange={(e) => setWhitelistEditData({...whitelistEditData, studentId: e.target.value})} 
-                                                        />
+                                                        <input autoFocus style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontFamily: 'monospace', fontSize: '13px'}} value={whitelistEditData.studentId} onChange={(e) => setWhitelistEditData({...whitelistEditData, studentId: e.target.value})} />
                                                     </td>
                                                     <td style={{padding: '8px 12px'}}>
-                                                        <input 
-                                                            style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontSize: '13px'}} 
-                                                            value={whitelistEditData.email} 
-                                                            onChange={(e) => setWhitelistEditData({...whitelistEditData, email: e.target.value})} 
-                                                        />
+                                                        <input style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontSize: '13px'}} value={whitelistEditData.email} onChange={(e) => setWhitelistEditData({...whitelistEditData, email: e.target.value})} />
                                                     </td>
                                                     <td style={{padding: '8px 12px', textAlign: 'right'}}>
                                                         <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px'}}>
@@ -490,12 +491,8 @@ export default function ManageStudents() {
                                                     <td style={{padding: '12px', color: '#4b5563', fontSize: '14px'}}>{item.email}</td>
                                                     <td style={{padding: '12px', textAlign: 'right'}}>
                                                         <div style={{display: 'flex', justifyContent: 'flex-end', gap: '8px'}}>
-                                                            <button className="btn-icon btn-edit" style={{background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#0ea5e9'}} onClick={() => startEditingWhitelist(item)} title="Edit Entry">
-                                                                <Edit size={16}/>
-                                                            </button>
-                                                            <button className="btn-icon btn-delete" style={{background: '#fee2e2', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#dc2626'}} onClick={() => deleteFromWhitelist(item.id)} title="Remove from Whitelist">
-                                                                <Trash2 size={16}/>
-                                                            </button>
+                                                            <button className="btn-icon btn-edit" style={{background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#0ea5e9'}} onClick={() => startEditingWhitelist(item)} title="Edit Entry"><Edit size={16}/></button>
+                                                            <button className="btn-icon btn-delete" style={{background: '#fee2e2', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#dc2626'}} onClick={() => deleteFromWhitelist(item.id)} title="Remove from Whitelist"><Trash2 size={16}/></button>
                                                         </div>
                                                     </td>
                                                 </>
@@ -537,12 +534,8 @@ export default function ManageStudents() {
                                         <td style={{padding: '12px', fontFamily: 'monospace', color: '#666'}}>{item.student_id}</td>
                                         <td style={{padding: '12px', textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}>
-                                                    <RotateCcw size={14} style={{marginRight: 5}}/> Restore
-                                                </button>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}>
-                                                    <Trash2 size={14} style={{marginRight: 5}}/> Delete
-                                                </button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}><RotateCcw size={14} style={{marginRight: 5}}/> Restore</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}><Trash2 size={14} style={{marginRight: 5}}/> Delete</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -586,10 +579,23 @@ export default function ManageStudents() {
                 <div className="form-group" style={{flex: 1}}><label className="form-label">Email</label><input className="form-input" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={isEditing} /></div>
                 {!isEditing && <div className="form-group" style={{flex: 1}}><label className="form-label">Password</label><input className="form-input" value={formData.password} readOnly /></div>}
               </div>
+              
+              {/* DYNAMIC MODAL DROPDOWNS */}
               <div style={{display: 'flex', gap: '16px'}}>
-                <div className="form-group" style={{flex: 1}}><label className="form-label">Year</label><select className="form-input" value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
-                <div className="form-group" style={{flex: 1}}><label className="form-label">Section</label><select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+                <div className="form-group" style={{flex: 1}}>
+                    <label className="form-label">Year</label>
+                    <select className="form-input" value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}>
+                        {academicYears.map(y => <option key={y.id} value={y.year_name}>{y.year_name}</option>)}
+                    </select>
+                </div>
+                <div className="form-group" style={{flex: 1}}>
+                    <label className="form-label">Section</label>
+                    <select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}>
+                        {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+                    </select>
+                </div>
               </div>
+
               <div className="form-group"><label className="form-label">Status</label><select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Regular">Regular</option><option value="Irregular">Irregular</option><option value="Dropped">Dropped</option></select></div>
               <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn-save">Save</button></div>
             </form>
