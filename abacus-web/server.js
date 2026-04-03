@@ -524,56 +524,57 @@ app.put('/announcements/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- ANNOUNCEMENT ROUTES ---
+
 app.get('/announcements/student/:id', async (req, res) => {
   try {
     const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     
-    const activeTermId = await getActiveTermId();
+    // ✅ Removed 'term_id' filter so announcements persist across semesters
     const [announcements] = await db.query(`
       SELECT * FROM announcements 
-      WHERE is_deleted = 0 AND term_id = ? 
+      WHERE is_deleted = 0 
       AND (
           (author_role = 'ADMIN' AND target_year != 'INSTRUCTORS') 
           OR target_year = 'ALL' 
           OR (target_year = ? AND target_section = ?)
       ) ORDER BY created_at DESC
-    `, [activeTermId, students[0].year_level, students[0].section]);
+    `, [students[0].year_level, students[0].section]);
     res.json(announcements);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ✅ Admin Only Fetches Admin Announcements
 app.get('/announcements/all', async (req, res) => {
   try {
-    const activeTermId = await getActiveTermId();
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND term_id = ? AND author_role = 'ADMIN' ORDER BY created_at DESC", [activeTermId]);
+    // ✅ Removed 'term_id' filter
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND author_role = 'ADMIN' ORDER BY created_at DESC");
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/announcements/admin-to-instructor/:instructorId', async (req, res) => {
   try {
-    const activeTermId = await getActiveTermId();
     const instructorId = req.params.instructorId;
     
+    // ✅ Removed 'term_id' filter
     const [rows] = await db.query(`
       SELECT * FROM announcements 
-      WHERE is_deleted = 0 AND term_id = ? AND author_role = 'ADMIN' 
+      WHERE is_deleted = 0 AND author_role = 'ADMIN' 
       AND (
         target_year = 'ALL' 
         OR (target_year = 'INSTRUCTORS' AND (target_section = 'ALL' OR target_section = ?))
       ) 
       ORDER BY created_at DESC
-    `, [activeTermId, instructorId]);
+    `, [instructorId]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/announcements/instructor/:id', async (req, res) => {
   try {
-    const activeTermId = await getActiveTermId();
-    const [rows] = await db.query("SELECT *, IF(term_id = ?, 0, 1) as is_archived FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [activeTermId, req.params.id]);
+    // ✅ Removed 'term_id' filter, setting is_archived to 0 permanently for UI consistency
+    const [rows] = await db.query("SELECT *, 0 as is_archived FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [req.params.id]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -725,7 +726,13 @@ app.get('/modules/student/:id', async (req, res) => {
     const { year_level, section } = students[0];
 
     const activeTermId = await getActiveTermId();
-    const [modules] = await db.query(`SELECT modules.*, users.full_name as author FROM modules JOIN users ON modules.uploaded_by = users.id WHERE modules.term_id = ? ORDER BY created_at DESC`, [activeTermId]);
+    // ✅ Removed the hard term_id filter. Added is_archived flag.
+    const [modules] = await db.query(`
+      SELECT modules.*, users.full_name as author, IF(modules.term_id = ?, 0, 1) as is_archived 
+      FROM modules 
+      JOIN users ON modules.uploaded_by = users.id 
+      ORDER BY created_at DESC
+    `, [activeTermId]);
     
     const relevantModules = modules.filter(mod => {
       try {

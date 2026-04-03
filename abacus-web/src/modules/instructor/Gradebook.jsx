@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Search, Filter, Eye, Edit3, 
-  Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2 
+  Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2, History, LayoutGrid
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './Instructor.css';
@@ -11,6 +11,9 @@ export default function Gradebook() {
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [quizStatusMap, setQuizStatusMap] = useState({}); 
+
+  // ✅ NEW: View Mode State (Active vs Archived)
+  const [viewMode, setViewMode] = useState('active'); 
 
   const [search, setSearch] = useState("");
   const [programFilter, setProgramFilter] = useState("All");
@@ -23,14 +26,18 @@ export default function Gradebook() {
 
   const navigate = useNavigate();
 
-  const calculateAverage = (gradesList, currentStatusMap) => {
+  const calculateAverage = (gradesList, currentStatusMap, isArchivedView) => {
     if (!gradesList || gradesList.length === 0) return "N/A";
     let totalScore = 0;
     let totalItems = 0;
     let validGradesCount = 0;
     
     gradesList.forEach(g => {
-      if (currentStatusMap[g.quiz_id] !== 'deleted') {
+      // Logic: If viewing active, only count non-archived grades that are NOT deleted.
+      // If viewing archived, only count archived grades.
+      const matchArchiveState = isArchivedView ? g.is_archived === 1 : g.is_archived === 0;
+      
+      if (matchArchiveState && currentStatusMap[g.quiz_id] !== 'deleted') {
         totalScore += parseFloat(g.grade || 0);
         totalItems += parseFloat(g.total_items || 100); 
         validGradesCount++;
@@ -58,8 +65,8 @@ export default function Gradebook() {
         const gradesRes = await fetch('http://localhost:5000/grades');
         const gradesData = await gradesRes.json();
 
-        const quizRes = await fetch('http://localhost:5000/quizzes');
-        const quizData = await quizRes.json();
+        // The dashboard fetch already includes quizzes (both active and archived depending on term)
+        const quizData = dashboardData.quizzes || [];
 
         const statusMap = {};
         quizData.forEach(q => { statusMap[q.id] = q.status; });
@@ -82,25 +89,21 @@ export default function Gradebook() {
     fetchData();
   }, [navigate]);
 
-  // ✅ DYNAMIC DROPDOWN GENERATORS
   const uniquePrograms = ['All', ...new Set(students.map(s => s.program))];
   const uniqueYears = ['All', ...new Set(students.map(s => s.yearLevel))].sort();
   const uniqueSections = ['All', ...new Set(students.map(s => s.section))].sort();
 
   useEffect(() => {
     let result = students;
-
     if (search) {
       const lower = search.toLowerCase();
       result = result.filter(s => (s.fullName && s.fullName.toLowerCase().includes(lower)) || (s.email && s.email.toLowerCase().includes(lower)));
     }
-
     if (programFilter !== "All") result = result.filter(s => s.program === programFilter);
     if (yearFilter !== "All") result = result.filter(s => String(s.yearLevel) === String(yearFilter));
     if (sectionFilter !== "All") result = result.filter(s => String(s.section) === String(sectionFilter));
-
     setFilteredStudents(result);
-  }, [search, programFilter, yearFilter, sectionFilter, students]);
+  }, [search, programFilter, yearFilter, sectionFilter, students, viewMode]);
 
   const openStudentModal = (student, editMode = false) => {
     setSelectedStudent(student);
@@ -147,6 +150,20 @@ export default function Gradebook() {
 
   return (
     <div className="gradebook-wrapper">
+      
+      <div className="inst-dashboard-header">
+        <div className="header-left">
+            <h2>Gradebook</h2>
+            <p>Monitor and manage student performance.</p>
+        </div>
+        <div className="header-actions">
+            <div className="view-toggle-container" style={{display: 'flex', background: '#f3f4f6', borderRadius: '8px', padding: '4px'}}>
+              <button onClick={() => setViewMode('active')} style={{border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', transition: 'all 0.2s', background: viewMode === 'active' ? 'white' : 'transparent', color: viewMode === 'active' ? '#111' : '#6b7280'}}><LayoutGrid size={16}/> Current Semester</button>
+              <button onClick={() => setViewMode('archived')} style={{border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', transition: 'all 0.2s', background: viewMode === 'archived' ? 'white' : 'transparent', color: viewMode === 'archived' ? '#111' : '#6b7280'}}><History size={16}/> Past Records</button>
+            </div>
+        </div>
+      </div>
+
       <div className="gb-filters-card">
         <div className="filter-title">
             <Filter size={18} color="#eab308"/> <span>Filter List</span>
@@ -171,8 +188,11 @@ export default function Gradebook() {
       </div>
 
       <div className="gb-table-card">
-        <div className="table-header-accent">
-            <div className="th-content"><Users size={20} color="white" /><h3>Enrolled Student Masterlist</h3></div>
+        <div className="table-header-accent" style={{background: viewMode === 'archived' ? '#64748b' : '#104a28'}}>
+            <div className="th-content">
+                <Users size={20} color="white" />
+                <h3>{viewMode === 'active' ? 'Enrolled Student Masterlist' : 'Archived Student Records'}</h3>
+            </div>
             <span className="student-count">{filteredStudents.length} Students found</span>
         </div>
         <table className="gb-table">
@@ -187,17 +207,20 @@ export default function Gradebook() {
             ) : filteredStudents.length === 0 ? ( <tr><td colSpan="5" className="text-center p-4">No students assigned to your classes yet.</td></tr>
             ) : (
               filteredStudents.map(student => {
-                const avg = calculateAverage(student.gradesList, quizStatusMap);
+                // Filter grades locally to calculate counts
+                const targetGrades = student.gradesList.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0);
+                const avg = calculateAverage(student.gradesList, quizStatusMap, viewMode === 'archived');
+
                 return (
                   <tr key={student.id}>
                     <td><div className="student-name">{student.fullName || "Unknown"}</div><div className="student-email">{student.email}</div></td>
                     <td className="text-center"><div className="badge-pill">{student.program || "N/A"}</div><div className="small-meta">{student.yearLevel} - {student.section}</div></td>
-                    <td className="text-center"><span className="quiz-count">{student.gradesList.length}</span></td>
+                    <td className="text-center"><span className="quiz-count">{targetGrades.length}</span></td>
                     <td className="text-center"><span className={`grade-avg ${avg >= 75 ? 'pass' : (avg === "N/A" ? 'neutral' : 'fail')}`}>{avg === "N/A" ? avg : `${avg}%`}</span></td>
                     <td className="text-right">
                       <div className="action-row right-aligned">
                         <button className="btn-icon view" onClick={() => openStudentModal(student, false)} title="View Grades"><Eye size={18} /></button>
-                        <button className="btn-icon edit" onClick={() => openStudentModal(student, true)} title="Edit Scores"><Edit3 size={18} /></button>
+                        {viewMode === 'active' && <button className="btn-icon edit" onClick={() => openStudentModal(student, true)} title="Edit Scores"><Edit3 size={18} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -211,40 +234,44 @@ export default function Gradebook() {
       {selectedStudent && (
         <div className="modal-overlay" onClick={() => setSelectedStudent(null)}>
           <div className="modal-content large" onClick={e => e.stopPropagation()}>
-            <div className="modal-header-green">
+            <div className="modal-header-green" style={{background: viewMode === 'archived' ? '#475569' : '#104a28'}}>
               <div><h2>{selectedStudent.fullName}</h2><p className="modal-subtitle-white">{selectedStudent.program} • {selectedStudent.yearLevel} - {selectedStudent.section}</p></div>
               <button className="btn-close-white" onClick={() => setSelectedStudent(null)}><X size={24}/></button>
             </div>
             <div className="modal-body">
               <div className="sheet-header">
-                <h3>Assessment Record</h3>
-                {!isEditing ? <button className="btn-secondary" onClick={() => setIsEditing(true)}><Edit3 size={16} /> Enable Editing</button>
-                  : <div className="editing-banner"><Edit3 size={14} /> Editing Mode Active</div>}
+                <h3>{viewMode === 'active' ? 'Assessment Record' : 'Past Assessment Record'}</h3>
+                {!isEditing && viewMode === 'active' ? <button className="btn-secondary" onClick={() => setIsEditing(true)}><Edit3 size={16} /> Enable Editing</button>
+                  : isEditing ? <div className="editing-banner"><Edit3 size={14} /> Editing Mode Active</div> : null}
               </div>
               <div className="sheet-container">
                 <table className="sheet-table">
                   <thead><tr><th width="35%">Quiz Title / Subject</th><th width="15%">Date Taken</th><th width="15%" className="text-center">Score</th><th width="15%" className="text-center">Total</th><th width="10%" className="text-center">Status</th>{isEditing && <th width="10%" className="text-center">Action</th>}</tr></thead>
                   <tbody>
-                    {editGrades.length === 0 ? <tr><td colSpan="6" className="text-center p-4">No quiz records found.</td></tr>
-                    : editGrades.map((grade, idx) => {
+                    {editGrades.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0).length === 0 ? <tr><td colSpan="6" className="text-center p-4">No records found for this term.</td></tr>
+                    : editGrades.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0).map((grade, idx) => {
                         const isDeleted = quizStatusMap[grade.quiz_id] === 'deleted';
                         const currentScore = parseFloat(grade.grade || 0);
                         const currentTotal = parseFloat(grade.total_items || 100);
                         const percentage = currentTotal > 0 ? ((currentScore / currentTotal) * 100) : 0;
+                        
+                        // We need the absolute index for the edit/delete mapping, not the filtered index
+                        const absoluteIdx = editGrades.findIndex(eg => eg.id === grade.id);
+
                         return (
-                          <tr key={idx} style={isDeleted ? {backgroundColor: '#f9f9f9', color: '#999'} : {}}>
+                          <tr key={grade.id} style={isDeleted ? {backgroundColor: '#f9f9f9', color: '#999'} : {}}>
                             <td><div style={{display:'flex', alignItems:'center', gap:'8px'}}><span style={{fontWeight: isDeleted ? 'normal' : '600', color: isDeleted ? '#999' : '#333', textDecoration: isDeleted ? 'line-through' : 'none'}}>{grade.subjectTitle}</span>{isDeleted && <span style={{fontSize:'10px', background:'#eee', color:'#666', padding:'2px 6px', borderRadius:'4px', display:'flex', alignItems:'center', gap:'3px'}}><Ban size={10}/> Disabled</span>}</div></td>
                             <td style={{color: isDeleted ? '#bbb' : '#666', fontSize: '13px'}}>{grade.dateTaken ? new Date(grade.dateTaken).toLocaleDateString() : "-"}</td>
-                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.grade} onChange={(e) => handleGradeChange(idx, 'grade', e.target.value)}/> : <span className="score-display" style={{color: isDeleted ? '#999' : '#111'}}>{currentScore}</span>}</td>
-                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.total_items || 100} onChange={(e) => handleGradeChange(idx, 'total_items', e.target.value)}/> : <span style={{color: isDeleted ? '#999' : '#666'}}>{currentTotal}</span>}</td>
+                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.grade} onChange={(e) => handleGradeChange(absoluteIdx, 'grade', e.target.value)}/> : <span className="score-display" style={{color: isDeleted ? '#999' : '#111'}}>{currentScore}</span>}</td>
+                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.total_items || 100} onChange={(e) => handleGradeChange(absoluteIdx, 'total_items', e.target.value)}/> : <span style={{color: isDeleted ? '#999' : '#666'}}>{currentTotal}</span>}</td>
                             <td className="text-center">{percentage >= 75 ? <span className={`status-badge ${isDeleted ? '' : 'pass'}`} style={isDeleted ? {background:'#eee', color:'#888'} : {}}><CheckCircle size={12}/> Passed</span> : <span className={`status-badge ${isDeleted ? '' : 'fail'}`} style={isDeleted ? {background:'#eee', color:'#888'} : {}}><AlertCircle size={12}/> Failed</span>}</td>
-                            {isEditing && <td className="text-center"><button onClick={() => handleDeleteGrade(idx)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer'}} title="Delete Grade Record"><Trash2 size={18}/></button></td>}
+                            {isEditing && <td className="text-center"><button onClick={() => handleDeleteGrade(absoluteIdx)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer'}} title="Delete Grade Record"><Trash2 size={18}/></button></td>}
                           </tr>
                         );
                       })
                     }
-                    {editGrades.length > 0 && (
-                        <tr style={{backgroundColor: '#f0fdf4', borderTop: '2px solid #bbf7d0'}}><td colSpan="2" className="text-right" style={{fontWeight: 'bold', color: '#166534'}}>Overall Average (Active):</td><td colSpan="2" className="text-center" style={{fontWeight: '900', color: '#15803d', fontSize: '16px'}}>{calculateAverage(editGrades, quizStatusMap)} {calculateAverage(editGrades, quizStatusMap) !== "N/A" && "%"}</td><td colSpan={isEditing ? 2 : 1}></td></tr>
+                    {editGrades.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0).length > 0 && (
+                        <tr style={{backgroundColor: viewMode === 'archived' ? '#f1f5f9' : '#f0fdf4', borderTop: viewMode === 'archived' ? '2px solid #cbd5e1' : '2px solid #bbf7d0'}}><td colSpan="2" className="text-right" style={{fontWeight: 'bold', color: viewMode === 'archived' ? '#334155' : '#166534'}}>Overall Average:</td><td colSpan="2" className="text-center" style={{fontWeight: '900', color: viewMode === 'archived' ? '#475569' : '#15803d', fontSize: '16px'}}>{calculateAverage(editGrades, quizStatusMap, viewMode === 'archived')} {calculateAverage(editGrades, quizStatusMap, viewMode === 'archived') !== "N/A" && "%"}</td><td colSpan={isEditing ? 2 : 1}></td></tr>
                     )}
                   </tbody>
                 </table>

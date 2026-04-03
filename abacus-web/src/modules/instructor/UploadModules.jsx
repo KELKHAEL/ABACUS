@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Plus, Trash2, FileText, Target, Calendar, 
-  UploadCloud, X, BookOpen, Download, RotateCcw, AlertTriangle, Clock, Search, Filter
+  UploadCloud, X, BookOpen, Download, RotateCcw, AlertTriangle, Clock, Search, Filter, History
 } from 'lucide-react';
 import './Instructor.css';
 
@@ -12,6 +12,9 @@ export default function UploadModules() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   
+  // ✅ NEW: View Mode State
+  const [viewMode, setViewMode] = useState('active'); // 'active' or 'archived'
+
   // --- FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterYear, setFilterYear] = useState('ALL');
@@ -162,13 +165,17 @@ export default function UploadModules() {
       return diffDays > 0 ? diffDays : 0; 
   };
 
-  // ✅ FILTER EXTRACT & LOGIC
+  // ✅ EXTRACT FILTERS
   const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
   const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
 
-  const activeModules = modules.filter(m => !m.is_archived && !m.is_deleted);
+  // ✅ VIEW MODE LOGIC & FILTERING
+  const filteredModules = modules.filter(m => {
+    // 1. Check if it matches the current tab (Active vs Archived)
+    const isTargetMode = viewMode === 'active' ? !m.is_archived : m.is_archived;
+    if (!isTargetMode || m.is_deleted) return false;
 
-  const filteredModules = activeModules.filter(m => {
+    // 2. Apply Text/Class Filters
     const matchSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                        (m.description && m.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
@@ -196,6 +203,26 @@ export default function UploadModules() {
               <UploadCloud size={20} /> Upload New Module
             </button>
         </div>
+      </div>
+
+      {/* ✅ TOGGLE TABS (ACTIVE / ARCHIVED) */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+          <button 
+            onClick={() => setViewMode('active')} 
+            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'active' ? '#104a28' : '#e5e7eb', color: viewMode === 'active' ? 'white' : '#4b5563' }}
+          >
+              <FileText size={18}/> Active Modules
+          </button>
+          <button 
+            onClick={() => setViewMode('archived')} 
+            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'archived' ? '#104a28' : '#e5e7eb', color: viewMode === 'archived' ? 'white' : '#4b5563' }}
+          >
+              <History size={18}/> Archived Modules
+          </button>
+      </div>
+
+      <div style={{marginBottom: '20px', color: '#666'}}>
+        {viewMode === 'active' ? 'Upload PDF lecture materials and assign them to your specific sections.' : 'Read-only history of modules from past semesters.'}
       </div>
 
       {/* FILTER BAR */}
@@ -245,10 +272,10 @@ export default function UploadModules() {
                 try { displayClasses = JSON.parse(mod.target_classes || '[]'); } catch(e) {}
 
                 return (
-                  <tr key={mod.id}>
+                  <tr key={mod.id} style={{opacity: viewMode === 'archived' ? 0.8 : 1}}>
                     <td>
                       <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                        <FileText size={16} color="#eab308"/> {mod.title}
+                        <FileText size={16} color={viewMode === 'active' ? "#eab308" : "#9ca3af"}/> {mod.title}
                       </div>
                       <div style={{fontSize: '12px', color: '#0ea5e9', marginTop: '4px'}}>
                         <a href={`http://localhost:5000${mod.file_url}`} target="_blank" rel="noreferrer" style={{color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px'}}><Download size={12}/> View File</a>
@@ -294,17 +321,39 @@ export default function UploadModules() {
                 <div style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
                     {trashLoading ? <p style={{textAlign:'center', padding: '20px'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center', padding: '20px'}}>Trash bin is empty.</p> : (
                         <table className="data-table">
-                            <thead><tr><th width="40%">Module Title</th><th width="25%">File Name</th><th width="15%">Days Left</th><th width="20%" style={{textAlign: 'right'}}>Actions</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th width="40%">Module Title</th>
+                                    <th width="25%">File Name</th>
+                                    <th width="15%">Days Left</th>
+                                    <th width="20%" style={{textAlign: 'right'}}>Actions</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 {trashList.map((item) => (
                                     <tr key={item.id}>
-                                        <td><div style={{fontWeight:'bold', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '6px'}}><FileText size={14} color="#9ca3af"/> {item.title}</div></td>
-                                        <td style={{fontSize: '12px', color: '#9ca3af', fontStyle: 'italic'}}>{item.file_name.length > 20 ? item.file_name.substring(0, 20) + '...' : item.file_name}</td>
-                                        <td><div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}><Clock size={14} color="#dc2626" />{getDaysLeft(item.deleted_at)} Days</div></td>
+                                        <td>
+                                            <div style={{fontWeight:'bold', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                                <FileText size={14} color="#9ca3af"/> {item.title}
+                                            </div>
+                                        </td>
+                                        <td style={{fontSize: '12px', color: '#9ca3af', fontStyle: 'italic'}}>
+                                            {item.file_name.length > 20 ? item.file_name.substring(0, 20) + '...' : item.file_name}
+                                        </td>
+                                        <td>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}>
+                                                <Clock size={14} color="#dc2626" />
+                                                {getDaysLeft(item.deleted_at)} Days
+                                            </div>
+                                        </td>
                                         <td style={{textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}><RotateCcw size={14}/> Restore</button>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}><Trash2 size={14}/> Delete</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}>
+                                                    <RotateCcw size={14}/> Restore
+                                                </button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}>
+                                                    <Trash2 size={14}/> Delete
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -322,24 +371,52 @@ export default function UploadModules() {
       {showModal && (
         <div className="modal-overlay" onClick={() => !uploading && setShowModal(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden'}}>
+                
+                {/* Header */}
                 <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><UploadCloud size={22}/> Upload Lecture Module</h2>
-                    {!uploading && <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>}
+                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <UploadCloud size={22}/> Upload Lecture Module
+                    </h2>
+                    {!uploading && (
+                        <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}>
+                            <X size={24}/>
+                        </button>
+                    )}
                 </div>
+
+                {/* Form */}
                 <form onSubmit={handleUpload}>
                     <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                        
                         <div>
                             <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Module Title</label>
-                            <input required placeholder="e.g., Chapter 1: Introduction to Sets" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box'}}/>
-                        </div>
-                        <div>
-                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Short Description</label>
-                            <textarea value={formData.description} placeholder="What is this module about?" onChange={e => setFormData({...formData, description: e.target.value})} rows="2" style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit'}}/>
+                            <input 
+                                required 
+                                placeholder="e.g., Chapter 1: Introduction to Sets"
+                                value={formData.title} 
+                                onChange={e => setFormData({...formData, title: e.target.value})} 
+                                style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box'}}
+                            />
                         </div>
                         
+                        <div>
+                            <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Short Description</label>
+                            <textarea 
+                                value={formData.description} 
+                                placeholder="What is this module about?"
+                                onChange={e => setFormData({...formData, description: e.target.value})} 
+                                rows="2" 
+                                style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit'}}
+                            />
+                        </div>
+                        
+                        {/* DYNAMIC TARGET CLASSES BLOCK */}
                         <div style={{background:'#fafafa', padding:'15px', borderRadius:'8px', border:'1px solid #eee'}}>
                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px'}}>
-                                <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: 0}}><Target size={14} style={{verticalAlign: 'middle', marginRight: '4px'}}/> Assign to Classes</label>
+                                <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: 0}}>
+                                    <Target size={14} style={{verticalAlign: 'middle', marginRight: '4px'}}/>
+                                    Assign to Classes
+                                </label>
                                 {assignedClasses.length > 0 ? (
                                     <button type="button" onClick={addClassRow} style={{fontSize:'12px', color:'#104a28', fontWeight:'bold', background:'none', border:'none', cursor:'pointer'}}>+ Add Class</button>
                                 ) : (
@@ -349,30 +426,56 @@ export default function UploadModules() {
                             
                             {formData.targetClasses.map((cls, idx) => (
                                 <div key={idx} style={{display:'flex', gap:'10px', marginBottom:'8px', alignItems:'center'}}>
-                                    <select style={{width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', outline: 'none', background: 'white'}} value={JSON.stringify(cls)} onChange={(e) => updateClassRow(idx, e.target.value)}>
+                                    <select 
+                                        style={{width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', outline: 'none', background: 'white'}}
+                                        value={JSON.stringify(cls)} 
+                                        onChange={(e) => updateClassRow(idx, e.target.value)}
+                                    >
+                                        {/* Populate options based ONLY on instructor's assigned classes */}
                                         {assignedClasses.map((ac, i) => (
-                                            <option key={i} value={JSON.stringify(ac)}>Year {ac.year} - Section {ac.section}</option>
+                                            <option key={i} value={JSON.stringify(ac)}>
+                                                Year {ac.year} - Section {ac.section}
+                                            </option>
                                         ))}
                                     </select>
+                                    
                                     <button type="button" onClick={() => removeClassRow(idx)} style={{color:'#dc2626', background:'none', border:'none', cursor:'pointer'}}><X size={18}/></button>
                                 </div>
                             ))}
-                            {formData.targetClasses.length === 0 && <p style={{fontSize: '12px', color: '#888', fontStyle: 'italic', margin: 0}}>If no classes are added, this module will be visible to ALL your assigned classes.</p>}
+                            {formData.targetClasses.length === 0 && (
+                                <p style={{fontSize: '12px', color: '#888', fontStyle: 'italic', margin: 0}}>If no classes are added, this module will be visible to ALL your assigned classes.</p>
+                            )}
                         </div>
 
+                        {/* File Input */}
                         <div style={{border: '2px dashed #d1d5db', borderRadius: '8px', padding: '20px', textAlign: 'center', background: '#f9fafb'}}>
-                            <input type="file" id="pdf-upload" accept="application/pdf" required onChange={handleFileChange} style={{display: 'none'}}/>
+                            <input 
+                                type="file" 
+                                id="pdf-upload"
+                                accept="application/pdf"
+                                required
+                                onChange={handleFileChange}
+                                style={{display: 'none'}}
+                            />
                             <label htmlFor="pdf-upload" style={{cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px'}}>
                                 <FileText size={32} color={formData.file ? '#10b981' : '#9ca3af'} />
-                                <span style={{fontWeight: 'bold', color: '#4b5563'}}>{formData.file ? formData.file.name : "Click to select a PDF file"}</span>
+                                <span style={{fontWeight: 'bold', color: '#4b5563'}}>
+                                    {formData.file ? formData.file.name : "Click to select a PDF file"}
+                                </span>
                                 {!formData.file && <span style={{fontSize: '12px', color: '#9ca3af'}}>Max size: ~10MB (PDFs only)</span>}
                             </label>
                         </div>
+
                     </div>
                     
+                    {/* Footer Actions */}
                     <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
-                        <button type="button" disabled={uploading} onClick={() => setShowModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: uploading ? 'not-allowed' : 'pointer'}}>Cancel</button>
-                        <button type="submit" disabled={uploading} style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: uploading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'}}>{uploading ? 'Uploading...' : 'Upload Module'}</button>
+                        <button type="button" disabled={uploading} onClick={() => setShowModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: uploading ? 'not-allowed' : 'pointer'}}>
+                            Cancel
+                        </button>
+                        <button type="submit" disabled={uploading} style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: uploading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                            {uploading ? 'Uploading...' : 'Upload Module'}
+                        </button>
                     </div>
                 </form>
             </div>

@@ -420,8 +420,22 @@ export default function CreateQuiz({ setActiveTab }) {
 
       {/* PUBLISH BAR */}
       <div className="bottom-publish-bar">
-        <div className="bar-content">
-          <span className="draft-status">{isEditing ? "Editing Existing Quiz" : "Draft saved locally"}</span>
+        <div className="bar-content" style={{display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center'}}>
+          <div style={{display: 'flex', gap: '15px', alignItems: 'center'}}>
+            <button 
+                className="btn-cancel" 
+                onClick={() => {
+                    if(window.confirm("Are you sure you want to exit? Unsaved changes will be lost.")) {
+                        if (setActiveTab) setActiveTab('dashboard');
+                        else navigate('/instructor/ManageQuizzes'); 
+                    }
+                }}
+                style={{background: 'white', border: '1px solid #d1d5db', color: '#4b5563', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold'}}
+            >
+                Cancel
+            </button>
+            <span className="draft-status">{isEditing ? "Editing Existing Quiz" : "Draft saved locally"}</span>
+          </div>
           <button className="btn-publish-final" onClick={publishQuiz}>
             <Save size={18} /> {isEditing ? "Update Quiz" : "Publish Quiz"}
           </button>

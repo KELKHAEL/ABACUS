@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Trash2, PlusCircle, Calendar, Eye, X, HelpCircle,
-  RefreshCcw, LayoutGrid, Target, Clock, History, Edit, BookOpen, Search, Filter
+  RefreshCcw, Target, Clock, History, Edit, BookOpen, Search, Filter, AlertTriangle, FileText
 } from 'lucide-react';
 import './Instructor.css';
 
@@ -12,7 +12,13 @@ export default function ManageQuizzes() {
   const [loading, setLoading] = useState(true);
   
   const [viewingQuiz, setViewingQuiz] = useState(null);
-  const [viewMode, setViewMode] = useState('active'); // active, trash, archived
+  
+  // ✅ NEW: View Mode State (Active vs Archived)
+  const [viewMode, setViewMode] = useState('active'); 
+
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [trashList, setTrashList] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
 
   // --- FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,7 +39,6 @@ export default function ManageQuizzes() {
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
 
-      // Parse Assigned Classes for the filters
       if (user.assigned_classes) {
           try {
               const classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
@@ -46,16 +51,12 @@ export default function ManageQuizzes() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setQuizzes(data.quizzes || []);
-    } catch (error) {
-      console.error("Error fetching quizzes:", error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error("Error fetching quizzes:", error); } 
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchQuizzesAndUser(); }, []);
 
-  // ✅ NEW: FETCH FULL QUIZ WITH QUESTIONS AND ROUTE TO EDITOR
   const handleEditQuiz = async (quizId) => {
     setLoading(true);
     try {
@@ -63,52 +64,59 @@ export default function ManageQuizzes() {
       const fullQuiz = await res.json();
       
       if (fullQuiz.error) {
-        alert(fullQuiz.error);
-        setLoading(false);
-        return;
+        alert(fullQuiz.error); setLoading(false); return;
       }
       
-      // Navigate to CreateQuiz and pass the full quiz data (including questions) via state
       navigate('/instructor/CreateQuiz', { state: { quizToEdit: fullQuiz } });
     } catch (error) {
-      console.error("Error fetching full quiz:", error);
       alert("Failed to load quiz details for editing.");
       setLoading(false);
     }
   };
 
+  // --- TRASH LOGIC ---
+  const fetchTrash = async () => {
+    setTrashLoading(true);
+    try {
+        const user = JSON.parse(localStorage.getItem('user'));
+        const res = await fetch(`http://localhost:5000/trash/quizzes/instructor/${user.id}`);
+        // If you don't have this endpoint yet, we will filter the existing `quizzes` state:
+        const trashed = quizzes.filter(q => q.status === 'deleted');
+        setTrashList(trashed);
+    } catch (error) { console.error("Error fetching trash:", error); } 
+    finally { setTrashLoading(false); }
+  };
+
+  const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
+
   const handleMoveToTrash = async (quizId, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (window.confirm("Move this quiz to the trashbin? Students will no longer see it.")) {
       try {
         const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'deleted' })
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
         });
         if (res.ok) fetchQuizzesAndUser();
       } catch (error) { alert("Failed to move to trash."); }
     }
   };
 
-  const handleRestore = async (quizId, e) => {
-    e.stopPropagation();
+  const handleRestore = async (quizId) => {
+    if(!window.confirm("Restore this quiz? Students will be able to see it again.")) return;
     try {
       const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' })
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' })
       });
-      if (res.ok) fetchQuizzesAndUser();
+      if (res.ok) { fetchTrash(); fetchQuizzesAndUser(); }
     } catch (error) { alert("Failed to restore quiz."); }
   };
 
-  const handlePermanentDelete = async (quizId, e) => {
-    e.stopPropagation();
+  const handlePermanentDelete = async (quizId) => {
     if (window.confirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.")) {
       try {
         await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
+        fetchTrash();
       } catch (error) { alert("Delete failed."); }
     }
   };
@@ -117,17 +125,17 @@ export default function ManageQuizzes() {
   const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
   const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
 
-  // ✅ FILTER LOGIC
-  const activeQuizzes = quizzes.filter(q => (q.status === 'active' || !q.status) && !q.is_archived);
-  const trashedQuizzes = quizzes.filter(q => q.status === 'deleted' && !q.is_archived);
-  const archivedQuizzes = quizzes.filter(q => q.is_archived && q.status !== 'deleted');
-  
-  const targetQuizzes = viewMode === 'active' ? activeQuizzes : viewMode === 'trash' ? trashedQuizzes : archivedQuizzes;
+  // ✅ VIEW MODE LOGIC & FILTERING
+  const filteredQuizzes = quizzes.filter(q => {
+      // 1. Check if it matches the current tab (Active vs Archived)
+      const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
+      if (!isTargetMode || q.status === 'deleted') return false;
 
-  const displayedQuizzes = targetQuizzes.filter(q => {
+      // 2. Apply Text/Class Filters
       const matchSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchYear = filterYear === 'ALL' || q.target_year === 'ALL' || String(q.target_year) === String(filterYear);
       const matchSection = filterSection === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterSection);
+      
       return matchSearch && matchYear && matchSection;
   });
 
@@ -135,26 +143,33 @@ export default function ManageQuizzes() {
     <div className="instructor-dashboard-container">
       <div className="inst-dashboard-header">
         <div className="header-left">
-            <h2>
-              {viewMode === 'active' ? 'Active Quizzes' : viewMode === 'trash' ? 'Trashbin' : 'Archived History'}
-            </h2>
-            <p>
-              {viewMode === 'active' ? 'Manage current assessments for this semester.' : 
-               viewMode === 'trash' ? 'Quizzes here are disabled for students.' : 'Read-only history of quizzes from past semesters.'}
-            </p>
+            <h2>Manage Quizzes</h2>
+            <p>Create, edit, and monitor assessments for your assigned classes.</p>
         </div>
         <div className="header-actions">
-            <div className="view-toggle-container" style={{display: 'flex', background: '#f3f4f6', borderRadius: '8px', padding: '4px'}}>
-              <button onClick={() => setViewMode('active')} style={{...toggleBtnStyle, background: viewMode === 'active' ? 'white' : 'transparent', color: viewMode === 'active' ? '#111' : '#6b7280'}}><LayoutGrid size={16}/> Active</button>
-              <button onClick={() => setViewMode('trash')} style={{...toggleBtnStyle, background: viewMode === 'trash' ? 'white' : 'transparent', color: viewMode === 'trash' ? '#e11d48' : '#6b7280'}}><Trash2 size={16}/> Trash</button>
-              <button onClick={() => setViewMode('archived')} style={{...toggleBtnStyle, background: viewMode === 'archived' ? 'white' : 'transparent', color: viewMode === 'archived' ? '#111' : '#6b7280'}}><History size={16}/> Archives</button>
-            </div>
-            {viewMode === 'active' && (
-                <button className="btn-create-modern" onClick={() => navigate('/instructor/CreateQuiz')}>
-                  <PlusCircle size={18} /> Create New Quiz
-                </button>
-            )}
+            <button className="btn-secondary" style={{backgroundColor: '#ef4444', color:'white', border:'none', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}} onClick={openTrash}>
+              <Trash2 size={18} /> Trash Bin
+            </button>
+            <button className="btn-create-modern" onClick={() => navigate('/instructor/CreateQuiz')}>
+              <PlusCircle size={18} /> Create New Quiz
+            </button>
         </div>
+      </div>
+
+      {/* ✅ TOGGLE TABS (ACTIVE / ARCHIVED) */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+          <button 
+            onClick={() => setViewMode('active')} 
+            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'active' ? '#104a28' : '#e5e7eb', color: viewMode === 'active' ? 'white' : '#4b5563' }}
+          >
+              <FileText size={18}/> Active Quizzes
+          </button>
+          <button 
+            onClick={() => setViewMode('archived')} 
+            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'archived' ? '#104a28' : '#e5e7eb', color: viewMode === 'archived' ? 'white' : '#4b5563' }}
+          >
+              <History size={18}/> Archived Quizzes
+          </button>
       </div>
 
       {/* FILTER BAR */}
@@ -184,7 +199,7 @@ export default function ManageQuizzes() {
 
       {loading ? (
         <div className="loading-state"><div className="spinner"></div><p>Loading data...</p></div>
-      ) : displayedQuizzes.length === 0 ? (
+      ) : filteredQuizzes.length === 0 ? (
         <div className="empty-state-modern">
           <div className="empty-icon-bg"><HelpCircle size={40} color="#104a28"/></div>
           <h3>No quizzes match your filters.</h3>
@@ -192,11 +207,11 @@ export default function ManageQuizzes() {
         </div>
       ) : (
         <div className="inst-quiz-grid">
-          {displayedQuizzes.map((quiz) => (
-            <div key={quiz.id} className="inst-quiz-card" style={{opacity: viewMode === 'archived' || viewMode === 'trash' ? 0.8 : 1}}>
-              <div className="card-top-accent" style={{background: viewMode === 'active' ? '#eab308' : viewMode === 'trash' ? '#e11d48' : '#8b5cf6'}}></div>
+          {filteredQuizzes.map((quiz) => (
+            <div key={quiz.id} className="inst-quiz-card" style={{opacity: viewMode === 'archived' ? 0.8 : 1}}>
+              <div className="card-top-accent" style={{background: viewMode === 'active' ? '#eab308' : '#8b5cf6'}}></div>
               <div className="card-content">
-                <h3 className="card-title" style={{textDecoration: viewMode === 'trash' ? 'line-through' : 'none', color: viewMode === 'trash' ? '#6b7280' : '#111'}}>{quiz.title}</h3>
+                <h3 className="card-title">{quiz.title}</h3>
                 <div className="card-tags">
                     {quiz.target_year && <span className="tag tag-year"><Target size={12}/> {quiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${quiz.target_year}-${quiz.target_section}`}</span>}
                     {quiz.due_date && (
@@ -213,16 +228,8 @@ export default function ManageQuizzes() {
                   
                   {viewMode === 'active' && (
                     <>
-                      {/* Calls handleEditQuiz directly */}
                       <button className="btn-action btn-edit" onClick={() => handleEditQuiz(quiz.id)} title="Edit Quiz & Questions"><Edit size={16}/></button>
                       <button className="btn-action btn-delete" onClick={(e) => handleMoveToTrash(quiz.id, e)} title="Move to Trash"><Trash2 size={16}/></button>
-                    </>
-                  )}
-
-                  {viewMode === 'trash' && (
-                    <>
-                      <button className="btn-action btn-edit" onClick={(e) => handleRestore(quiz.id, e)} title="Restore Quiz"><RefreshCcw size={16}/></button>
-                      <button className="btn-action btn-delete" onClick={(e) => handlePermanentDelete(quiz.id, e)} title="Permanently Delete"><X size={16}/></button>
                     </>
                   )}
               </div>
@@ -282,8 +289,63 @@ export default function ManageQuizzes() {
           </div>
         </div>
       )}
+
+      {/* TRASH MODAL */}
+      {showTrashModal && (
+        <div className="modal-overlay">
+            <div className="modal-content" style={{width: '800px', maxWidth: '90vw'}}>
+                <div className="modal-header"><h2 className="modal-title" style={{color: '#dc2626'}}>Trash Bin (Deleted Quizzes)</h2></div>
+                <div style={{padding: '15px 20px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                    <AlertTriangle size={18} color="#dc2626"/>
+                    <span style={{fontSize: '13px', color: '#991b1b'}}>Quizzes in the trash will be permanently deleted after 30 days.</span>
+                </div>
+                <div style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
+                    {trashLoading ? <p style={{textAlign:'center', padding: '20px'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center', padding: '20px'}}>Trash bin is empty.</p> : (
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="40%">Quiz Title</th>
+                                    <th width="25%">Target Class</th>
+                                    <th width="15%">Status</th>
+                                    <th width="20%" style={{textAlign: 'right'}}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {trashList.map((item) => (
+                                    <tr key={item.id}>
+                                        <td>
+                                            <div style={{fontWeight:'bold', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                                <BookOpen size={14} color="#9ca3af"/> {item.title}
+                                            </div>
+                                        </td>
+                                        <td style={{fontSize: '12px', color: '#6b7280'}}>
+                                            {item.target_year === 'ALL' ? 'All Classes' : `Yr ${item.target_year} - Sec ${item.target_section}`}
+                                        </td>
+                                        <td>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}>
+                                                Disabled
+                                            </div>
+                                        </td>
+                                        <td style={{textAlign: 'right'}}>
+                                            <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}>
+                                                    <RotateCcw size={14}/> Restore
+                                                </button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}>
+                                                    <Trash2 size={14}/> Delete
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                <div className="modal-actions"><button className="btn-cancel" onClick={() => setShowTrashModal(false)}>Close</button></div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
-
-const toggleBtnStyle = { border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', transition: 'all 0.2s' };
