@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Trash2, PlusCircle, Calendar, Eye, X, HelpCircle,
-  RefreshCcw, Target, Clock, History, Edit, BookOpen, Search, Filter, AlertTriangle, FileText
+  RefreshCcw, Target, Clock, History, Edit, BookOpen, Search, Filter, AlertTriangle, FileText, RotateCcw
 } from 'lucide-react';
 import './Instructor.css';
 
@@ -75,6 +75,7 @@ export default function ManageQuizzes() {
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
+        // Find deleted quizzes directly from our local state first for speed
         const trashed = quizzes.filter(q => q.status === 'deleted');
         setTrashList(trashed);
     } catch (error) { console.error("Error fetching trash:", error); } 
@@ -90,28 +91,59 @@ export default function ManageQuizzes() {
         const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
         });
-        if (res.ok) fetchQuizzesAndUser();
+        if (res.ok) {
+            // Optimistic UI Update
+            setQuizzes(prev => prev.map(q => q.id === quizId ? { ...q, status: 'deleted' } : q));
+        }
       } catch (error) { alert("Failed to move to trash."); }
     }
   };
 
   const handleRestore = async (quizId) => {
     if(!window.confirm("Restore this quiz? Students will be able to see it again.")) return;
+    
+    // 1. Find the quiz we are restoring
+    const quizToRestore = trashList.find(q => q.id === quizId);
+    
+    // 2. Optimistically remove it from the Trash UI instantly
+    setTrashList(prev => prev.filter(q => q.id !== quizId));
+    
+    // 3. Optimistically add it back to the Main UI instantly
+    if (quizToRestore) {
+        setQuizzes(prev => prev.map(q => q.id === quizId ? { ...q, status: 'active' } : q));
+    }
+
     try {
+      // 4. Send the request to the server in the background
       const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' })
       });
-      if (res.ok) { fetchTrash(); fetchQuizzesAndUser(); }
-    } catch (error) { alert("Failed to restore quiz."); }
+      
+      if (!res.ok) {
+         // If it fails, revert the optimistic updates
+         alert("Failed to restore quiz on the server.");
+         fetchQuizzesAndUser(); 
+         fetchTrash();
+      }
+    } catch (error) { 
+        alert("Failed to restore quiz."); 
+        fetchQuizzesAndUser(); 
+        fetchTrash();
+    }
   };
 
   const handlePermanentDelete = async (quizId) => {
     if (window.confirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.")) {
       try {
-        await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
+        // Optimistically remove it from UI instantly
+        setTrashList(prev => prev.filter(q => q.id !== quizId));
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
-        fetchTrash();
-      } catch (error) { alert("Delete failed."); }
+
+        await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
+      } catch (error) { 
+          alert("Delete failed."); 
+          fetchTrash(); // Revert on failure
+      }
     }
   };
 
@@ -120,9 +152,9 @@ export default function ManageQuizzes() {
 
   const filteredQuizzes = quizzes.filter(q => {
       const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
+      // Hide deleted items from the main views
       if (!isTargetMode || q.status === 'deleted') return false;
 
-      // ✅ FIX: Safe checks to prevent crash if title is somehow null
       const matchSearch = (q.title || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchYear = filterYear === 'ALL' || q.target_year === 'ALL' || String(q.target_year) === String(filterYear);
       const matchSection = filterSection === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterSection);

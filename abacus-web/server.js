@@ -102,7 +102,7 @@ app.post('/login', async (req, res) => {
 });
 
 // ==========================
-// ADMIN: USER MANAGEMENT 
+// ADMIN: USER & TRASH MANAGEMENT 
 // ==========================
 app.get('/users', async (req, res) => {
   const { role } = req.query; 
@@ -173,9 +173,31 @@ app.put('/users/:id/restore', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// 🚀 FIXED: PERMANENT DELETE CASCADES PROPERLY TO AVOID SQL CRASHES
 app.delete('/users/:id/permanent', async (req, res) => {
-  try { await db.query("DELETE FROM users WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
-  catch (err) { res.status(500).json({ error: err.message }); }
+  const connection = await db.getConnection();
+  try { 
+    await connection.beginTransaction();
+    // 1. Delete associated grades so MySQL doesn't block the delete
+    await connection.query("DELETE FROM student_grades WHERE user_id = ?", [req.params.id]);
+    
+    // 2. Delete any uploaded COR images
+    const [users] = await connection.query("SELECT cor_image_url FROM users WHERE id = ?", [req.params.id]);
+    if (users.length > 0 && users[0].cor_image_url) {
+        const filePath = path.join(__dirname, users[0].cor_image_url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    // 3. Finally, delete the user
+    await connection.query("DELETE FROM users WHERE id = ?", [req.params.id]); 
+    await connection.commit();
+    res.json({ success: true }); 
+  } catch (err) { 
+    await connection.rollback();
+    res.status(500).json({ error: err.message }); 
+  } finally {
+    connection.release();
+  }
 });
 
 app.patch('/users/:id/student-status', async (req, res) => {
@@ -232,21 +254,6 @@ app.delete('/academic-setup/:type/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/academic-setup/term/active/:id', async (req, res) => {
-  const { id } = req.params;
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
-    await connection.query("UPDATE academic_terms SET is_active = 0"); 
-    await connection.query("UPDATE academic_terms SET is_active = 1 WHERE id = ?", [id]); 
-    await connection.commit();
-    res.json({ success: true });
-  } catch (err) {
-    await connection.rollback();
-    res.status(500).json({ error: err.message });
-  } finally { connection.release(); }
-});
-
 app.put('/academic-setup/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   const { value } = req.body; 
@@ -259,9 +266,6 @@ app.put('/academic-setup/:type/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==========================================
-// TERM ROLLOVER / TRANSITION SYSTEM
-// ==========================================
 app.put('/academic-setup/term/active/:id', async (req, res) => {
   const { id } = req.params;
   const { resetInstructors, resetStudents } = req.body; 
@@ -269,14 +273,12 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
   
   try {
     await connection.beginTransaction();
-    
     await connection.query("UPDATE academic_terms SET is_active = 0"); 
     await connection.query("UPDATE academic_terms SET is_active = 1 WHERE id = ?", [id]); 
     
     if (resetInstructors) {
         await connection.query("UPDATE users SET assigned_classes = '[]' WHERE role = 'INSTRUCTOR'");
     }
-    
     if (resetStudents) {
         await connection.query(`
             UPDATE users 
@@ -284,15 +286,12 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
             WHERE role = 'STUDENT' AND is_deleted = 0
         `);
     }
-
     await connection.commit();
     res.json({ success: true });
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });
-  } finally { 
-    connection.release(); 
-  }
+  } finally { connection.release(); }
 });
 
 // ==========================
@@ -458,11 +457,9 @@ app.post('/grades', async (req, res) => {
     let finalScore = score;
     let finalTitle = subjectTitle;
 
-    // 🚀 RETAKE ENGINE: Apply deductions and overwrite old grade!
     if (quiz && quiz.is_retake) {
        const deduction = (score * quiz.penalty) / 100;
        finalScore = Math.max(0, score - deduction); 
-       
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
        finalTitle = subjectTitle + ` (-${quiz.penalty}% Penalty Applied)`;
     }
@@ -500,6 +497,64 @@ app.put('/grades/:id', async (req, res) => {
 app.delete('/grades/:id', async (req, res) => {
   try { await db.query("DELETE FROM student_grades WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
   catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
+// ==========================
+// 🚀 RESTORED MISSING TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
+// ==========================
+app.get('/trash/announcements', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 ORDER BY deleted_at DESC");
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/trash/announcements/instructor/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 1 AND author_id = ? ORDER BY deleted_at DESC", [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/announcements/:id/restore', async (req, res) => {
+  try { 
+    await db.query("UPDATE announcements SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [req.params.id]); 
+    res.json({ success: true }); 
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/announcements/:id/permanent', async (req, res) => {
+  try { 
+    await db.query("DELETE FROM announcements WHERE id = ?", [req.params.id]); 
+    res.json({ success: true }); 
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/trash/modules/instructor/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM modules WHERE is_deleted = 1 AND uploaded_by = ? ORDER BY deleted_at DESC", [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/modules/:id/restore', async (req, res) => {
+  try { 
+    await db.query("UPDATE modules SET is_deleted = 0, deleted_at = NULL WHERE id = ?", [req.params.id]); 
+    res.json({ success: true }); 
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/modules/:id/permanent', async (req, res) => {
+  try { 
+    const [mod] = await db.query("SELECT file_url FROM modules WHERE id = ?", [req.params.id]);
+    if (mod.length > 0 && mod[0].file_url) {
+        const filePath = path.join(__dirname, mod[0].file_url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await db.query("DELETE FROM modules WHERE id = ?", [req.params.id]); 
+    res.json({ success: true }); 
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
@@ -553,7 +608,6 @@ app.get('/announcements/instructor/:id', async (req, res) => {
 app.post('/announcements', async (req, res) => {
     const { title, content, authorRole, authorName, authorId, targets, targetYear, targetSection } = req.body;
     const connection = await db.getConnection();
-    
     try {
         await connection.beginTransaction();
         const activeTermId = await getActiveTermId(); 
@@ -851,7 +905,6 @@ const autoAssignMissedZeros = async () => {
                       `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, 0, 100, ?, ?)`,
                       [student.id, quiz.id, missedTitle, activeTermId]
                   );
-                  console.log(`[Auto-Grader] Assigned 0 to Student ID: ${student.id} for Quiz: ${quiz.title}`);
               }
           }
       }
