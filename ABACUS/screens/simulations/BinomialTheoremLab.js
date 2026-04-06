@@ -1,103 +1,154 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function BinomialTheoremLab({ navigation }) {
-  const [power, setPower] = useState('4');
-  const [results, setResults] = useState(null);
+  const [power, setPower] = useState('3');
+  const [result, setResult] = useState(null);
 
-  const factorial = (num) => {
-    if (num < 0) return -1;
-    if (num === 0 || num === 1) return 1;
-    let res = 1;
-    for (let i = 2; i <= num; i++) res *= i;
-    return res;
+  // Safely generates Pascal's Triangle matrix
+  const generatePascal = (numRows) => {
+    let triangle = [];
+    for (let i = 0; i <= numRows; i++) {
+      let row = new Array(i + 1).fill(1);
+      for (let j = 1; j < i; j++) {
+        row[j] = triangle[i - 1][j - 1] + triangle[i - 1][j];
+      }
+      triangle.push(row);
+    }
+    return triangle;
   };
 
-  const getCombination = (n, k) => {
-    return factorial(n) / (factorial(k) * factorial(n - k));
-  };
-
-  const calculateExpansion = () => {
+  const expand = () => {
     const n = parseInt(power);
-    if (isNaN(n) || n < 0) {
-      return Alert.alert("Invalid Input", "Please enter a positive integer.");
-    }
-    if (n > 15) {
-      return Alert.alert("Power Too High", "Please enter a power of 15 or less to prevent screen overflow.");
+    if (isNaN(n) || n < 0 || n > 8) {
+      alert("Please enter a power between 0 and 8.");
+      return;
     }
 
-    let expansionArr = [];
-    let coefficientsList = [];
+    const triangle = generatePascal(n);
+    const coeffs = triangle[n]; // Get the specific row
 
+    let steps = [];
+    let finalTerms = [];
+
+    // Build the algebraic expansion term by term
     for (let k = 0; k <= n; k++) {
-        const coeff = getCombination(n, k);
-        const xPow = n - k;
-        const yPow = k;
-        
-        coefficientsList.push(`C(${n},${k}) = ${coeff}`);
+      const coeff = coeffs[k];
+      const aExp = n - k;
+      const bExp = k;
 
-        let term = '';
-        if (coeff !== 1) term += coeff;
-        
-        if (xPow > 0) {
-            term += 'x';
-            if (xPow > 1) term += `^${xPow}`;
-        }
-        
-        if (yPow > 0) {
-            term += 'y';
-            if (yPow > 1) term += `^${yPow}`;
-        }
-        
-        if (term === '') term = '1'; // Edge case for n=0
+      // Create visual breakdown for the student
+      steps.push({
+          k,
+          coeff,
+          aExp,
+          bExp,
+          formula: `C(${n}, ${k}) · a^${aExp} · b^${bExp}`,
+      });
 
-        expansionArr.push(term);
+      // Format the final algebra string cleanly (e.g. drop 1s and 0s)
+      let termStr = "";
+      if (coeff > 1 || (aExp === 0 && bExp === 0)) termStr += coeff;
+      
+      if (aExp > 0) termStr += `a${aExp > 1 ? `^${aExp}` : ""}`;
+      if (bExp > 0) termStr += `b${bExp > 1 ? `^${bExp}` : ""}`;
+      
+      finalTerms.push(termStr);
     }
 
-    setResults({ n, equation: expansionArr.join(' + '), coefficients: coefficientsList });
+    setResult({ n, triangle, coeffs, expansion: finalTerms.join(" + "), steps });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#104a28" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Binomial Expansion</Text>
+        <Text style={styles.headerTitle}>Pascal & Binomial</Text>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Expand (x + y)ⁿ</Text>
-            <Text style={styles.descText}>Use Combinatorics to quickly expand binomial expressions.</Text>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Enter Power (n):</Text>
-              <TextInput style={styles.input} value={power} onChangeText={setPower} keyboardType="numeric" placeholder="e.g. 4" />
+            <Text style={styles.cardTitle}>Expand (a + b)ⁿ</Text>
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 5}}>
+                <Text style={styles.label}>Enter Power (n):</Text>
+                <TextInput 
+                  style={styles.input} 
+                  keyboardType="numeric" 
+                  value={power} 
+                  onChangeText={setPower} 
+                  maxLength={1}
+                />
             </View>
-
-            <TouchableOpacity style={styles.calcBtn} onPress={calculateExpansion}>
-              <Text style={styles.calcBtnText}>Expand Polynomial</Text>
+            <Text style={styles.hint}>Max power 8 for mobile visualization</Text>
+            <TouchableOpacity style={styles.calcButton} onPress={expand}>
+                <Text style={styles.calcButtonText}>Generate Expansion & Triangle</Text>
             </TouchableOpacity>
           </View>
 
-          {results && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Final Expansion</Text>
+          {result && (
+            <View style={styles.triangleCard}>
+              <Text style={styles.visualTitle}>Pascal's Triangle (Rows 0 to {result.n})</Text>
               
-              <View style={styles.resultBanner}>
-                <Text style={styles.resultLabel}>(x + y)^{results.n} =</Text>
-                <Text style={styles.resultValue}>{results.equation}</Text>
-              </View>
-
-              <Text style={styles.subTitle}>Coefficients breakdown C(n, k):</Text>
-              <View style={styles.stepsBox}>
-                {results.coefficients.map((coeff, idx) => (
-                  <Text key={idx} style={styles.stepText}>{coeff}</Text>
+              {/* RENDER THE TRIANGLE */}
+              <View style={styles.triangleContainer}>
+                {result.triangle.map((row, i) => (
+                  <View key={i} style={[styles.row, i === result.n && styles.activeRow]}>
+                    <Text style={styles.rowLabel}>n={i}</Text>
+                    {row.map((num, j) => (
+                      <View key={j} style={[styles.numCircle, i === result.n && styles.activeCircle]}>
+                        <Text style={[styles.numText, i === result.n && styles.activeNumText]}>{num}</Text>
+                      </View>
+                    ))}
+                  </View>
                 ))}
               </View>
+
+              <View style={styles.explanationBox}>
+                  <Ionicons name="bulb" size={24} color="#f59e0b" />
+                  <Text style={styles.expText}>
+                     We use Row <Text style={{fontWeight: 'bold'}}>{result.n}</Text> to get the coefficients:{"\n"}
+                     <Text style={{fontWeight: '900', color: '#c2410c', fontSize: 16}}>
+                       {result.coeffs.join(', ')}
+                     </Text>
+                  </Text>
+              </View>
+
+              <View style={styles.divider} />
+              
+              <Text style={styles.visualTitle}>Final Expansion</Text>
+              <View style={styles.mathBox}>
+                  <Text style={styles.expansionText}>{result.expansion}</Text>
+              </View>
+
+              <View style={styles.divider} />
+              
+              <Text style={styles.visualTitle}>Term-by-Term Rules</Text>
+              <Text style={styles.ruleText}>1. Coeffs come from Pascal's Triangle.</Text>
+              <Text style={styles.ruleText}>2. Power of 'a' decreases from {result.n} to 0.</Text>
+              <Text style={styles.ruleText}>3. Power of 'b' increases from 0 to {result.n}.</Text>
+
+              {/* RENDER THE STEPS */}
+              <View style={{marginTop: 15}}>
+                  {result.steps.map((item, idx) => (
+                      <View key={idx} style={styles.stepBox}>
+                          <View style={styles.stepHeader}>
+                              <Text style={styles.stepLabel}>Term {idx + 1}</Text>
+                              <Text style={styles.kLabel}>(k={item.k})</Text>
+                          </View>
+                          <Text style={styles.mathText}>
+                             <Text style={{color: '#c2410c', fontWeight: 'bold'}}>{item.coeff}</Text> · 
+                             a^<Text style={{color: '#2563eb'}}>{item.aExp}</Text> · 
+                             b^<Text style={{color: '#16a34a'}}>{item.bExp}</Text>
+                          </Text>
+                      </View>
+                  ))}
+              </View>
+
             </View>
           )}
         </ScrollView>
@@ -107,23 +158,46 @@ export default function BinomialTheoremLab({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FD' },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#104a28', padding: 20, paddingTop: 40 },
-  backBtn: { marginRight: 15 },
-  headerTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  scrollContent: { padding: 20 },
-  card: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 3 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#104a28', marginBottom: 5 },
-  descText: { fontSize: 13, color: '#666', marginBottom: 15 },
-  inputGroup: { marginBottom: 15 },
-  label: { fontSize: 13, color: '#555', marginBottom: 5, fontWeight: 'bold' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f9f9f9', textAlign: 'center' },
-  calcBtn: { backgroundColor: '#eab308', padding: 15, borderRadius: 8, alignItems: 'center' },
-  calcBtnText: { color: '#422006', fontWeight: 'bold', fontSize: 16 },
-  resultBanner: { backgroundColor: '#1e293b', padding: 15, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: '#334155' },
-  resultLabel: { color: '#94a3b8', fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
-  resultValue: { color: '#eab308', fontSize: 16, fontWeight: 'bold', lineHeight: 24, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  subTitle: { fontWeight: 'bold', color: '#333', marginBottom: 8 },
-  stepsBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  stepText: { fontSize: 14, color: '#0369a1', fontWeight: 'bold', backgroundColor: '#e0f2fe', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
+  backButton: { marginRight: 15 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
+  scrollContent: { padding: 20, paddingBottom: 50 },
+  
+  card: { backgroundColor: 'white', padding: 20, borderRadius: 12, elevation: 2, marginBottom: 20 },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 10 },
+  label: { fontSize: 15, fontWeight: 'bold', color: '#64748b' },
+  input: { width: 60, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#d1d5db', padding: 10, borderRadius: 8, fontSize: 18, textAlign: 'center', fontWeight: 'bold' },
+  hint: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginTop: 10 },
+  calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 15 },
+  calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+
+  triangleCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, elevation: 2, borderTopWidth: 5, borderTopColor: '#f97316' },
+  visualTitle: { fontSize: 15, fontWeight: 'bold', color: '#475569', marginBottom: 15 },
+  
+  triangleContainer: { alignItems: 'center', backgroundColor: '#f8fafc', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 },
+  rowLabel: { position: 'absolute', left: -30, fontSize: 10, color: '#94a3b8', fontWeight: 'bold' },
+  activeRow: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' },
+  
+  numCircle: { width: 28, height: 28, backgroundColor: '#e2e8f0', borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginHorizontal: 3 },
+  activeCircle: { backgroundColor: '#f97316' },
+  numText: { fontSize: 12, fontWeight: 'bold', color: '#475569' },
+  activeNumText: { color: 'white' },
+
+  explanationBox: { marginTop: 15, backgroundColor: '#fefce8', padding: 15, borderRadius: 8, flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#fef08a' },
+  expText: { flex: 1, fontSize: 13, color: '#854d0e', lineHeight: 20 },
+  
+  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 20 },
+  
+  mathBox: { backgroundColor: '#fff7ed', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#ffedd5', alignItems: 'center' },
+  expansionText: { fontSize: 18, fontFamily: 'monospace', color: '#c2410c', fontWeight: 'bold', textAlign: 'center' },
+
+  ruleText: { fontSize: 13, color: '#475569', marginBottom: 4, fontStyle: 'italic' },
+
+  stepBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
+  stepHeader: { flexDirection: 'column' },
+  stepLabel: { fontSize: 13, color: '#334155', fontWeight: 'bold' },
+  kLabel: { fontSize: 11, color: '#94a3b8' },
+  mathText: { fontFamily: 'monospace', fontSize: 18, color: '#1e293b' },
 });

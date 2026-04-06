@@ -14,7 +14,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     const data = rawData.split(/[\s,]+/).map(n => parseFloat(n)).filter(n => !isNaN(n));
 
     if (data.length < 5) {
-      Alert.alert("Insufficient Data", "Please enter at least 5 numbers.");
+      Alert.alert("Insufficient Data", "Please enter at least 5 valid numbers.");
       return;
     }
 
@@ -24,22 +24,24 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     const LV = data[0];
     const Range = HV - LV;
 
+    // ✨ MATHEMATICAL FIX: Sturges' Formula for Number of Classes
     const k_exact = 1 + (3.322 * Math.log10(N));
     const k = Math.round(k_exact);
-    const c_calc = Range / k_exact; 
-    const c = Math.round(c_calc); 
+    
+    // ✨ MATHEMATICAL FIX: Class width must strictly round UP to fit all data.
+    // Using (Range + 1) ensures inclusive integer boundaries
+    const c_calc = (HV - LV + 1) / k; 
+    const c = Math.ceil(c_calc); 
 
     let classes = [];
     let currentLower = LV;
     let cumFreqLess = 0;
     let sum_fx = 0;
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < k + 2; i++) { // Safety buffer in loop
       const currentUpper = currentLower + c - 1;
       const classData = data.filter(n => n >= currentLower && n <= currentUpper);
       const f = classData.length;
-
-      if (currentLower > HV && f === 0) break;
 
       const x = (currentLower + currentUpper) / 2;
       const LCB = currentLower - 0.5; 
@@ -61,9 +63,11 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       });
 
       currentLower = currentUpper + 1;
+      // Stop strictly when we have counted all N items
       if (cumFreqLess >= N) break;
     }
 
+    // Greater Than Cumulative Frequency
     let runningTotal = N;
     classes = classes.map(row => {
       const r = { ...row, cfGreater: runningTotal };
@@ -71,14 +75,17 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       return r;
     });
 
+    // --- CENTRAL TENDENCY MATH ---
     const mean = sum_fx / N;
 
+    // Median
     const medianPos = N / 2;
     const medianClass = classes.find(cls => cls.cfLess >= medianPos) || classes[classes.length - 1];
     const mIdx = classes.indexOf(medianClass);
     const Fb = mIdx > 0 ? classes[mIdx - 1].cfLess : 0;
     const median = medianClass.lcb + ((medianPos - Fb) / medianClass.f) * c;
 
+    // Mode
     const maxFreq = Math.max(...classes.map(cls => cls.f));
     const modalClass = classes.find(cls => cls.f === maxFreq) || classes[0];
     const moIdx = classes.indexOf(modalClass);
@@ -89,6 +96,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     const modeDenominator = ((f1 - f0) + (f1 - f2));
     const mode = modeDenominator === 0 ? modalClass.lcb : modalClass.lcb + ((f1 - f0) / modeDenominator) * c;
 
+    // --- DISPERSION MATH ---
     let sum_f_abs_dev = 0; 
     let sum_f_sq_dev = 0;
 
@@ -110,7 +118,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     });
 
     setResult({
-      stats: { N, HV, LV, Range, k_rounded: k, c_rounded: c },
+      stats: { N, HV, LV, Range, k_exact: k_exact.toFixed(2), k_rounded: k, c_calc: c_calc.toFixed(2), c_rounded: c },
       table: finalClasses,
       ct: { 
         sum_fx: sum_fx.toFixed(2), 
@@ -124,7 +132,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       },
       disp: {
         meanDeviation: (sum_f_abs_dev / N).toFixed(2),
-        variance: (sum_f_sq_dev / (N - 1)).toFixed(2),
+        variance: (sum_f_sq_dev / (N - 1)).toFixed(2), // Note: Sample Variance (N-1)
         stdDev: Math.sqrt(sum_f_sq_dev / (N - 1)).toFixed(2),
         sum_f_abs_dev: sum_f_abs_dev.toFixed(2),
         sum_f_sq_dev: sum_f_sq_dev.toFixed(2)
@@ -145,7 +153,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Text style={styles.cardTitle}>DATA SET INPUT</Text>
             <TextInput 
@@ -198,14 +206,12 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                   <View style={styles.stepCard}>
                     <Text style={styles.stepTitle}>FDT Construction Steps:</Text>
                     <Text style={styles.stepItem}>1. Range (R) = HV - LV = {result.stats.Range}</Text>
-                    <Text style={styles.stepItem}>2. Classes (k) ≈ {result.stats.k_rounded}</Text>
-                    <Text style={styles.stepItem}>3. Class Size (c) ≈ {result.stats.c_rounded}</Text>
+                    <Text style={styles.stepItem}>2. Classes (k) via Sturges' Formula ≈ {result.stats.k_rounded}</Text>
+                    <Text style={styles.stepItem}>3. Class Width (c) = (Range + 1) / k ≈ {result.stats.c_rounded}</Text>
                   </View>
 
                   <View style={styles.tableCard}>
-                    {/* flexGrow: 1 ensures it stretches to fill tablet screens */}
                     <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ flexGrow: 1 }}>
-                      {/* minWidth ensures it still scrolls on small phones instead of crushing text */}
                       <View style={{ flex: 1, minWidth: 600 }}>
                           <View style={[styles.row, styles.headerRow]}>
                             <Text style={[styles.cell, styles.headerCell, {flex: 2}]}>Classes</Text>
@@ -290,13 +296,14 @@ export default function FrequencyDistributionSimulation({ navigation }) {
               {activeTab === 'Variance' && (
                 <View>
                   <View style={[styles.statCard, {borderLeftColor: '#7B61FF'}]}>
-                    <Text style={styles.statTitleCentered}>VARIANCE & STD DEV</Text>
-                    <View style={{flexDirection: 'row', justifyContent: 'space-around', width: '100%'}}>
-                      <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s² = {result.disp.variance}</Text><Text style={{fontSize: 10, color:'#888'}}>VARIANCE</Text></View>
-                      <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s = {result.disp.stdDev}</Text><Text style={{fontSize: 10, color:'#888'}}>STD. DEV</Text></View>
+                    <Text style={styles.statTitleCentered}>SAMPLE VARIANCE & STD DEV</Text>
+                    <Text style={styles.theoryNote}>*Using (N - 1) for Sample calculations.</Text>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 10}}>
+                      <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s² = {result.disp.variance}</Text><Text style={{fontSize: 10, color:'#888', fontWeight: 'bold'}}>VARIANCE</Text></View>
+                      <View style={{alignItems:'center'}}><Text style={[styles.statResultBig, {color:'#7B61FF', fontSize: 24}]}>s = {result.disp.stdDev}</Text><Text style={{fontSize: 10, color:'#888', fontWeight: 'bold'}}>STD. DEV</Text></View>
                     </View>
                     <View style={styles.subStep}>
-                      <Text style={styles.stepTextCentered}>Variance = Σ f(x - x̄)² / (n - 1)</Text>
+                      <Text style={styles.stepTextCentered}>Variance = Σ f(x - x̄)² / (N - 1)</Text>
                       <Text style={styles.stepTextCentered}>{result.disp.sum_f_sq_dev} ÷ {result.stats.N - 1} = {result.disp.variance}</Text>
                     </View>
                   </View>
@@ -336,10 +343,21 @@ export default function FrequencyDistributionSimulation({ navigation }) {
               {/* HOW TO SOLVE TAB */}
               {activeTab === 'HowTo' && (
                 <View>
-                  <Text style={styles.sectionHeader}>Central Tendency</Text>
+                  <Text style={styles.sectionHeader}>Grouped Data Formulas</Text>
                   
                   <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>1. Mean (x̄)</Text>
+                      <Text style={styles.solveTitle}>1. Finding Classes via Sturges' Formula</Text>
+                      <Text style={styles.formulaText}>Formula: k = 1 + 3.322 log(N)</Text>
+                      <View style={styles.substitutionBox}>
+                          <Text style={styles.subTextMain}>k = 1 + 3.322 * log({result.stats.N})</Text>
+                          <Text style={styles.subTextMain}>k = {result.stats.k_exact} ≈ {result.stats.k_rounded}</Text>
+                          <Text style={[styles.subTextMain, {marginTop: 5, color: '#104a28'}]}>Class Width (c) = (Range / k)</Text>
+                          <Text style={styles.finalAnswerText}>c = {result.stats.c_rounded}</Text>
+                      </View>
+                  </View>
+
+                  <View style={styles.solveCard}>
+                      <Text style={styles.solveTitle}>2. Mean (x̄)</Text>
                       <Text style={styles.formulaText}>Formula: x̄ = Σfx / n</Text>
                       <View style={styles.substitutionBox}>
                           <Text style={styles.subTextMain}>x̄ = {result.ct.sum_fx} / {result.stats.N}</Text>
@@ -348,8 +366,8 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                   </View>
 
                   <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>2. Median (x̃)</Text>
-                      <Text style={styles.stepDtl}>• n/2 = {result.stats.N/2} | Class: {result.ct.medianClass}</Text>
+                      <Text style={styles.solveTitle}>3. Median (x̃)</Text>
+                      <Text style={styles.stepDtl}>• n/2 = {result.stats.N/2} | Median Class: {result.ct.medianClass}</Text>
                       <Text style={styles.formulaText}>Formula: x̃ = Lmd + c [ (n/2 - Fb) / fmd ]</Text>
                       <View style={styles.substitutionBox}>
                           <Text style={styles.subTextMain}>x̃ = {result.ct.lmd} + {result.stats.c_rounded} [ ({result.stats.N/2} - {result.ct.fb}) / {result.ct.fmd} ]</Text>
@@ -358,40 +376,12 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                   </View>
 
                   <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>3. Mode (x̂)</Text>
+                      <Text style={styles.solveTitle}>4. Mode (x̂)</Text>
+                      <Text style={styles.stepDtl}>• Modal Class: {result.ct.modalClass} (Highest freq: {result.ct.f1})</Text>
                       <Text style={styles.formulaText}>Formula: x̂ = Lmo + c [ (f1 - f0) / ((f1 - f0) + (f1 - f2)) ]</Text>
                       <View style={styles.substitutionBox}>
                           <Text style={styles.subTextMain}>x̂ = {result.ct.lmo} + {result.stats.c_rounded} [ ({result.ct.f1} - {result.ct.f0}) / (({result.ct.f1} - {result.ct.f0}) + ({result.ct.f1} - {result.ct.f2})) ]</Text>
                           <Text style={styles.finalAnswerText}>x̂ = {result.ct.mode}</Text>
-                      </View>
-                  </View>
-
-                  <Text style={styles.sectionHeader}>Measures of Dispersion</Text>
-
-                  <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>4. Mean Deviation (MD)</Text>
-                      <Text style={styles.formulaText}>Formula: MD = Σf|x - x̄| / n</Text>
-                      <View style={styles.substitutionBox}>
-                          <Text style={styles.subTextMain}>MD = {result.disp.sum_f_abs_dev} / {result.stats.N}</Text>
-                          <Text style={styles.finalAnswerText}>MD = {result.disp.meanDeviation}</Text>
-                      </View>
-                  </View>
-
-                  <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>5. Variance (s²)</Text>
-                      <Text style={styles.formulaText}>Formula: s² = Σf(x - x̄)² / (n - 1)</Text>
-                      <View style={styles.substitutionBox}>
-                          <Text style={styles.subTextMain}>s² = {result.disp.sum_f_sq_dev} / ({result.stats.N} - 1)</Text>
-                          <Text style={styles.finalAnswerText}>s² = {result.disp.variance}</Text>
-                      </View>
-                  </View>
-
-                  <View style={styles.solveCard}>
-                      <Text style={styles.solveTitle}>6. Standard Deviation (s)</Text>
-                      <Text style={styles.formulaText}>Formula: s = √s²</Text>
-                      <View style={styles.substitutionBox}>
-                          <Text style={styles.subTextMain}>s = √{result.disp.variance}</Text>
-                          <Text style={styles.finalAnswerText}>s = {result.disp.stdDev}</Text>
                       </View>
                   </View>
                 </View>
@@ -405,57 +395,58 @@ export default function FrequencyDistributionSimulation({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 2, shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.05 },
+  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
   backButton: { marginRight: 15 },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: '#333' },
+  headerTitle: { color: '#104a28', fontSize: 18, fontWeight: '900' },
   content: { padding: 20, paddingBottom: 50 },
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 4 },
-  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 10 },
-  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#eee', minHeight: 100, textAlignVertical: 'top', fontSize: 15 },
+  card: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#104a28', marginBottom: 10, textTransform: 'uppercase' },
+  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', minHeight: 100, textAlignVertical: 'top', fontSize: 15, fontFamily: 'monospace' },
   btnContainer: { marginTop: 15, gap: 10 },
   secondaryBtnRow: { flexDirection: 'row', gap: 10 },
-  secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
-  secondaryBtnText: { fontWeight: 'bold', color: '#666' },
-  loadBtn: { backgroundColor: '#E3F2FD', borderColor: '#2D7FF9' },
-  loadBtnText: { color: '#2D7FF9' },
+  secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' },
+  secondaryBtnText: { fontWeight: 'bold', color: '#475569' },
+  loadBtn: { backgroundColor: '#e0f2fe', borderColor: '#38bdf8' },
+  loadBtnText: { color: '#0284c7' },
   primaryBtn: { width: '100%', paddingVertical: 16, borderRadius: 12, backgroundColor: '#104a28', alignItems: 'center' },
   primaryBtnText: { fontWeight: '900', color: '#fff', fontSize: 16 },
   
   tabContainer: { flexDirection: 'row', marginBottom: 20, paddingBottom: 5 },
-  tab: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, backgroundColor: '#eee', marginRight: 8 },
-  activeTab: { backgroundColor: '#104a28' },
-  tabText: { fontWeight: 'bold', color: '#666', fontSize: 13 },
+  tab: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, backgroundColor: '#f1f5f9', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  activeTab: { backgroundColor: '#104a28', borderColor: '#104a28' },
+  tabText: { fontWeight: 'bold', color: '#64748b', fontSize: 13 },
   activeTabText: { color: '#fff' },
   
   centralTendencyRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, gap: 10 },
-  ctBox: { flex: 1, backgroundColor: '#fff', padding: 12, borderRadius: 10, alignItems: 'center', borderBottomWidth: 3, elevation: 1, shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.05 },
-  ctLabel: { fontSize: 10, fontWeight: 'bold', color: '#888', marginBottom: 5 },
-  ctValue: { fontSize: 18, fontWeight: '900', color: '#333' },
+  ctBox: { flex: 1, backgroundColor: '#fff', padding: 12, borderRadius: 10, alignItems: 'center', borderBottomWidth: 4, elevation: 1, borderColor: '#e2e8f0' },
+  ctLabel: { fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 5 },
+  ctValue: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
   
-  stepCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#eee' },
-  stepTitle: { fontWeight: 'bold', marginBottom: 10, color: '#333', textDecorationLine: 'underline', fontSize: 14 },
-  stepItem: { fontSize: 14, color: '#555', marginBottom: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  stepCard: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0' },
+  stepTitle: { fontWeight: 'bold', marginBottom: 10, color: '#334155', fontSize: 14 },
+  stepItem: { fontSize: 13, color: '#475569', marginBottom: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   
-  tableCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#eee', elevation: 1 },
-  row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 14, alignItems: 'center' },
+  tableCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', elevation: 1 },
+  row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingVertical: 14, alignItems: 'center' },
   headerRow: { backgroundColor: '#104a28' },
-  oddRow: { backgroundColor: '#f9f9f9' },
-  cell: { textAlign: 'center', fontSize: 13, color: '#333', paddingHorizontal: 4 }, // Slightly larger text
-  headerCell: { fontWeight: 'bold', color: '#fff', fontSize: 14 }, // Slightly larger header text
+  oddRow: { backgroundColor: '#f8fafc' },
+  cell: { textAlign: 'center', fontSize: 13, color: '#334155', paddingHorizontal: 4 },
+  headerCell: { fontWeight: 'bold', color: '#fff', fontSize: 14 },
   
-  sectionHeader: { fontSize: 18, fontWeight: 'bold', color: '#333', marginVertical: 15 },
-  solveCard: { backgroundColor: '#fff', padding: 18, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#eee', elevation: 1 },
-  solveTitle: { fontWeight: 'bold', fontSize: 16, color: '#104a28', marginBottom: 8 },
-  formulaText: { fontStyle: 'italic', color: '#555', marginBottom: 12, fontSize: 13, fontWeight: '500' },
-  stepDtl: { fontSize: 12, color: '#777', marginBottom: 8 },
-  substitutionBox: { backgroundColor: '#f8f9fa', padding: 15, borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#104a28' },
-  subTextMain: { fontSize: 14, color: '#333', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  finalAnswerText: { fontSize: 18, fontWeight: 'bold', color: '#104a28', marginTop: 10 },
+  sectionHeader: { fontSize: 16, fontWeight: 'bold', color: '#334155', marginVertical: 15, textTransform: 'uppercase' },
+  solveCard: { backgroundColor: '#fff', padding: 18, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0', elevation: 1 },
+  solveTitle: { fontWeight: 'bold', fontSize: 15, color: '#104a28', marginBottom: 8 },
+  formulaText: { fontStyle: 'italic', color: '#64748b', marginBottom: 12, fontSize: 13, fontWeight: 'bold' },
+  stepDtl: { fontSize: 12, color: '#64748b', marginBottom: 8 },
+  substitutionBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#104a28' },
+  subTextMain: { fontSize: 13, color: '#334155', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  finalAnswerText: { fontSize: 18, fontWeight: '900', color: '#104a28', marginTop: 10 },
   
-  statCard: { backgroundColor: '#fff', padding: 25, borderRadius: 16, alignItems: 'center', marginBottom: 20, borderLeftWidth: 5, elevation: 2, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05 },
-  statTitleCentered: { fontSize: 15, fontWeight: 'bold', color: '#888', marginBottom: 10 },
-  statResultBig: { fontSize: 40, fontWeight: '900', marginVertical: 10 },
-  subStep: { marginTop: 15, backgroundColor: '#f8f9fa', padding: 15, borderRadius: 12, width: '100%' },
-  stepTextCentered: { fontSize: 15, color: '#333', textAlign: 'center', fontWeight: 'bold', marginVertical: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }
+  statCard: { backgroundColor: '#fff', padding: 25, borderRadius: 16, alignItems: 'center', marginBottom: 20, borderLeftWidth: 5, elevation: 1, borderColor: '#e2e8f0' },
+  statTitleCentered: { fontSize: 14, fontWeight: 'bold', color: '#64748b', marginBottom: 5 },
+  theoryNote: { fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginBottom: 10 },
+  statResultBig: { fontSize: 36, fontWeight: '900', marginVertical: 10 },
+  subStep: { marginTop: 15, backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', borderWidth: 1, borderColor: '#e2e8f0' },
+  stepTextCentered: { fontSize: 13, color: '#334155', textAlign: 'center', fontWeight: 'bold', marginVertical: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }
 });

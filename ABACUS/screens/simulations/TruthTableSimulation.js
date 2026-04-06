@@ -1,231 +1,480 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function TruthTableSimulation({ navigation }) {
-  const [formula, setFormula] = useState('');
-  const [tableData, setTableData] = useState(null);
-  const [variables, setVariables] = useState([]);
-  const [tableAnalysis, setTableAnalysis] = useState(null);
+// Get screen width to calculate dynamic centering
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
-  // --- LOGIC ENGINE ---
+// Define strict column widths for the spreadsheet
+const VAR_COL_WIDTH = 60;
+const EXPR_COL_WIDTH = 160;
+
+export default function TruthTableSimulation({ navigation }) {
+  const [expression, setExpression] = useState('');
+  const [tableData, setTableData] = useState(null);
+  const [showTheory, setShowTheory] = useState(false);
+  const [variables, setVariables] = useState([]);
+  const [subHeaders, setSubHeaders] = useState([]);
+
+  // --- LOGIC EVALUATOR WITH INTERMEDIATE STEP TRACKING ---
+  
+  const getSymbol = (op) => {
+      if (op === 'AND') return '∧';
+      if (op === 'OR') return '∨';
+      if (op === 'NOT') return '¬';
+      if (op === 'XOR') return '⊕';
+      if (op === 'IMPLIES') return '→';
+      return op;
+  };
+
+  const getPrecedence = (op) => {
+      if (op === 'NOT') return 4;
+      if (op === 'AND') return 3;
+      if (op === 'XOR') return 2;
+      if (op === 'OR') return 1;
+      if (op === 'IMPLIES') return 0;
+      return -1;
+  };
+
+  const infixToPostfix = (tokens) => {
+      const output = [];
+      const opStack = [];
+
+      for (let token of tokens) {
+          if (/^[a-zA-Z]$/.test(token) || token === 'T' || token === 'F') {
+              output.push(token);
+          } else if (token === '(') {
+              opStack.push(token);
+          } else if (token === ')') {
+              while (opStack.length > 0 && opStack[opStack.length - 1] !== '(') {
+                  output.push(opStack.pop());
+              }
+              if (opStack.length === 0) throw new Error("Mismatched parentheses");
+              opStack.pop(); 
+          } else {
+              while (
+                  opStack.length > 0 && 
+                  opStack[opStack.length - 1] !== '(' &&
+                  getPrecedence(opStack[opStack.length - 1]) >= getPrecedence(token)
+              ) {
+                  output.push(opStack.pop());
+              }
+              opStack.push(token);
+          }
+      }
+
+      while (opStack.length > 0) {
+          const op = opStack.pop();
+          if (op === '(') throw new Error("Mismatched parentheses");
+          output.push(op);
+      }
+
+      return output;
+  };
+
+  const evaluatePostfixWithSteps = (postfix, rowEnv, headerCollector = null) => {
+      const stack = [];
+      const steps = {};
+
+      for (let token of postfix) {
+          if (rowEnv.hasOwnProperty(token)) {
+              stack.push({ str: token, val: rowEnv[token] });
+          } else if (token === 'T') {
+              stack.push({ str: 'T', val: true });
+          } else if (token === 'F') {
+              stack.push({ str: 'F', val: false });
+          } else if (token === 'NOT') {
+              if (stack.length < 1) throw new Error();
+              const operand = stack.pop();
+              
+              const isComplex = operand.str.length > 1 && !operand.str.startsWith('¬');
+              const exprStr = isComplex ? `¬(${operand.str})` : `¬${operand.str}`;
+              const val = !operand.val;
+              
+              if (headerCollector && !headerCollector.includes(exprStr) && !rowEnv.hasOwnProperty(exprStr)) {
+                  headerCollector.push(exprStr);
+              }
+              steps[exprStr] = val;
+              stack.push({ str: exprStr, val });
+          } else {
+              if (stack.length < 2) throw new Error();
+              const right = stack.pop();
+              const left = stack.pop();
+              let val;
+              
+              if (token === 'AND') val = left.val && right.val;
+              else if (token === 'OR') val = left.val || right.val;
+              else if (token === 'XOR') val = left.val !== right.val;
+              else if (token === 'IMPLIES') val = !left.val || right.val;
+
+              const exprStr = `(${left.str} ${getSymbol(token)} ${right.str})`;
+              
+              if (headerCollector && !headerCollector.includes(exprStr) && !rowEnv.hasOwnProperty(exprStr)) {
+                  headerCollector.push(exprStr);
+              }
+              steps[exprStr] = val;
+              stack.push({ str: exprStr, val });
+          }
+      }
+
+      if (stack.length !== 1) throw new Error();
+      return { result: stack[0].val, steps, finalStr: stack[0].str };
+  };
+
   const generateTable = () => {
-    if (!formula.trim()) {
-      Alert.alert("Input Error", "Please enter a logical formula.");
+    if (!expression.trim()) {
+      alert("Please enter a logical expression.");
       return;
     }
 
     try {
-      const foundVars = [...new Set(formula.match(/[A-Za-z]+/g))].filter(v => 
-        !['v', 'V', 'T', 'F', 'true', 'false', 'and', 'or', 'not', 'xor', 'iff'].includes(v.toLowerCase())
-      ).sort();
+        let cleanExpr = expression
+            .replace(/<->|↔|iff/gi, " XOR NOT ") 
+            .replace(/->|implies|→/gi, " IMPLIES ")
+            .replace(/\bAND\b|∧|&/gi, " AND ")
+            .replace(/\bOR\b|∨|\|/gi, " OR ")
+            .replace(/\bNOT\b|¬|~/gi, " NOT ")
+            .replace(/\bXOR\b|⊕|\^/gi, " XOR ")
+            .replace(/\(/g, " ( ")
+            .replace(/\)/g, " ) ");
 
-      setVariables(foundVars);
-
-      let jsFormula = formula
-        .replace(/!=|~=/g, '!==')        
-        .replace(/<->|<=>|iff|==/gi, '===') 
-        .replace(/->|=>|implies/gi, '<=') 
-        .replace(/([^!<>])=(?!=)/g, '$1===')
-        .replace(/xor/gi, '!==')        
-        .replace(/v|V|\|\|| or /g, '||') 
-        .replace(/\^|&| and /g, '&&')   
-        .replace(/!|~| not /gi, '!')    
-        .replace(/\bT\b/g, 'true')
-        .replace(/\bF\b/g, 'false');
-
-      const rows = [];
-      const numRows = Math.pow(2, foundVars.length);
-
-      for (let i = 0; i < numRows; i++) {
-        const rowVars = {};
-        for (let j = 0; j < foundVars.length; j++) {
-          const boolVal = !((i >> (foundVars.length - 1 - j)) & 1); 
-          rowVars[foundVars[j]] = boolVal;
-        }
-
-        let evalExpr = jsFormula;
-        foundVars.forEach(v => {
-          const regex = new RegExp(`\\b${v}\\b`, 'g');
-          evalExpr = evalExpr.replace(regex, rowVars[v]);
+        const rawTokens = cleanExpr.split(/\s+/).filter(t => t.length > 0);
+        
+        const validOperators = ['AND', 'OR', 'NOT', 'XOR', 'IMPLIES', '(', ')', 'T', 'F'];
+        const tokens = rawTokens.map(t => {
+            const upperT = t.toUpperCase();
+            if (validOperators.includes(upperT)) return upperT;
+            if (/^[a-zA-Z]$/.test(t)) return t.toLowerCase();
+            throw new Error(`Invalid token found: '${t}'`);
         });
 
-        let result;
-        try {
-          result = eval(evalExpr); 
-          if (result !== true && result !== false) result = "Error";
-        } catch (e) {
-          result = "Error";
+        const varsFound = [...new Set(tokens.filter(t => /^[a-z]$/.test(t)))].sort();
+        
+        if (varsFound.length === 0) {
+            alert("No variables (like p, q) found in expression.");
+            return;
+        }
+        if (varsFound.length > 4) {
+            alert("Please use a maximum of 4 variables to prevent lag.");
+            return;
         }
 
-        rows.push({ ...rowVars, result });
-      }
+        setVariables(varsFound);
+        const postfix = infixToPostfix(tokens);
 
-      setTableData(rows);
-      analyzeFormula(rows);
+        const collectedHeaders = [];
+        let dummyEnv = {};
+        varsFound.forEach(v => dummyEnv[v] = true);
+        evaluatePostfixWithSteps(postfix, dummyEnv, collectedHeaders);
+        setSubHeaders(collectedHeaders);
 
-    } catch (error) {
-      console.log(error);
-      Alert.alert("Syntax Error", "Could not parse formula. Try checking your operators.");
+        const numRows = Math.pow(2, varsFound.length);
+        const rows = [];
+
+        for (let i = numRows - 1; i >= 0; i--) {
+            let rowEnv = {};
+            for (let v = 0; v < varsFound.length; v++) {
+                rowEnv[varsFound[v]] = Boolean((i & (1 << (varsFound.length - 1 - v))));
+            }
+
+            const evaluated = evaluatePostfixWithSteps(postfix, rowEnv, null);
+            rows.push({ inputs: rowEnv, steps: evaluated.steps, result: evaluated.result });
+        }
+
+        setTableData(rows);
+
+    } catch (err) {
+        alert(err.message === "Mismatched parentheses" 
+            ? "Syntax Error: Mismatched parentheses." 
+            : "Syntax Error: Invalid expression format.");
     }
   };
 
-  // --- ANALYZE RESULTS ---
-  const analyzeFormula = (rows) => {
-    const allTrue = rows.every(r => r.result === true);
-    const allFalse = rows.every(r => r.result === false);
-
-    if (allTrue) {
-      setTableAnalysis({ type: "TAUTOLOGY", desc: "This statement is ALWAYS TRUE, regardless of the input values.", color: "#104a28" });
-    } else if (allFalse) {
-      setTableAnalysis({ type: "CONTRADICTION", desc: "This statement is ALWAYS FALSE, regardless of the input values.", color: "#d32f2f" });
-    } else {
-      setTableAnalysis({ type: "CONTINGENCY", desc: "The truth of this statement depends on the variable values. It is sometimes True and sometimes False.", color: "#eab308" });
-    }
+  const insertText = (text) => {
+    setExpression(prev => {
+        const spacer = prev.endsWith(' ') || prev.length === 0 ? '' : ' ';
+        return prev + spacer + text + ' ';
+    });
   };
 
-  // --- EXPLAIN SPECIFIC ROW ---
-  const showRowExplanation = (row) => {
-    const conditions = variables.map(v => `${v} is ${row[v] ? 'TRUE' : 'FALSE'}`).join(' and ');
-    const outcome = row.result ? "TRUE" : "FALSE";
-    
-    Alert.alert(
-      "Scenario Explanation", 
-      `When ${conditions},\nthe result is ${outcome}.`
-    );
-  };
+  // ✅ CALCULATE TABLE WIDTH TO DETERMINE CENTERING
+  const calculatedTableWidth = (variables.length * VAR_COL_WIDTH) + (subHeaders.length * EXPR_COL_WIDTH);
+  // Screen width minus the padding of the cards (approx 80px buffer)
+  const isSmallTable = calculatedTableWidth < (SCREEN_WIDTH - 80);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-           <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#104a28" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>TRUTH TABLE</Text>
+        <Text style={styles.headerTitle}>Truth Tables</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        <Text style={styles.heading}>TYPE YOUR FORMULA</Text>
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputHint}>Example: !(A & B) = !A v !B</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Type logic here..." 
-            placeholderTextColor="#ccc"
-            value={formula}
-            onChangeText={setFormula}
-            autoCapitalize="characters"
-          />
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.gridGuide}>
-            <View style={styles.guideItem}><Text style={styles.guideLabel}>And</Text><Text style={styles.guideSym}>^ / &</Text></View>
-            <View style={styles.guideItem}><Text style={styles.guideLabel}>Or</Text><Text style={styles.guideSym}>v / |</Text></View>
-            <View style={styles.guideItem}><Text style={styles.guideLabel}>Not</Text><Text style={styles.guideSym}>~ / !</Text></View>
-            <View style={styles.guideItem}><Text style={styles.guideLabel}>Imp</Text><Text style={styles.guideSym}>{`->`}</Text></View>
-            <View style={styles.guideItem}><Text style={styles.guideLabel}>Equiv</Text><Text style={styles.guideSym}>=</Text></View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.genBtn} onPress={generateTable}>
-          <Text style={styles.genBtnText}>GENERATE TABLE</Text>
-        </TouchableOpacity>
-
-        {tableData && (
-          <View style={styles.tableContainer}>
-            
-            {/* --- NEW: ANALYSIS CARD --- */}
-            {tableAnalysis && (
-              <View style={[styles.analysisCard, { borderLeftColor: tableAnalysis.color }]}>
-                <Text style={[styles.analysisTitle, { color: tableAnalysis.color }]}>
-                  {tableAnalysis.type}
-                </Text>
-                <Text style={styles.analysisDesc}>{tableAnalysis.desc}</Text>
-              </View>
-            )}
-
-            <Text style={styles.heading}>TRUTH TABLE:</Text>
-            <Text style={styles.subHint}>Tap any row for an explanation</Text>
-            
-            <View style={styles.tableWrapper}>
-              {/* Header Row */}
-              <View style={styles.tableRowHeader}>
-                {variables.map(v => (
-                  <Text key={v} style={styles.cellHeader}>{v}</Text>
-                ))}
-                <Text style={[styles.cellHeader, styles.cellResult]}>RESULT</Text>
-              </View>
-
-              {/* Data Rows (Clickable) */}
-              {tableData.map((row, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  style={[styles.tableRow, idx % 2 === 0 ? styles.rowEven : styles.rowOdd]}
-                  onPress={() => showRowExplanation(row)}
-                >
-                  {variables.map(v => (
-                    <Text key={v} style={[styles.cell, row[v] ? styles.trueText : styles.falseText]}>
-                      {row[v] ? 'T' : 'F'}
-                    </Text>
-                  ))}
-                  <Text style={[styles.cell, styles.cellResult, row.result ? styles.trueText : styles.falseText]}>
-                    {row.result === "Error" ? "ERR" : (row.result ? 'T' : 'F')}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          
+          {/* 📚 THEORY CARD */}
+          <TouchableOpacity style={styles.theoryToggle} onPress={() => setShowTheory(!showTheory)}>
+            <Ionicons name="book" size={20} color="#104a28" />
+            <Text style={styles.theoryToggleText}>Learn Logic Gates</Text>
+            <Ionicons name={showTheory ? "chevron-up" : "chevron-down"} size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
+          </TouchableOpacity>
+          
+          {showTheory && (
+            <View style={styles.theoryCard}>
+              <Text style={styles.theoryText}>The calculator uses standard mathematical precedence:</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>1. Parentheses</Text> ( )</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>2. NOT</Text> (~, ¬)</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>3. AND</Text> (^, &)</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>4. XOR</Text> (⊕)</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>5. OR</Text> (v, |)</Text>
+              <Text style={styles.theoryText}><Text style={{fontWeight: 'bold'}}>6. IMPLIES</Text> (-{'>'})</Text>
             </View>
-          </View>
-        )}
+          )}
 
-      </ScrollView>
+          {/* ⚙️ CALCULATOR CARD */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Build Expression</Text>
+            
+            <View style={styles.exampleBox}>
+                <Text style={styles.exampleTitle}>Valid Examples:</Text>
+                <Text style={styles.exampleText}>• p AND q OR r</Text>
+                <Text style={styles.exampleText}>• p AND ( q OR NOT r )</Text>
+                <Text style={styles.exampleText}>• p -{">"} q</Text>
+            </View>
+            
+            <TextInput 
+                style={styles.input} 
+                value={expression} 
+                onChangeText={setExpression} 
+                placeholder="p AND q OR r" 
+                autoCapitalize="none"
+            />
+
+            <View style={styles.quickButtonsContainer}>
+                {['AND', 'OR', 'NOT', 'XOR', '->', '(', ')'].map(op => (
+                    <TouchableOpacity key={op} style={styles.quickButton} onPress={() => insertText(op)}>
+                        <Text style={styles.quickButtonText}>{op}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <TouchableOpacity style={styles.calcButton} onPress={generateTable}>
+              <Text style={styles.calcButtonText}>Generate Truth Table</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 📝 RESULT TABLE CARD */}
+          {tableData && subHeaders.length > 0 && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultTitle}>Step-by-Step Truth Table</Text>
+              <Text style={styles.formulaText}>{subHeaders[subHeaders.length - 1]}</Text>
+
+              {/* HORIZONTAL SCROLL VIEW WITH DYNAMIC CENTERING ALIGNMENT */}
+              <ScrollView 
+                  horizontal={true} 
+                  showsHorizontalScrollIndicator={true} 
+                  bounces={false}
+                  contentContainerStyle={{ 
+                      flexGrow: 1, 
+                      justifyContent: isSmallTable ? 'center' : 'flex-start', // Centers small tables safely!
+                      paddingBottom: 10 
+                  }}
+              >
+                  <View style={styles.strictTableWrapper}>
+                      
+                      {/* --- Header Row --- */}
+                      <View style={styles.strictHeaderRow}>
+                          {/* Variable Headers */}
+                          {variables.map((v) => (
+                              <View key={v} style={styles.strictVarHeaderCell}>
+                                  <Text style={styles.strictHeaderText}>{v}</Text>
+                              </View>
+                          ))}
+                          
+                          {/* Expression Headers */}
+                          {subHeaders.map((expr, idx) => {
+                              const isLast = idx === subHeaders.length - 1;
+                              return (
+                                  <View 
+                                      key={idx} 
+                                      style={[
+                                          styles.strictExprHeaderCell, 
+                                          isLast && styles.highlightBg,
+                                          isLast && { borderRightWidth: 0 }
+                                      ]}
+                                  >
+                                      <Text 
+                                          style={[styles.strictHeaderText, isLast && {color: '#7b61ff'}]}
+                                          numberOfLines={2}
+                                      >
+                                          {expr}
+                                      </Text>
+                                  </View>
+                              );
+                          })}
+                      </View>
+
+                      {/* --- Data Rows --- */}
+                      {tableData.map((row, rIdx) => {
+                          const isLastRow = rIdx === tableData.length - 1;
+                          const rowBgColor = rIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
+                          return (
+                              <View key={rIdx} style={[styles.strictDataRow, { backgroundColor: rowBgColor }, isLastRow && { borderBottomWidth: 0 }]}>
+                                  
+                                  {/* Variable Data */}
+                                  {variables.map(v => (
+                                      <View key={v} style={styles.strictVarDataCell}>
+                                          <Text style={[styles.strictBoolText, row.inputs[v] ? styles.textTrue : styles.textFalse]}>
+                                              {row.inputs[v] ? 'T' : 'F'}
+                                          </Text>
+                                      </View>
+                                  ))}
+                                  
+                                  {/* Expression Data */}
+                                  {subHeaders.map((expr, sIdx) => {
+                                      const isLastCol = sIdx === subHeaders.length - 1;
+                                      const val = row.steps[expr];
+                                      return (
+                                          <View 
+                                              key={sIdx} 
+                                              style={[
+                                                  styles.strictExprDataCell,
+                                                  isLastCol && styles.highlightBg,
+                                                  isLastCol && { borderRightWidth: 0 }
+                                              ]}
+                                          >
+                                              <Text style={[styles.strictBoolText, val ? styles.textTrue : styles.textFalse]}>
+                                                  {val ? 'T' : 'F'}
+                                              </Text>
+                                          </View>
+                                      );
+                                  })}
+                              </View>
+                          );
+                      })}
+                  </View>
+              </ScrollView>
+              
+              <Text style={styles.noteText}>
+                  Evaluated using standard mathematical precedence. { !isSmallTable && "Swipe table to view all steps." }
+              </Text>
+            </View>
+          )}
+
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
   backButton: { marginRight: 15 },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: '#333' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
+  scrollContent: { padding: 20, paddingBottom: 50 },
   
-  content: { padding: 20, paddingBottom: 50 },
-  heading: { fontSize: 22, fontWeight: '900', color: '#000', marginBottom: 10, textTransform: 'uppercase' },
-  subHint: { fontSize: 12, color: '#888', fontStyle: 'italic', marginBottom: 10 },
+  theoryToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f5e9', padding: 15, borderRadius: 10, marginBottom: 15 },
+  theoryToggleText: { color: '#104a28', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
+  theoryCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#c8e6c9' },
+  theoryText: { fontSize: 14, color: '#4b5563', lineHeight: 22, marginBottom: 5 },
+  divider: { height: 1, backgroundColor: '#e5e7eb', marginVertical: 10 },
+
+  card: { backgroundColor: 'white', padding: 20, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, marginBottom: 20 },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 10 },
   
-  inputContainer: { marginBottom: 20 },
-  inputHint: { fontSize: 12, color: '#888', marginBottom: 5, fontStyle: 'italic' },
-  input: { backgroundColor: '#fff', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', fontSize: 18, color: '#333', fontWeight: 'bold', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  exampleBox: { backgroundColor: '#f1f5f9', padding: 12, borderRadius: 8, marginBottom: 15, borderLeftWidth: 3, borderLeftColor: '#3b82f6' },
+  exampleTitle: { fontSize: 13, fontWeight: 'bold', color: '#475569', marginBottom: 4 },
+  exampleText: { fontSize: 12, color: '#64748b', fontFamily: 'monospace', marginBottom: 2 },
+  
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: 'monospace', textAlign: 'center', marginBottom: 15 },
+  
+  quickButtonsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 20 },
+  quickButton: { backgroundColor: '#e2e8f0', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
+  quickButtonText: { fontWeight: 'bold', color: '#475569', fontSize: 12 },
 
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-  gridGuide: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
-  guideItem: { alignItems: 'center', width: '18%' },
-  guideLabel: { fontSize: 12, color: '#888', fontWeight: 'bold' },
-  guideSym: { fontSize: 16, color: '#333', fontWeight: 'bold' },
+  calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
+  calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
-  genBtn: { backgroundColor: '#000', padding: 18, borderRadius: 12, alignItems: 'center', marginBottom: 30 },
-  genBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
+  resultCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, borderLeftWidth: 5, borderLeftColor: '#7b61ff', marginTop: 10 },
+  resultTitle: { fontSize: 14, fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', textAlign: 'center' },
+  formulaText: { fontSize: 20, fontFamily: 'monospace', color: '#7b61ff', textAlign: 'center', marginVertical: 15, fontWeight: 'bold' },
 
-  // Analysis Card Styles
-  analysisCard: { 
-    backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 25, 
-    borderLeftWidth: 5, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 
+  /* --- ROCK SOLID RESPONSIVE TABLE STYLES --- */
+  strictTableWrapper: {
+      flexDirection: 'column',
+      borderWidth: 1,
+      borderColor: '#cbd5e1',
+      borderRadius: 8,
+      overflow: 'hidden',
+      backgroundColor: 'white',
+      alignSelf: 'flex-start' 
   },
-  analysisTitle: { fontSize: 16, fontWeight: '900', marginBottom: 5, letterSpacing: 1 },
-  analysisDesc: { fontSize: 14, color: '#555', lineHeight: 20 },
-
-  tableContainer: { marginTop: 10 },
-  tableWrapper: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#ddd' },
-  tableRowHeader: { flexDirection: 'row', backgroundColor: '#f0f0f0', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#ddd' },
-  tableRow: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  rowEven: { backgroundColor: '#fff' },
-  rowOdd: { backgroundColor: '#fafafa' },
+  strictHeaderRow: {
+      flexDirection: 'row',
+      backgroundColor: '#f1f5f9',
+      borderBottomWidth: 1,
+      borderBottomColor: '#cbd5e1'
+  },
+  strictDataRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: '#e2e8f0'
+  },
   
-  cellHeader: { flex: 1, textAlign: 'center', fontWeight: '900', fontSize: 14, color: '#555' },
-  cell: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 'bold' },
-  cellResult: { flex: 1.5, borderLeftWidth: 1, borderLeftColor: '#eee', color: '#000' },
+  strictVarHeaderCell: {
+      width: VAR_COL_WIDTH, // Fixed 60px
+      paddingVertical: 12,
+      borderRightWidth: 1,
+      borderRightColor: '#cbd5e1',
+      alignItems: 'center',
+      justifyContent: 'center'
+  },
+  strictExprHeaderCell: {
+      width: EXPR_COL_WIDTH, // Fixed 160px
+      paddingVertical: 12,
+      paddingHorizontal: 5,
+      borderRightWidth: 1,
+      borderRightColor: '#cbd5e1',
+      alignItems: 'center',
+      justifyContent: 'center'
+  },
+  strictVarDataCell: {
+      width: VAR_COL_WIDTH,
+      height: 45, 
+      borderRightWidth: 1,
+      borderRightColor: '#e2e8f0',
+      alignItems: 'center',
+      justifyContent: 'center'
+  },
+  strictExprDataCell: {
+      width: EXPR_COL_WIDTH,
+      height: 45,
+      borderRightWidth: 1,
+      borderRightColor: '#e2e8f0',
+      alignItems: 'center',
+      justifyContent: 'center'
+  },
   
-  trueText: { color: '#104a28' }, 
-  falseText: { color: '#d32f2f' },
+  highlightBg: {
+      backgroundColor: '#f3f0ff'
+  },
+  strictHeaderText: {
+      fontWeight: 'bold',
+      color: '#334155',
+      fontSize: 14,
+      textAlign: 'center'
+  },
+  strictBoolText: {
+      fontWeight: 'bold',
+      fontSize: 16,
+      fontFamily: 'monospace'
+  },
+  
+  textTrue: { color: '#10b981' }, 
+  textFalse: { color: '#ef4444' },
+  noteText: { fontSize: 11, color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', marginTop: 15 }
 });
