@@ -11,7 +11,7 @@ export default function QuizListScreen({ navigation }) {
   const [availableQuizzes, setAvailableQuizzes] = useState([]);
   const [completedQuizzes, setCompletedQuizzes] = useState([]);
   const [uncompletedQuizzes, setUncompletedQuizzes] = useState([]); 
-  const [archivedQuizzes, setArchivedQuizzes] = useState([]); // ✅ NEW
+  const [archivedQuizzes, setArchivedQuizzes] = useState([]); 
   
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('available'); // 'available', 'uncompleted', 'completed', 'archived'
@@ -37,23 +37,54 @@ export default function QuizListScreen({ navigation }) {
       const takenQuizIds = userGrades.map(g => g.quiz_id);
       const now = new Date();
 
-      // 1. Separate Active vs Archived
+      // 1. Separate Active vs Archived & Apply Strict Target Filtering
       const activeRelevant = allQuizzes.filter(q => {
-        return q.status === 'active' && !q.is_archived && 
-               (!q.target_year || q.target_year == user.yearLevel) && 
-               (!q.target_section || q.target_section == user.section);
+        const matchYear = !q.target_year || q.target_year === 'ALL' || String(q.target_year) === String(user.yearLevel);
+        const matchSec = !q.target_section || q.target_section === 'ALL' || String(q.target_section) === String(user.section);
+        
+        if (q.status !== 'active' || q.is_archived || !matchYear || !matchSec) {
+            return false;
+        }
+
+        // 🚀 RETAKE ENGINE SECURITY: If it's a retake, STRICTLY verify the student is explicitly allowed
+        if (q.is_retake) {
+            try {
+                const targets = JSON.parse(q.target_students || '[]');
+                if (!targets.includes(user.id)) return false; // Hide from students not explicitly allowed
+            } catch (e) {
+                return false; 
+            }
+        }
+        return true;
       });
 
-      // 2. Active Arrays
-      const available = activeRelevant.filter(q => !takenQuizIds.includes(q.id) && (!q.due_date || new Date(q.due_date) > now));
-      const uncompleted = activeRelevant.filter(q => !takenQuizIds.includes(q.id) && (q.due_date && new Date(q.due_date) <= now));
-      
-      const completed = activeRelevant.filter(q => takenQuizIds.includes(q.id)).map(q => {
+      // 2. Sort into Tabs (Handling Auto-Graded Missed Quizzes intelligently)
+      const available = [];
+      const uncompleted = [];
+      const completed = [];
+
+      activeRelevant.forEach(q => {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
-          return { ...q, score: gradeEntry ? gradeEntry.grade : 0, total_items: gradeEntry ? gradeEntry.total_items : 100 };
+          
+          if (gradeEntry) {
+              // Did the server auto-grader assign this a 0 because they missed it?
+              if (gradeEntry.subjectTitle && gradeEntry.subjectTitle.includes('(Missed)')) {
+                  uncompleted.push(q); // Keep it in the 'Missed' tab
+              } else {
+                  // It's a real grade (or a retake), put it in 'Done'
+                  completed.push({ ...q, score: gradeEntry.grade, total_items: gradeEntry.total_items });
+              }
+          } else {
+              // No grade in DB yet
+              if (q.due_date && new Date(q.due_date) <= now) {
+                  uncompleted.push(q); // Deadline passed, auto-grader hasn't caught it yet
+              } else {
+                  available.push(q); // Ready to take
+              }
+          }
       });
 
-      // 3. Archived Arrays (Only show past quizzes the student actually completed)
+      // 3. Archived Arrays (Only show past quizzes the student actually has a grade/zero for)
       const archived = allQuizzes.filter(q => q.is_archived && takenQuizIds.includes(q.id)).map(q => {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
           return { ...q, score: gradeEntry ? gradeEntry.grade : 0, total_items: gradeEntry ? gradeEntry.total_items : 100 };
@@ -62,7 +93,8 @@ export default function QuizListScreen({ navigation }) {
       setAvailableQuizzes(available);
       setUncompletedQuizzes(uncompleted);
       setCompletedQuizzes(completed);
-      setArchivedQuizzes(archived); // ✅ Set Archives
+      setArchivedQuizzes(archived); 
+
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {

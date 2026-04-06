@@ -27,7 +27,6 @@ export default function ManageStudents() {
 
   const fileInputRef = useRef(null);
 
-  // --- 1. EXCEL UPLOAD LOGIC ---
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -40,9 +39,10 @@ export default function ManageStudents() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
+      // 🛠️ BUG FIX: Force conversion to String and completely trim trailing spaces/hidden characters
       const formattedData = data.map(row => ({
-        studentId: row['Student ID'] || row['student_id'] || row['id'], 
-        email: row['Email'] || row['email']
+        studentId: String(row['Student ID'] || row['student_id'] || row['id'] || '').trim(), 
+        email: String(row['Email'] || row['email'] || '').trim()
       })).filter(item => item.studentId && item.email);
 
       if (formattedData.length === 0) {
@@ -61,12 +61,8 @@ export default function ManageStudents() {
           if (result.success) {
             alert("Upload Successful! Students can now register.");
             if (showWhitelistModal) fetchWhitelist(); 
-          } else {
-            alert("Upload failed: " + result.error);
-          }
-        } catch (err) {
-          alert("Server Error");
-        }
+          } else { alert("Upload failed: " + result.error); }
+        } catch (err) { alert("Server Error"); }
       }
     };
     reader.readAsBinaryString(file);

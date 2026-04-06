@@ -7,22 +7,27 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check login on load
-  useEffect(() => {
-    const checkLogin = async () => {
-      try {
-        const userJson = await AsyncStorage.getItem('user');
-        if (userJson) {
-          setUser(JSON.parse(userJson));
+  // Inside AuthContext.js
+useEffect(() => {
+    const loadUser = async () => {
+        const storedUser = await AsyncStorage.getItem('user');
+        if (storedUser) {
+            let parsedUser = JSON.parse(storedUser);
+            
+            try {
+                const res = await fetch(`${API_URL}/users/sync/${parsedUser.id}`);
+                const freshData = await res.json();
+                if (freshData && !freshData.error) {
+                    parsedUser = { ...parsedUser, yearLevel: freshData.year_level, section: freshData.section, corStatus: freshData.cor_status };
+                    await AsyncStorage.setItem('user', JSON.stringify(parsedUser)); 
+                }
+            } catch (e) { console.log("Sync skipped, using local cache."); }
+
+            setUser(parsedUser);
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
     };
-    checkLogin();
-  }, []);
+    loadUser();
+}, []);
 
   // Login Function
   const login = async (token, userData) => {

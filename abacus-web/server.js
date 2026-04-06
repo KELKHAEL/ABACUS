@@ -104,6 +104,15 @@ app.post('/login', async (req, res) => {
 // ==========================
 // ADMIN: USER & TRASH MANAGEMENT 
 // ==========================
+// Add this anywhere in server.js
+app.get('/users/sync/:id', async (req, res) => {
+  try {
+    const [user] = await db.query("SELECT year_level, section, status, cor_status FROM users WHERE id = ?", [req.params.id]);
+    if (user.length === 0) return res.status(404).json({ error: "Not found" });
+    res.json(user[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/users', async (req, res) => {
   const { role } = req.query; 
   try {
@@ -889,8 +898,9 @@ const autoAssignMissedZeros = async () => {
       );
 
       for (const quiz of expiredQuizzes) {
-          let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0`;
+          let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped'`;
           let params = [];
+    
           if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
           if (quiz.target_section !== 'ALL') { query += ` AND section = ?`; params.push(quiz.target_section); }
 
