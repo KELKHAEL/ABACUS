@@ -68,7 +68,7 @@ export default function StudentHome({ navigation }) {
 
   // --- FILTER STATES ---
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filterSender, setFilterSender] = useState('ALL'); // ALL, ADMIN, INSTRUCTOR
+  const [filterSender, setFilterSender] = useState('ALL'); 
   const [filterYear, setFilterYear] = useState('ALL');
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterDay, setFilterDay] = useState('ALL');
@@ -361,7 +361,7 @@ export default function StudentHome({ navigation }) {
         <SimulationCard title="Pigeonhole Calculator" desc="What is the guaranteed minimum number of items inside?" color="#4c7d96" onPress={() => navigation.navigate("PigeonholeCalculator")} />
         <SimulationCard title="Euclidean Lab" desc="Compute Greatest Common Divisor." color="#2700d5" onPress={() => navigation.navigate("EuclideanLab")} />
         <SimulationCard title="Linear Diophantine Lab" desc="Find the integer solutions using the Extended Euclidean Algrorithm." color="#a31d86" onPress={() => navigation.navigate("LinearDiophantineLab")} />
-        <SimulationCard title="Chinese Remainder Lab" desc="Solve for 'x' in a system of two congruences." color="#ff00 d4" onPress={() => navigation.navigate("ChineseRemainderLab")} />
+        <SimulationCard title="Chinese Remainder Lab" desc="Solve for 'x' in a system of two congruences." color="#ff00d4" onPress={() => navigation.navigate("ChineseRemainderLab")} />
         <SimulationCard title="Inclusion-Exclusion Lab" desc="This tool takes the cardinality (size) of individual sets and their intersections, and computes the total Union size." color="#a6202e" onPress={() => navigation.navigate("InclusionExclusionLab")} />
         <SimulationCard title="Euler Planar Graph Lab" desc="Calculate Regions (Faces)." color="#ffd858" onPress={() => navigation.navigate("EulerPlanarGraphLab")} />
         <SimulationCard title="Binomial Theorem Lab" desc="Use combinatorics to expand binomial expressions." color="#800000" onPress={() => navigation.navigate("BinomialTheoremLab")} />
@@ -386,9 +386,16 @@ export default function StudentHome({ navigation }) {
               <Text style={styles.headerTitle}>Announcements</Text>
               <Text style={styles.subText}>Updates from your Instructors & Registrar</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, isFiltered && styles.filterBtnActive]}>
-                <Ionicons name="filter" size={20} color={isFiltered ? "white" : "#104a28"} />
-            </TouchableOpacity>
+            
+            {/* ✅ NEW: Grouped Refresh and Filter Buttons */}
+            <View style={{flexDirection: 'row', gap: 10}}>
+              <TouchableOpacity onPress={onRefresh} style={styles.filterBtn}>
+                  <Ionicons name="refresh" size={20} color="#104a28" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, isFiltered && styles.filterBtnActive]}>
+                  <Ionicons name="filter" size={20} color={isFiltered ? "white" : "#104a28"} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{marginTop: 20, gap: 15}}>

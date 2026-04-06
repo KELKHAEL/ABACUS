@@ -130,25 +130,14 @@ export default function Gradebook() {
   const saveGrades = async () => {
     if (!selectedStudent) return;
     try {
+      // ✅ FIX: Run sequentially to prevent MySQL connection flood on large classes
       for (const grade of editGrades) {
-          if (String(grade.id).startsWith('missed-')) {
-              await fetch(`http://localhost:5000/grades`, {
-                  method: 'POST', 
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                      userId: selectedStudent.id, 
-                      quizId: grade.quiz_id, 
-                      score: grade.grade, 
-                      totalItems: grade.total_items || 100, 
-                      subjectTitle: grade.subjectTitle.replace(' (Missed)', '') 
-                  })
-              });
-          } else {
-              await fetch(`http://localhost:5000/grades/${grade.id}`, {
-                  method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ score: grade.grade, total_items: grade.total_items || 100 })
-              });
-          }
+          const cleanTitle = grade.subjectTitle ? grade.subjectTitle.replace(' (Missed)', '') : '';
+          
+          await fetch(`http://localhost:5000/grades/${grade.id}`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ score: grade.grade, total_items: grade.total_items || 100, subjectTitle: cleanTitle })
+          });
       }
       
       fetchData();

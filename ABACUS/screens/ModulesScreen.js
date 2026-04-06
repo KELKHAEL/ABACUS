@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   View, Text, FlatList, TouchableOpacity, StyleSheet, 
   ActivityIndicator, StatusBar, Alert 
@@ -18,27 +18,28 @@ export default function ModulesScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
   
-  // ✅ NEW: Toggle State
-  const [viewMode, setViewMode] = useState('active'); // 'active' or 'archived'
+  const [viewMode, setViewMode] = useState('active'); 
+
+  // ✅ Extracted to useCallback so we can call it manually
+  const fetchModules = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/modules/student/${user.id}`);
+      const data = await response.json();
+      
+      if (data.error) throw new Error(data.error);
+      setModules(data);
+    } catch (error) {
+      console.error("Error fetching modules:", error);
+      Alert.alert("Error", "Could not load modules. Check your connection.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    const fetchModules = async () => {
-      try {
-        const response = await fetch(`${API_URL}/modules/student/${user.id}`);
-        const data = await response.json();
-        
-        if (data.error) throw new Error(data.error);
-        setModules(data);
-      } catch (error) {
-        console.error("Error fetching modules:", error);
-        Alert.alert("Error", "Could not load modules. Check your connection.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (user) fetchModules();
-  }, [user]);
+  }, [user, fetchModules]);
 
   const handleDownloadAndOpen = async (fileUrl, fileName, moduleId) => {
     try {
@@ -103,7 +104,6 @@ export default function ModulesScreen({ navigation }) {
     );
   };
 
-  // ✅ FILTER BASED ON ARCHIVE FLAG
   const displayedModules = modules.filter(m => viewMode === 'archived' ? m.is_archived === 1 : m.is_archived === 0);
 
   return (
@@ -111,13 +111,19 @@ export default function ModulesScreen({ navigation }) {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Posted Modules</Text>
+        </View>
+        
+        {/* ✅ NEW: Refresh Button */}
+        <TouchableOpacity onPress={fetchModules} style={{padding: 5}}>
+          <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Posted Modules</Text>
       </View>
 
-      {/* ✅ TOGGLE TABS */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={[styles.tab, viewMode === 'active' && styles.activeTab]} onPress={() => setViewMode('active')}>
           <Text style={[styles.tabText, viewMode === 'active' && styles.activeTabText]}>Active</Text>
@@ -149,7 +155,7 @@ export default function ModulesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FD' },
   headerRow: { 
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, 
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee',
   },
   backBtn: { marginRight: 15 },

@@ -1,32 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, GraduationCap, Megaphone, CalendarDays, ArrowRight } from 'lucide-react'; // Changed Icon
+import { Users, GraduationCap, Megaphone, CalendarDays, ArrowRight } from 'lucide-react'; 
 import './AdminDashboard.css';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ students: 0, teachers: 0, announcements: 0, loading: true });
+  const [stats, setStats] = useState({ 
+      students: 0, 
+      teachers: 0, 
+      announcements: 0, 
+      activeTerm: { school_year: 'Loading...', semester: 'Loading...' },
+      loading: true 
+  });
+  
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // --- 1. Fetch Students ---
-        const studentRes = await fetch('http://localhost:5000/users?role=STUDENT');
-        const studentData = await studentRes.json();
-        
-        // --- 2. Fetch Instructors ---
-        const teacherRes = await fetch('http://localhost:5000/users?role=INSTRUCTOR');
-        const teacherData = await teacherRes.json();
+        // ✅ OPTIMIZATION: Fetch all data simultaneously to make the dashboard load instantly
+        const [studentRes, teacherRes, announceRes, setupRes] = await Promise.all([
+            fetch('http://localhost:5000/users?role=STUDENT'),
+            fetch('http://localhost:5000/users?role=INSTRUCTOR'),
+            fetch('http://localhost:5000/announcements/all'),
+            fetch('http://localhost:5000/academic-setup')
+        ]);
 
-        // --- 3. Fetch Announcements (NEW) ---
-        const announceRes = await fetch('http://localhost:5000/announcements/all');
+        const studentData = await studentRes.json();
+        const teacherData = await teacherRes.json();
         const announceData = await announceRes.json();
-        
-        // --- 4. Update State ---
+        const setupData = await setupRes.json();
+
+        // ✅ DYNAMIC TERM LOGIC: Find the active term from the database
+        let currentTerm = { school_year: 'Not Set', semester: 'Not Set' };
+        if (!setupData.error && setupData.terms) {
+            const active = setupData.terms.find(t => t.is_active === 1 || t.is_active === true);
+            if (active) {
+                currentTerm = { school_year: active.school_year, semester: active.semester };
+            }
+        }
+
+        // --- Update State ---
         setStats({ 
           students: Array.isArray(studentData) ? studentData.length : 0, 
           teachers: Array.isArray(teacherData) ? teacherData.length : 0,
           announcements: Array.isArray(announceData) ? announceData.length : 0,
+          activeTerm: currentTerm,
           loading: false
         });
 
@@ -82,7 +100,7 @@ export default function Dashboard() {
           </div>
           <div className="card-content">
             <h2 className="count-number">
-               {stats.loading ? "..." : stats.students}
+                {stats.loading ? "..." : stats.students}
             </h2>
             <p className="stat-desc">Total enrolled students</p>
           </div>
@@ -92,7 +110,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ANNOUNCEMENTS CARD (REPLACED GRADES) */}
+        {/* ANNOUNCEMENTS CARD */}
         <div className="stat-card" onClick={() => navigate('/admin/ManageAnnouncements')}>
           <div className="card-header">
             <div className="icon-wrapper red">
@@ -112,8 +130,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* SEMESTER CARD */}
-        <div className="stat-card highlight-card">
+        {/* SEMESTER CARD (NOW DYNAMIC) */}
+        <div className="stat-card highlight-card" onClick={() => navigate('/admin/ManageAcademicSetup')} style={{cursor: 'pointer'}}>
           <div className="card-header">
             <div className="icon-wrapper white">
               <CalendarDays size={24} color="#ffffff" />
@@ -121,11 +139,16 @@ export default function Dashboard() {
             <span className="card-label text-white">Academic Year</span>
           </div>
           <div className="card-content">
-            <h2 className="count-number text-white">2025-2026</h2>
-            <p className="stat-desc text-white-70">First Semester</p>
+            <h2 className="count-number text-white">
+                {stats.loading ? "..." : stats.activeTerm.school_year}
+            </h2>
+            <p className="stat-desc text-white-70">
+                {stats.loading ? "..." : stats.activeTerm.semester}
+            </p>
           </div>
           <div className="card-footer text-white">
             <span className="status-badge">Active</span>
+            <ArrowRight size={16} color="#ffffff" />
           </div>
         </div>
       </div>

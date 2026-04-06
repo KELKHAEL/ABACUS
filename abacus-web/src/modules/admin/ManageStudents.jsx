@@ -39,7 +39,6 @@ export default function ManageStudents() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
-      // 🛠️ BUG FIX: Force conversion to String and completely trim trailing spaces/hidden characters
       const formattedData = data.map(row => ({
         studentId: String(row['Student ID'] || row['student_id'] || row['id'] || '').trim(), 
         email: String(row['Email'] || row['email'] || '').trim()
@@ -143,20 +142,42 @@ export default function ManageStudents() {
 
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
+  // ✅ FIX: Optimistic UI Update and corrected fetch call
   const handleRestore = async (id) => {
     if(!window.confirm("Restore this student account?")) return;
     try {
-        await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
-        fetchTrash(); fetchStudents(); 
-    } catch (e) { alert("Failed to restore"); }
+        // Remove instantly from UI
+        setTrashList(prev => prev.filter(s => s.id !== id));
+        
+        const res = await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
+        if (res.ok) {
+            fetchStudentsAndSetup(); // ✅ Corrected function name
+        } else {
+            alert("Failed to restore on server.");
+            fetchTrash(); // Revert on failure
+        }
+    } catch (e) { 
+        alert("Failed to restore"); 
+        fetchTrash();
+    }
   };
 
+  // ✅ FIX: Optimistic UI Update for Permanent Deletion
   const handlePermanentDelete = async (id) => {
     if(!window.confirm("WARNING: This will permanently delete the student and their grades. This cannot be undone.")) return;
     try {
-        await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
-        fetchTrash();
-    } catch (e) { alert("Failed to delete permanently"); }
+        // Remove instantly from UI
+        setTrashList(prev => prev.filter(s => s.id !== id));
+
+        const res = await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
+        if (!res.ok) {
+            alert("Failed to delete permanently on server.");
+            fetchTrash(); // Revert on failure
+        }
+    } catch (e) { 
+        alert("Failed to delete permanently"); 
+        fetchTrash(); 
+    }
   };
 
   // --- EXISTING MANAGE LOGIC ---
@@ -540,6 +561,7 @@ export default function ManageStudents() {
                         </table>
                     )}
                 </div>
+                <div className="modal-actions"><button className="btn-cancel" onClick={() => setShowTrashModal(false)}>Close</button></div>
             </div>
         </div>
       )}

@@ -39,7 +39,6 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
-// ✅ AUTO-MIGRATE RETAKE COLUMNS
 (async () => {
   try {
     const connection = await db.getConnection();
@@ -60,6 +59,19 @@ const getActiveTermId = async () => {
     return rows.length > 0 ? rows[0].id : 1;
   } catch(e) { return 1; }
 };
+
+// ==========================
+// 🚑 EMERGENCY RESTORE ROUTE (Run this in your browser!)
+// ==========================
+app.get('/emergency-restore-announcements', async (req, res) => {
+  try {
+      // This will force every announcement out of the trash bin and back into the main feed.
+      await db.query("UPDATE announcements SET is_deleted = 0, deleted_at = NULL");
+      res.json({ success: true, message: "All announcements have been successfully restored! They will no longer be affected by term rollovers." });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
 
 // ==========================
 // AUTHENTICATION ROUTES
@@ -104,15 +116,6 @@ app.post('/login', async (req, res) => {
 // ==========================
 // ADMIN: USER & TRASH MANAGEMENT 
 // ==========================
-// Add this anywhere in server.js
-app.get('/users/sync/:id', async (req, res) => {
-  try {
-    const [user] = await db.query("SELECT year_level, section, status, cor_status FROM users WHERE id = ?", [req.params.id]);
-    if (user.length === 0) return res.status(404).json({ error: "Not found" });
-    res.json(user[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.get('/users', async (req, res) => {
   const { role } = req.query; 
   try {
@@ -182,36 +185,37 @@ app.put('/users/:id/restore', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 🚀 FIXED: PERMANENT DELETE CASCADES PROPERLY TO AVOID SQL CRASHES
 app.delete('/users/:id/permanent', async (req, res) => {
   const connection = await db.getConnection();
   try { 
     await connection.beginTransaction();
-    // 1. Delete associated grades so MySQL doesn't block the delete
     await connection.query("DELETE FROM student_grades WHERE user_id = ?", [req.params.id]);
     
-    // 2. Delete any uploaded COR images
     const [users] = await connection.query("SELECT cor_image_url FROM users WHERE id = ?", [req.params.id]);
     if (users.length > 0 && users[0].cor_image_url) {
         const filePath = path.join(__dirname, users[0].cor_image_url);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
-
-    // 3. Finally, delete the user
     await connection.query("DELETE FROM users WHERE id = ?", [req.params.id]); 
     await connection.commit();
     res.json({ success: true }); 
   } catch (err) { 
     await connection.rollback();
     res.status(500).json({ error: err.message }); 
-  } finally {
-    connection.release();
-  }
+  } finally { connection.release(); }
 });
 
 app.patch('/users/:id/student-status', async (req, res) => {
   try { await db.query("UPDATE users SET status = ? WHERE id = ?", [req.body.status, req.params.id]); res.json({ success: true }); } 
   catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/users/sync/:id', async (req, res) => {
+  try {
+    const [user] = await db.query("SELECT year_level, section, status, cor_status FROM users WHERE id = ?", [req.params.id]);
+    if (user.length === 0) return res.status(404).json({ error: "Not found" });
+    res.json(user[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/admin-reset-password', async (req, res) => {
@@ -295,6 +299,7 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
             WHERE role = 'STUDENT' AND is_deleted = 0
         `);
     }
+    // ✅ NOTE: ANNOUNCEMENTS ARE DELIBERATELY EXCLUDED FROM DELETION HERE.
     await connection.commit();
     res.json({ success: true });
   } catch (err) {
@@ -366,6 +371,13 @@ app.get('/quizzes/:id', async (req, res) => {
       q.type = q.question_type;
     }
     res.json({ ...quiz[0], questions });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/trash/quizzes/instructor/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM quizzes WHERE created_by = ? AND status = 'deleted' ORDER BY created_at DESC", [req.params.id]);
+    res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -497,8 +509,13 @@ app.get('/grades', async (req, res) => {
 });
 
 app.put('/grades/:id', async (req, res) => {
+  const { score, total_items, subjectTitle } = req.body;
   try {
-    await db.query("UPDATE student_grades SET score = ?, total_items = ? WHERE id = ?", [req.body.score, req.body.total_items, req.params.id]);
+    if (subjectTitle) {
+        await db.query("UPDATE student_grades SET score = ?, total_items = ?, subject_title = ? WHERE id = ?", [score, total_items, subjectTitle, req.params.id]);
+    } else {
+        await db.query("UPDATE student_grades SET score = ?, total_items = ? WHERE id = ?", [score, total_items, req.params.id]);
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -508,9 +525,8 @@ app.delete('/grades/:id', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-
 // ==========================
-// 🚀 RESTORED MISSING TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
+// RESTORED MISSING TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
 // ==========================
 app.get('/trash/announcements', async (req, res) => {
   try {
@@ -900,7 +916,6 @@ const autoAssignMissedZeros = async () => {
       for (const quiz of expiredQuizzes) {
           let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped'`;
           let params = [];
-    
           if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
           if (quiz.target_section !== 'ALL') { query += ` AND section = ?`; params.push(quiz.target_section); }
 

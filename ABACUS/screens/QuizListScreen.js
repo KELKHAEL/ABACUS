@@ -37,7 +37,6 @@ export default function QuizListScreen({ navigation }) {
       const takenQuizIds = userGrades.map(g => g.quiz_id);
       const now = new Date();
 
-      // 1. Separate Active vs Archived & Apply Strict Target Filtering
       const activeRelevant = allQuizzes.filter(q => {
         const matchYear = !q.target_year || q.target_year === 'ALL' || String(q.target_year) === String(user.yearLevel);
         const matchSec = !q.target_section || q.target_section === 'ALL' || String(q.target_section) === String(user.section);
@@ -46,11 +45,10 @@ export default function QuizListScreen({ navigation }) {
             return false;
         }
 
-        // 🚀 RETAKE ENGINE SECURITY: If it's a retake, STRICTLY verify the student is explicitly allowed
         if (q.is_retake) {
             try {
                 const targets = JSON.parse(q.target_students || '[]');
-                if (!targets.includes(user.id)) return false; // Hide from students not explicitly allowed
+                if (!targets.includes(user.id)) return false; 
             } catch (e) {
                 return false; 
             }
@@ -58,7 +56,6 @@ export default function QuizListScreen({ navigation }) {
         return true;
       });
 
-      // 2. Sort into Tabs (Handling Auto-Graded Missed Quizzes intelligently)
       const available = [];
       const uncompleted = [];
       const completed = [];
@@ -67,24 +64,20 @@ export default function QuizListScreen({ navigation }) {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
           
           if (gradeEntry) {
-              // Did the server auto-grader assign this a 0 because they missed it?
               if (gradeEntry.subjectTitle && gradeEntry.subjectTitle.includes('(Missed)')) {
-                  uncompleted.push(q); // Keep it in the 'Missed' tab
+                  uncompleted.push(q); 
               } else {
-                  // It's a real grade (or a retake), put it in 'Done'
                   completed.push({ ...q, score: gradeEntry.grade, total_items: gradeEntry.total_items });
               }
           } else {
-              // No grade in DB yet
               if (q.due_date && new Date(q.due_date) <= now) {
-                  uncompleted.push(q); // Deadline passed, auto-grader hasn't caught it yet
+                  uncompleted.push(q); 
               } else {
-                  available.push(q); // Ready to take
+                  available.push(q); 
               }
           }
       });
 
-      // 3. Archived Arrays (Only show past quizzes the student actually has a grade/zero for)
       const archived = allQuizzes.filter(q => q.is_archived && takenQuizIds.includes(q.id)).map(q => {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
           return { ...q, score: gradeEntry ? gradeEntry.grade : 0, total_items: gradeEntry ? gradeEntry.total_items : 100 };
@@ -174,13 +167,19 @@ export default function QuizListScreen({ navigation }) {
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Quizzes</Text>
+        </View>
+
+        {/* ✅ NEW: Refresh Button */}
+        <TouchableOpacity onPress={onRefresh} style={{padding: 5}}>
+          <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Quizzes</Text>
       </View>
 
-      {/* ✅ 4 TABS SCROLLABLE */}
       <View style={{backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee'}}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
             <TouchableOpacity style={[styles.tab, viewMode === 'available' && styles.activeTab]} onPress={() => setViewMode('available')}>
@@ -224,7 +223,7 @@ export default function QuizListScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FD' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff' },
   backBtn: { marginRight: 15 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
   

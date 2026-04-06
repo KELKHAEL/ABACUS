@@ -113,7 +113,8 @@ export default function InstructorDashboard() {
           const hasTaken = allGrades.some(g => 
               g.user_id === student.id && 
               g.quiz_id === quiz.id && 
-              g.is_archived === (chartViewMode === 'archived' ? 1 : 0)
+              g.is_archived === (chartViewMode === 'archived' ? 1 : 0) &&
+              !(g.subjectTitle && g.subjectTitle.includes('(Missed)')) // ✅ FIX: Ignore auto-graded zeros!
           );
           if (hasTaken) participatingStudentIds.add(student.id);
       });

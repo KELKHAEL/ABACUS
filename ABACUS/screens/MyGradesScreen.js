@@ -26,7 +26,6 @@ export default function MyGradesScreen({ navigation }) {
       const allGrades = await gradesResponse.json();
       const allQuizzes = await quizzesResponse.json();
 
-      // The 0s are native to the DB now. Just pull them normally!
       const myGrades = allGrades.filter(g => g.user_id === user.id);
       
       const statusMap = {};
@@ -52,7 +51,6 @@ export default function MyGradesScreen({ navigation }) {
     const isPassing = percentage >= 75;
     const isDisabled = quizStatusMap[item.quiz_id] === 'deleted';
     
-    // Check if the backend auto-grader tagged it as missed
     const isMissed = item.subjectTitle && item.subjectTitle.includes('(Missed)');
 
     return (
@@ -113,11 +111,17 @@ export default function MyGradesScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#F8F9FD" />
       
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Grades</Text>
+        </View>
+        
+        {/* ✅ NEW: Refresh Button */}
+        <TouchableOpacity onPress={fetchGradesAndStatus} style={{padding: 5}}>
+          <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Grades</Text>
-        <View style={{width: 24}} /> 
       </View>
 
       <View style={styles.tabBar}>
@@ -157,7 +161,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
     paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff', 
   },
-  backBtn: { padding: 5 },
+  backBtn: { padding: 5, marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
 
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 2, shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.05 },
