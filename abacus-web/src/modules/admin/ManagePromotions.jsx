@@ -10,7 +10,7 @@ export default function ManagePromotions() {
   // Modal, Selection & Zoom State
   const [viewImage, setViewImage] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [zoomLevel, setZoomLevel] = useState(1); // ✅ NEW: Tracks zoom level
+  const [zoomLevel, setZoomLevel] = useState(1); 
 
   // Filters
   const [search, setSearch] = useState("");
@@ -32,8 +32,13 @@ export default function ManagePromotions() {
       const pendingData = await pendingRes.json();
       const setup = await setupRes.json();
 
-      setPendingRequests(pendingData);
-      setFilteredRequests(pendingData);
+      const uppercaseData = pendingData.map(s => ({
+          ...s, 
+          full_name: s.full_name ? s.full_name.toUpperCase() : ''
+      }));
+
+      setPendingRequests(uppercaseData);
+      setFilteredRequests(uppercaseData);
       
       if (!setup.error) {
         setSetupData({
@@ -85,7 +90,6 @@ export default function ManagePromotions() {
     setSelectedIds([]); 
   }, [search, programFilter, yearFilter, sectionFilter, pendingRequests]);
 
-  // --- ACTIONS ---
   const handleApprove = async (id, name) => {
     if (!window.confirm(`Approve promotion for ${name}?`)) return;
     try {
@@ -134,13 +138,11 @@ export default function ManagePromotions() {
       }
   };
 
-  // ✅ NEW: Open modal and reset zoom
   const openImagePreview = (url) => {
       setViewImage(url);
-      setZoomLevel(1); // Start at standard size
+      setZoomLevel(1); 
   };
 
-  // ✅ NEW: Close modal and reset zoom
   const closeImagePreview = () => {
       setViewImage(null);
       setZoomLevel(1);
@@ -258,10 +260,17 @@ export default function ManagePromotions() {
                     <div style={{fontSize: '11px', color: '#8b5cf6', marginTop: '4px', fontWeight: 'bold'}}>{student.program}</div>
                   </td>
                   
+                  {/* ✅ FIX: Replaces the ugly 4-(to be assigned) text with a clean badge */}
                   <td style={tdStyle}>
-                     <span style={{color: '#6b7280', fontSize: '13px'}}>
-                        Year {student.year_level} - Sec {student.section}
-                     </span>
+                     {student.section === 'To be assigned' || !student.section ? (
+                         <span style={{background: '#f1f5f9', color: '#475569', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold'}}>
+                            Unassigned / Previous Term
+                         </span>
+                     ) : (
+                         <span style={{color: '#6b7280', fontSize: '13px'}}>
+                            Year {student.year_level} - Sec {student.section}
+                         </span>
+                     )}
                   </td>
 
                   <td style={tdStyle}>
@@ -271,7 +280,6 @@ export default function ManagePromotions() {
                     <div style={{fontSize: '11px', color: '#d97706', marginTop: '6px', fontWeight: 'bold'}}>{student.pending_status}</div>
                   </td>
                   
-                  {/* VIEW COR BUTTON (Updated onClick) */}
                   <td style={{...tdStyle, textAlign: 'center'}}>
                     <button 
                         onClick={() => openImagePreview(`http://localhost:5000${student.cor_image_url}`)}
@@ -298,15 +306,11 @@ export default function ManagePromotions() {
         </table>
       </div>
 
-      {/* ✅ FULLY UPDATED: IMAGE PREVIEW MODAL WITH ZOOM */}
       {viewImage && (
           <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(4px)'}} onClick={closeImagePreview}>
-              {/* Modal Container: Set explicitly high max-height so we have room for the scrollable container */}
               <div style={{background: 'white', padding: '24px', borderRadius: '16px', position: 'relative', width: '90%', maxWidth: '1000px', height: '90%', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'}} onClick={e => e.stopPropagation()}>
-                  
                   <button onClick={closeImagePreview} style={{position: 'absolute', top: -15, right: -15, background: '#ef4444', color: 'white', border: '2px solid white', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}}>X</button>
                   
-                  {/* Header & Zoom Controls */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
                       <h3 style={{margin: 0, color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
                           <FileImage size={20} color="#104a28"/> COR Document Preview
@@ -318,7 +322,6 @@ export default function ManagePromotions() {
                       </div>
                   </div>
                   
-                  {/* Scrollable Image Container */}
                   <div style={{background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start'}}>
                       <img 
                           src={viewImage} 

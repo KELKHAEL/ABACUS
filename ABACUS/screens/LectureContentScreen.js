@@ -213,13 +213,6 @@ export default function LectureContentScreen({ route, navigation }) {
         {/* Full Academic Module Content rendered here */}
         {renderContent()}
 
-        <TouchableOpacity 
-          style={[styles.labButton, { backgroundColor: moduleColor }]}
-          onPress={() => navigation.navigate('Simulations')}
-        >
-          <Ionicons name="flask-outline" size={20} color="white" />
-          <Text style={styles.labButtonText}>Open Laboratory Simulation</Text>
-        </TouchableOpacity>
         <View style={{height: 60}} />
       </ScrollView>
     </SafeAreaView>

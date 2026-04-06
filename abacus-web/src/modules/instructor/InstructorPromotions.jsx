@@ -24,7 +24,6 @@ export default function InstructorPromotions() {
 
   const canMassSelect = programFilter !== "All" && yearFilter !== "All" && sectionFilter !== "All";
 
-  // Get Logged-in Instructor
   const user = JSON.parse(localStorage.getItem("user"));
   const instructorId = user?.id;
 
@@ -33,14 +32,17 @@ export default function InstructorPromotions() {
     setLoading(true);
     setSelectedIds([]); 
     try {
-      // Fetch ONLY students requesting to join this instructor's classes
       const res = await fetch(`http://localhost:5000/instructor/${instructorId}/promotions/pending`);
       const data = await res.json();
 
-      setPendingRequests(data);
-      setFilteredRequests(data);
+      const uppercaseData = data.map(s => ({
+          ...s, 
+          full_name: s.full_name ? s.full_name.toUpperCase() : ''
+      }));
+
+      setPendingRequests(uppercaseData);
+      setFilteredRequests(uppercaseData);
       
-      // Dynamically populate dropdowns based ONLY on the assigned classes returned
       setAvailablePrograms([...new Set(data.map(s => s.program))]);
       setAvailableYears([...new Set(data.map(s => s.pending_year))]);
       setAvailableSections([...new Set(data.map(s => s.pending_section))]);
@@ -54,7 +56,6 @@ export default function InstructorPromotions() {
 
   useEffect(() => { fetchData(); }, [instructorId]);
 
-  // Filter & Sorting Logic
   useEffect(() => {
     let result = [...pendingRequests];
 
@@ -70,7 +71,6 @@ export default function InstructorPromotions() {
     if (yearFilter !== "All") result = result.filter(s => s.pending_year === yearFilter);
     if (sectionFilter !== "All") result = result.filter(s => s.pending_section === sectionFilter);
 
-    // Sort Alphabetically by Surname
     result.sort((a, b) => {
       const getSurname = (name) => {
         if (!name) return "";
@@ -84,8 +84,6 @@ export default function InstructorPromotions() {
     setSelectedIds([]); 
   }, [search, programFilter, yearFilter, sectionFilter, pendingRequests]);
 
-  // --- ACTIONS ---
-  // (We reuse the admin endpoints since the database update logic is identical)
   const handleApprove = async (id, name) => {
     if (!window.confirm(`Approve promotion for ${name} into your class?`)) return;
     try {
@@ -164,7 +162,6 @@ export default function InstructorPromotions() {
         )}
       </div>
 
-      {/* DYNAMIC FILTER BAR */}
       <div style={{ display: 'flex', gap: '15px', alignItems: 'center', background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '25px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', border: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4b5563', fontWeight: 'bold', borderRight: '1px solid #e5e7eb', paddingRight: '15px' }}>
             <Filter size={18}/> My Classes
@@ -181,7 +178,6 @@ export default function InstructorPromotions() {
           />
         </div>
 
-        {/* Filters dynamically generated based on the instructor's scope */}
         <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} style={selectStyle}>
             <option value="All">All Programs</option>
             {availablePrograms.map(p => <option key={p} value={p}>{p}</option>)}
@@ -204,7 +200,6 @@ export default function InstructorPromotions() {
           </div>
       )}
 
-      {/* TABLE */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead style={{ background: '#104a28', color: 'white' }}>
@@ -257,10 +252,17 @@ export default function InstructorPromotions() {
                     <div style={{fontSize: '11px', color: '#8b5cf6', marginTop: '4px', fontWeight: 'bold'}}>{student.program}</div>
                   </td>
                   
+                  {/* ✅ FIX: Replaces the ugly 4-(to be assigned) text with a clean badge */}
                   <td style={tdStyle}>
-                     <span style={{color: '#6b7280', fontSize: '13px'}}>
-                        Year {student.year_level} - Sec {student.section}
-                     </span>
+                     {student.section === 'To be assigned' || !student.section ? (
+                         <span style={{background: '#f1f5f9', color: '#475569', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold'}}>
+                            Unassigned / Previous Term
+                         </span>
+                     ) : (
+                         <span style={{color: '#6b7280', fontSize: '13px'}}>
+                            Year {student.year_level} - Sec {student.section}
+                         </span>
+                     )}
                   </td>
 
                   <td style={tdStyle}>
@@ -296,7 +298,6 @@ export default function InstructorPromotions() {
         </table>
       </div>
 
-      {/* MODAL */}
       {viewImage && (
           <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(4px)'}} onClick={closeImagePreview}>
               <div style={{background: 'white', padding: '24px', borderRadius: '16px', position: 'relative', width: '90%', maxWidth: '1000px', height: '90%', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'}} onClick={e => e.stopPropagation()}>

@@ -30,7 +30,13 @@ export default function MyClassList() {
       const data = await res.json();
 
       if (data.error) throw new Error(data.error);
-      setMyStudents(data.students || []);
+
+      const uppercaseStudents = (data.students || []).map(s => ({
+          ...s, 
+          full_name: s.full_name ? s.full_name.toUpperCase() : ''
+      }));
+
+      setMyStudents(uppercaseStudents);
 
     } catch (error) {
       console.error("Error fetching students:", error);

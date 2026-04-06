@@ -4,15 +4,12 @@ import * as XLSX from 'xlsx';
 import './ManageStudents.css';
 
 export default function ManageStudents() {
-  // --- MAIN STATE ---
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // --- DYNAMIC ACADEMIC SETUP ---
   const [academicYears, setAcademicYears] = useState([]);
   const [academicSections, setAcademicSections] = useState([]);
   
-  // --- WHITELIST & TRASH STATE ---
   const [allowedList, setAllowedList] = useState([]);
   const [showWhitelistModal, setShowWhitelistModal] = useState(false);
   const [whitelistLoading, setWhitelistLoading] = useState(false);
@@ -70,7 +67,6 @@ export default function ManageStudents() {
 
   const triggerFileInput = () => { fileInputRef.current.click(); };
 
-  // --- 2. WHITELIST LOGIC ---
   const fetchWhitelist = async () => {
     setWhitelistLoading(true);
     try {
@@ -117,7 +113,6 @@ export default function ManageStudents() {
       } catch (e) { alert("Server Error."); }
   };
 
-  // ✅ DYNAMIC BATCH FILTERING FOR WHITELIST
   const whitelistBatchYears = [...new Set(
       allowedList
         .map(item => item.student_id ? String(item.student_id).substring(0, 4) : null)
@@ -129,7 +124,6 @@ export default function ManageStudents() {
       return item.student_id && String(item.student_id).startsWith(whitelistFilterYear);
   });
 
-  // --- 3. TRASH BIN LOGIC ---
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
@@ -142,19 +136,16 @@ export default function ManageStudents() {
 
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
-  // ✅ FIX: Optimistic UI Update and corrected fetch call
   const handleRestore = async (id) => {
     if(!window.confirm("Restore this student account?")) return;
     try {
-        // Remove instantly from UI
         setTrashList(prev => prev.filter(s => s.id !== id));
-        
         const res = await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
         if (res.ok) {
-            fetchStudentsAndSetup(); // ✅ Corrected function name
+            fetchStudentsAndSetup(); 
         } else {
             alert("Failed to restore on server.");
-            fetchTrash(); // Revert on failure
+            fetchTrash(); 
         }
     } catch (e) { 
         alert("Failed to restore"); 
@@ -162,17 +153,14 @@ export default function ManageStudents() {
     }
   };
 
-  // ✅ FIX: Optimistic UI Update for Permanent Deletion
   const handlePermanentDelete = async (id) => {
     if(!window.confirm("WARNING: This will permanently delete the student and their grades. This cannot be undone.")) return;
     try {
-        // Remove instantly from UI
         setTrashList(prev => prev.filter(s => s.id !== id));
-
         const res = await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
         if (!res.ok) {
             alert("Failed to delete permanently on server.");
-            fetchTrash(); // Revert on failure
+            fetchTrash(); 
         }
     } catch (e) { 
         alert("Failed to delete permanently"); 
@@ -180,7 +168,6 @@ export default function ManageStudents() {
     }
   };
 
-  // --- EXISTING MANAGE LOGIC ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBatch, setFilterBatch] = useState('ALL');
   const [filterYear, setFilterYear] = useState('ALL');
@@ -221,7 +208,7 @@ export default function ManageStudents() {
       }
       
       const formatted = studentData.map(user => ({
-        id: user.id, fullName: user.full_name, email: user.email, studentId: user.student_id,
+        id: user.id, fullName: user.full_name ? user.full_name.toUpperCase() : '', email: user.email, studentId: user.student_id,
         program: user.program || 'Bachelor of Science in Information Technology',
         yearLevel: user.year_level, section: user.section, status: user.status || 'Regular', defaultPassword: '' 
       }));
@@ -329,7 +316,6 @@ export default function ManageStudents() {
     } catch (error) { alert("Failed to reset password."); }
   };
 
-  // ✅ DYNAMIC FILTERING LOGIC
   const mainBatchYears = [...new Set(
     students
       .map(item => item.studentId ? String(item.studentId).substring(0, 4) : null)
@@ -339,7 +325,7 @@ export default function ManageStudents() {
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || student.studentId?.includes(searchTerm);
     const matchesBatch = filterBatch !== 'ALL' ? (student.studentId && String(student.studentId).startsWith(filterBatch)) : true;
-    const matchesYear = filterYear !== 'ALL' ? student.yearLevel == filterYear : true; // using == to handle string/int mismatches
+    const matchesYear = filterYear !== 'ALL' ? student.yearLevel == filterYear : true; 
     const matchesSection = filterSection !== 'ALL' ? student.section == filterSection : true;
     const matchesStatus = filterStatus !== 'ALL' ? student.status === filterStatus : true;
     return matchesSearch && matchesBatch && matchesYear && matchesSection && matchesStatus;
@@ -355,7 +341,6 @@ export default function ManageStudents() {
 
   return (
     <div className="page-container">
-      {/* HEADER */}
       <div className="page-header">
         <h1 className="page-title">Manage Students</h1>
         
@@ -376,7 +361,6 @@ export default function ManageStudents() {
         </div>
       </div>
 
-      {/* FILTER BAR (Dynamic) */}
       <div className="filter-bar" style={{flexWrap: 'wrap', gap: '10px'}}>
         <div className="search-wrapper" style={{minWidth: '200px'}}>
           <Search className="search-icon" size={18} />
@@ -403,7 +387,6 @@ export default function ManageStudents() {
         <button className="btn-reset" onClick={clearFilters}>Reset</button>
       </div>
 
-      {/* MAIN TABLE */}
       <div className="table-card">
         <table className="data-table">
           <thead>
@@ -428,7 +411,18 @@ export default function ManageStudents() {
                     <td><span style={{fontSize: '12px', fontWeight: '500', color: '#555'}}>{student.program.replace('Bachelor of Science in', 'BS')}</span></td>
                     <td>{isNew ? <span className="badge badge-new">Verification</span> : <span className={`badge ${getStatusClass(student.status)}`}>{student.status || 'Regular'}</span>}</td>
                     <td style={{fontFamily: 'monospace'}}>{student.studentId || 'N/A'}</td>
-                    <td>{student.yearLevel}-{student.section}</td>
+                    
+                    {/* ✅ FIX: Replaces the ugly 4-To be assigned text with a clean badge */}
+                    <td>
+                      {student.section === 'To be assigned' ? (
+                          <span style={{background: '#f1f5f9', color: '#6b7280', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'}}>
+                              Needs Enrollment
+                          </span>
+                      ) : (
+                          `${student.yearLevel}-${student.section}`
+                      )}
+                    </td>
+
                     <td>
                       <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
                         {!isNew && <button className="btn-icon" style={{color: '#d97706', background: '#fef3c7', marginRight: '5px'}} onClick={() => handleAdminReset(student)} title="Reset Password"><Key size={18} /></button>}
@@ -444,7 +438,6 @@ export default function ManageStudents() {
         </table>
       </div>
 
-      {/* --- RE-DESIGNED WHITELIST MODAL --- */}
       {showWhitelistModal && (
         <div className="modal-overlay" onClick={() => setShowWhitelistModal(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '800px', maxWidth: '95vw', padding: 0, overflow: 'hidden'}}>
@@ -525,7 +518,6 @@ export default function ManageStudents() {
         </div>
       )}
 
-      {/* --- TRASH BIN MODAL --- */}
       {showTrashModal && (
         <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px', padding: 0, overflow: 'hidden'}}>
@@ -566,7 +558,6 @@ export default function ManageStudents() {
         </div>
       )}
 
-      {/* --- ADD/EDIT MODAL --- */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -598,7 +589,6 @@ export default function ManageStudents() {
                 {!isEditing && <div className="form-group" style={{flex: 1}}><label className="form-label">Password</label><input className="form-input" value={formData.password} readOnly /></div>}
               </div>
               
-              {/* DYNAMIC MODAL DROPDOWNS */}
               <div style={{display: 'flex', gap: '16px'}}>
                 <div className="form-group" style={{flex: 1}}>
                     <label className="form-label">Year</label>

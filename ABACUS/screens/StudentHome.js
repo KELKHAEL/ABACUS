@@ -76,20 +76,25 @@ export default function StudentHome({ navigation }) {
   const { start } = useCopilot();
 
   const getGreetingName = (fullName) => {
-    if (!fullName) return "Student";
+    if (!fullName) return "STUDENT";
+    let formattedName = fullName;
+
     if (fullName.includes(',')) {
       const parts = fullName.split(',');
       const lastName = parts[0].trim().split(' ')[0]; 
       let words = parts[1].trim().split(' ').filter(w => w.length > 0);
       if (words.length >= 3) words.pop(); 
       if (words.length > 1 && (words[words.length - 1].endsWith('.') || words[words.length - 1].length === 1)) words.pop(); 
-      if (words.length >= 2) return `${words[0]} ${words[1]}`; 
-      else if (words.length === 1) return `${words[0]} ${lastName}`; 
-    } 
-    const words = fullName.split(' ').filter(w => w.length > 0);
-    if (words.length >= 3) return `${words[0]} ${words[1]}`; 
-    else if (words.length === 2) return `${words[0]} ${words[1]}`; 
-    return fullName; 
+      
+      if (words.length >= 2) formattedName = `${words[0]} ${words[1]}`; 
+      else if (words.length === 1) formattedName = `${words[0]} ${lastName}`; 
+    } else {
+      const words = fullName.split(' ').filter(w => w.length > 0);
+      if (words.length >= 3) formattedName = `${words[0]} ${words[1]}`; 
+      else if (words.length === 2) formattedName = `${words[0]} ${words[1]}`; 
+    }
+    
+    return formattedName.toUpperCase(); 
   };
 
   const studentName = getGreetingName(user?.fullName);

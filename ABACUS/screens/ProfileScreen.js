@@ -11,7 +11,8 @@ import * as ImagePicker from 'expo-image-picker';
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
 export default function ProfileScreen({ navigation }) {
-  const { user } = useContext(AuthContext);
+  // ✅ FIX: Make sure to extract 'logout' from the AuthContext
+  const { user, logout } = useContext(AuthContext);
   
   // Promotion Modal States
   const [showModal, setShowModal] = useState(false);
@@ -21,10 +22,8 @@ export default function ProfileScreen({ navigation }) {
   const [corImage, setCorImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // ✅ NEW: State to hold the dynamic setup from the database
   const [setupData, setSetupData] = useState({ yearLevels: [], sections: [] });
 
-  // Fetch the dynamic Years and Sections when the screen loads
   useEffect(() => {
     const fetchAcademicSetup = async () => {
       try {
@@ -35,7 +34,6 @@ export default function ProfileScreen({ navigation }) {
                yearLevels: data.yearLevels || [],
                sections: data.sections || []
            });
-           // Auto-select the first available option so it's not blank
            if (data.yearLevels?.length > 0) setNewYear(data.yearLevels[0].year_name);
            if (data.sections?.length > 0) setNewSection(data.sections[0].section_name);
         }
@@ -46,8 +44,22 @@ export default function ProfileScreen({ navigation }) {
     fetchAcademicSetup();
   }, []);
 
-  const handleLogout = () => {
-    navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] });
+  // ✅ FIX: Use the AuthContext logout function. This safely unmounts the app and returns to Login.
+  const handleLogout = async () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Log Out", 
+          style: "destructive",
+          onPress: async () => {
+            await logout(); // Calls the function defined in AuthContext.js
+          }
+        }
+      ]
+    );
   };
 
   const pickImage = async () => {
@@ -138,7 +150,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>{user.fullName ? user.fullName.charAt(0).toUpperCase() : 'S'}</Text>
           </View>
-          <Text style={styles.name}>{user.fullName}</Text>
+          <Text style={styles.name}>{user.fullName ? user.fullName.toUpperCase() : ''}</Text>
           <Text style={styles.email}>{user.email}</Text>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{user.role}</Text>
@@ -170,6 +182,8 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.promoteBtnText}>Request Promotion / Update Semester</Text>
             <Ionicons name="chevron-forward" size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
           </TouchableOpacity>
+          
+          {/* ✅ FIX: Calls handleLogout which triggers AuthContext.logout() */}
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
             <Text style={styles.logoutText}>Log Out</Text>
@@ -189,7 +203,6 @@ export default function ProfileScreen({ navigation }) {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalDesc}>Upload your new Certificate of Registration (COR) to be assigned to your new classes.</Text>
 
-              {/* ✅ DYNAMIC YEAR LEVELS */}
               <Text style={styles.inputLabel}>New Year Level</Text>
               <View style={styles.pickerRow}>
                 {setupData.yearLevels.map(y => (
@@ -199,7 +212,6 @@ export default function ProfileScreen({ navigation }) {
                 ))}
               </View>
 
-              {/* ✅ DYNAMIC SECTIONS */}
               <Text style={styles.inputLabel}>New Section</Text>
               <View style={styles.pickerRow}>
                 {setupData.sections.map(s => (
@@ -238,7 +250,6 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-// Ensure the buttons wrap correctly if the Admin adds a lot of sections
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FD' },
   header: { 
@@ -289,7 +300,6 @@ const styles = StyleSheet.create({
   
   inputLabel: { fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 8, marginTop: 15 },
   
-  // ✅ UPDATED: Added flexWrap so buttons wrap to the next line if the admin adds 10 sections!
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   pickerBtn: { minWidth: '22%', paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   pickerActive: { backgroundColor: '#104a28', borderColor: '#104a28' },

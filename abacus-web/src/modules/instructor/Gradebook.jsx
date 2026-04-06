@@ -56,6 +56,7 @@ export default function Gradebook() {
       const dashboardRes = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
       const dashboardData = await dashboardRes.json();
       if (dashboardData.error) throw new Error(dashboardData.error);
+      
       const assignedStudents = dashboardData.students || [];
 
       const gradesRes = await fetch('http://localhost:5000/grades');
@@ -68,13 +69,17 @@ export default function Gradebook() {
       setQuizStatusMap(statusMap);
 
       const mergedData = assignedStudents.map(student => {
-          // The zeros are now in the database natively! Just pull them straight out.
           const studentGrades = gradesData.filter(g => g.user_id === student.id);
 
           return {
-              id: student.id, fullName: student.full_name, email: student.email,
-              program: student.program || 'BSIT', yearLevel: student.year_level,
-              section: student.section, gradesList: studentGrades 
+              id: student.id, 
+              // ✅ FIX: Force the name to uppercase immediately when downloading from the database
+              fullName: student.full_name ? student.full_name.toUpperCase() : '', 
+              email: student.email,
+              program: student.program || 'BSIT', 
+              yearLevel: student.year_level,
+              section: student.section, 
+              gradesList: studentGrades 
           };
       });
 
@@ -130,7 +135,6 @@ export default function Gradebook() {
   const saveGrades = async () => {
     if (!selectedStudent) return;
     try {
-      // ✅ FIX: Run sequentially to prevent MySQL connection flood on large classes
       for (const grade of editGrades) {
           const cleanTitle = grade.subjectTitle ? grade.subjectTitle.replace(' (Missed)', '') : '';
           
@@ -253,7 +257,6 @@ export default function Gradebook() {
                         const percentage = currentTotal > 0 ? ((currentScore / currentTotal) * 100) : 0;
                         const absoluteIdx = editGrades.findIndex(eg => eg.id === grade.id);
                         
-                        // Check if the backend auto-grader tagged it as Missed
                         const isMissed = grade.subjectTitle && grade.subjectTitle.includes('(Missed)');
 
                         return (

@@ -39,6 +39,7 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
+// ✅ AUTO-MIGRATE COLUMNS & DATABASE CLEANUP
 (async () => {
   try {
     const connection = await db.getConnection();
@@ -47,6 +48,10 @@ const db = mysql.createPool({
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
+    
+    // 🚀 NEW: This instantly deletes all the ghost requests created by the old rollover bug!
+    try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
+    
     connection.release();
   } catch (err) {
     console.error("❌ Database Connection Failed:", err.message);
@@ -59,19 +64,6 @@ const getActiveTermId = async () => {
     return rows.length > 0 ? rows[0].id : 1;
   } catch(e) { return 1; }
 };
-
-// ==========================
-// 🚑 EMERGENCY RESTORE ROUTE (Run this in your browser!)
-// ==========================
-app.get('/emergency-restore-announcements', async (req, res) => {
-  try {
-      // This will force every announcement out of the trash bin and back into the main feed.
-      await db.query("UPDATE announcements SET is_deleted = 0, deleted_at = NULL");
-      res.json({ success: true, message: "All announcements have been successfully restored! They will no longer be affected by term rollovers." });
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
 
 // ==========================
 // AUTHENTICATION ROUTES
@@ -196,6 +188,7 @@ app.delete('/users/:id/permanent', async (req, res) => {
         const filePath = path.join(__dirname, users[0].cor_image_url);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
+
     await connection.query("DELETE FROM users WHERE id = ?", [req.params.id]); 
     await connection.commit();
     res.json({ success: true }); 
@@ -279,6 +272,9 @@ app.put('/academic-setup/:type/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==========================================
+// TERM ROLLOVER / TRANSITION SYSTEM
+// ==========================================
 app.put('/academic-setup/term/active/:id', async (req, res) => {
   const { id } = req.params;
   const { resetInstructors, resetStudents } = req.body; 
@@ -293,13 +289,13 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
         await connection.query("UPDATE users SET assigned_classes = '[]' WHERE role = 'INSTRUCTOR'");
     }
     if (resetStudents) {
+        // 🚀 FIXED: Sets cor_status to 'Unassigned' instead of 'Pending' so it doesn't flood the verification queue!
         await connection.query(`
             UPDATE users 
-            SET section = 'To be assigned', cor_status = 'Pending', cor_image_url = NULL, pending_year = NULL, pending_section = NULL 
+            SET section = 'To be assigned', cor_status = 'Unassigned', cor_image_url = NULL, pending_year = NULL, pending_section = NULL 
             WHERE role = 'STUDENT' AND is_deleted = 0
         `);
     }
-    // ✅ NOTE: ANNOUNCEMENTS ARE DELIBERATELY EXCLUDED FROM DELETION HERE.
     await connection.commit();
     res.json({ success: true });
   } catch (err) {
@@ -526,7 +522,7 @@ app.delete('/grades/:id', async (req, res) => {
 });
 
 // ==========================
-// RESTORED MISSING TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
+// RESTORED TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
 // ==========================
 app.get('/trash/announcements', async (req, res) => {
   try {
@@ -708,7 +704,7 @@ app.put('/allowed-students/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/register', async (req, res) => {
+app.post('/register', upload.single('corImage'), async (req, res) => {
   const { fullName, studentId, email, password, yearLevel, section, program } = req.body;
   try {
     const [allowed] = await db.query("SELECT * FROM allowed_students WHERE student_id = ? AND email = ?", [studentId, email]);
@@ -717,13 +713,34 @@ app.post('/register', async (req, res) => {
     const [existing] = await db.query("SELECT * FROM users WHERE email = ? OR student_id = ?", [email, studentId]);
     if (existing.length > 0) return res.status(409).json({ success: false, error: "Account already exists." });
 
+    // ✅ NEW: Handle Image Upload processing
+    let corUrl = null;
+    if (req.file) {
+      const safeName = fullName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+      const safeId = studentId.replace(/[^a-zA-Z0-9]/g, '');
+      const ext = path.extname(req.file.originalname) || '.jpg';
+      
+      const newFileName = `${safeName}_${safeId}_REG${ext}`;
+      const newPath = path.join(__dirname, 'uploads', newFileName);
+      fs.renameSync(req.file.path, newPath);
+      
+      corUrl = `/uploads/${newFileName}`;
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const [result] = await db.query(
-      `INSERT INTO users (full_name, student_id, email, password_hash, year_level, section, role, program, status, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 'STUDENT', ?, 'Regular', 0)`,
-      [fullName, studentId, email, hashedPassword, yearLevel, section, program]
+    
+    // ✅ NEW: Saves COR image, sets section to 'To be assigned', and pushes them into 'Pending' verification!
+    await db.query(
+      `INSERT INTO users (full_name, student_id, email, password_hash, year_level, section, role, program, status, is_deleted, pending_year, pending_section, pending_status, cor_image_url, cor_status) 
+       VALUES (?, ?, ?, ?, ?, 'To be assigned', 'STUDENT', ?, 'Regular', 0, ?, ?, 'Regular', ?, 'Pending')`,
+      [fullName, studentId, email, hashedPassword, yearLevel, program, yearLevel, section, corUrl]
     );
-    res.status(201).json({ success: true, message: "Account created!", userId: result.insertId });
-  } catch (err) { res.status(500).json({ success: false, error: "Server Error" }); }
+
+    res.status(201).json({ success: true, message: "Account created and pending verification." });
+  } catch (err) { 
+    if (req.file && fs.existsSync(req.file.path)) { fs.unlinkSync(req.file.path); }
+    res.status(500).json({ success: false, error: "Server Error: " + err.message }); 
+  }
 });
 
 // ==========================
@@ -914,6 +931,7 @@ const autoAssignMissedZeros = async () => {
       );
 
       for (const quiz of expiredQuizzes) {
+          // ✅ FIX: Ignore students whose status is 'Dropped'
           let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped'`;
           let params = [];
           if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
@@ -938,6 +956,35 @@ const autoAssignMissedZeros = async () => {
 
 setTimeout(autoAssignMissedZeros, 5000);
 setInterval(autoAssignMissedZeros, 5 * 60 * 1000);
+
+// ==========================
+// STUDENT FORGOT PASSWORD (FROM MOBILE APP)
+// ==========================
+app.post('/student-forgot-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) return res.status(400).json({ success: false, error: "Missing email or password" });
+  
+  try {
+    // Check if the user exists and is a student (or instructor)
+    const [users] = await db.query("SELECT id FROM users WHERE email = ? AND is_deleted = 0", [email]);
+    
+    if (users.length === 0) {
+        return res.status(404).json({ success: false, error: "No active account found with this email." });
+    }
+
+    const userId = users[0].id;
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the database
+    await db.query("UPDATE users SET password_hash = ? WHERE id = ?", [hashedPassword, userId]);
+    
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Database error: " + err.message });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => { console.log(`🚀 Server running on http://localhost:${PORT}`); });
