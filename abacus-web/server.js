@@ -18,9 +18,6 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-
-app.use(express.json());
-app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const storage = multer.diskStorage({
@@ -42,24 +39,26 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
+// ✅ AUTO-MIGRATE RETAKE COLUMNS
 (async () => {
   try {
     const connection = await db.getConnection();
     console.log("✅ Connected to MySQL Database: " + process.env.DB_NAME);
+    try { await connection.query("ALTER TABLE quizzes ADD COLUMN is_retake BOOLEAN DEFAULT FALSE"); } catch(e){}
+    try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
+    try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
+    try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     connection.release();
   } catch (err) {
     console.error("❌ Database Connection Failed:", err.message);
   }
 })();
 
-// --- NEW: HELPER TO GET THE CURRENT ACTIVE ACADEMIC TERM ---
 const getActiveTermId = async () => {
   try {
     const [rows] = await db.query("SELECT id FROM academic_terms WHERE is_active = 1 LIMIT 1");
     return rows.length > 0 ? rows[0].id : 1;
-  } catch(e) {
-    return 1;
-  }
+  } catch(e) { return 1; }
 };
 
 // ==========================
@@ -120,6 +119,13 @@ app.get('/users', async (req, res) => {
 app.get('/trash/students', async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM users WHERE role = 'STUDENT' AND is_deleted = 1 ORDER BY full_name ASC");
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/trash/instructors', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM users WHERE role = 'INSTRUCTOR' AND is_deleted = 1 ORDER BY full_name ASC");
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -188,13 +194,6 @@ app.post('/admin-reset-password', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: "Database error" }); }
 });
 
-app.get('/trash/instructors', async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM users WHERE role = 'INSTRUCTOR' AND is_deleted = 1 ORDER BY full_name ASC");
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ==========================================
 // ACADEMIC SETUP & CLASS MANAGEMENT (ADMIN)
 // ==========================================
@@ -247,6 +246,7 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally { connection.release(); }
 });
+
 app.put('/academic-setup/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   const { value } = req.body; 
@@ -270,24 +270,17 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
   try {
     await connection.beginTransaction();
     
-    // 1. Switch the active term (This automatically archives all old Quizzes, Modules, etc.)
     await connection.query("UPDATE academic_terms SET is_active = 0"); 
     await connection.query("UPDATE academic_terms SET is_active = 1 WHERE id = ?", [id]); 
     
-    // 2. Term Rollover: Clear Instructor Assigned Classes for the new semester
     if (resetInstructors) {
         await connection.query("UPDATE users SET assigned_classes = '[]' WHERE role = 'INSTRUCTOR'");
     }
     
-    // 3. Term Rollover: Reset Students so they must upload a new COR via the mobile app
     if (resetStudents) {
         await connection.query(`
             UPDATE users 
-            SET section = 'To be assigned', 
-                cor_status = 'Pending', 
-                cor_image_url = NULL, 
-                pending_year = NULL, 
-                pending_section = NULL 
+            SET section = 'To be assigned', cor_status = 'Pending', cor_image_url = NULL, pending_year = NULL, pending_section = NULL 
             WHERE role = 'STUDENT' AND is_deleted = 0
         `);
     }
@@ -300,96 +293,6 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
   } finally { 
     connection.release(); 
   }
-});
-
-// ==========================
-// INSTRUCTOR: QUIZ MANAGEMENT
-// ==========================
-app.get('/quizzes', async (req, res) => {
-  try {
-    const activeTermId = await getActiveTermId();
-    // ✅ Include all statuses so the frontend Gradebook and App can disable them appropriately
-    const [quizzes] = await db.query(`
-      SELECT quizzes.*, users.full_name as author, IF(quizzes.term_id = ?, 0, 1) as is_archived
-      FROM quizzes 
-      JOIN users ON quizzes.created_by = users.id 
-      ORDER BY created_at DESC
-    `, [activeTermId]);
-    res.json(quizzes);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.delete('/quizzes/:id', async (req, res) => {
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
-    // ✅ Cascade the delete to wipe out grades associated with this quiz permanently
-    await connection.query("DELETE FROM student_grades WHERE quiz_id = ?", [req.params.id]);
-    await connection.query("DELETE FROM quizzes WHERE id = ?", [req.params.id]);
-    await connection.commit();
-    res.json({ success: true });
-  } catch (err) { 
-    await connection.rollback();
-    res.status(500).json({ error: err.message }); 
-  } finally {
-    connection.release();
-  }
-});
-
-app.post('/quizzes', async (req, res) => {
-  const { title, description, targetYear, targetSection, dueDate, createdBy, questions } = req.body;
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
-    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
-
-    const [quizResult] = await connection.query(
-      `INSERT INTO quizzes (title, description, target_year, target_section, due_date, created_by, term_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [title, description, targetYear, targetSection, dueDate, createdBy, activeTermId]
-    );
-    const quizId = quizResult.insertId;
-
-    for (const q of questions) {
-      const [qResult] = await connection.query(
-        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) VALUES (?, ?, ?, ?, ?, ?)`,
-        [quizId, q.questionText, q.type, q.correctIndex || 0, q.correctAnswerText || '', q.required]
-      );
-      const qId = qResult.insertId;
-
-      if (q.options && q.options.length > 0) {
-        for (let i = 0; i < q.options.length; i++) {
-          await connection.query(
-            `INSERT INTO question_options (question_id, option_text, option_order) VALUES (?, ?, ?)`,
-            [qId, q.options[i], i]
-          );
-        }
-      }
-    }
-    await connection.commit();
-    res.json({ success: true, quizId });
-  } catch (err) {
-    await connection.rollback();
-    res.status(500).json({ error: err.message });
-  } finally { connection.release(); }
-});
-
-app.patch('/quizzes/:id/status', async (req, res) => {
-  try {
-    const [result] = await db.query("UPDATE quizzes SET status = ? WHERE id = ?", [req.body.status, req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ success: false, error: "Quiz not found" });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
-});
-
-app.patch('/quizzes/:id/details', async (req, res) => {
-  const { title, description, targetYear, targetSection, dueDate } = req.body;
-  try {
-    await db.query(
-      `UPDATE quizzes SET title=?, description=?, target_year=?, target_section=?, due_date=? WHERE id=?`,
-      [title, description, targetYear, targetSection, dueDate, req.params.id]
-    );
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
@@ -408,14 +311,13 @@ app.get('/instructor/dashboard/:id', async (req, res) => {
       const conditions = assignedClasses.map(() => `(year_level = ? AND section = ?)`).join(' OR ');
       const params = assignedClasses.flatMap(c => [c.year, c.section]);
       const [students] = await db.query(
-        `SELECT id, full_name, student_id, program, year_level, section, status FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND (${conditions})`,
+        `SELECT id, full_name, student_id, program, year_level, section, status, cor_image_url FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND (${conditions})`,
         params
       );
       myStudents = students;
     }
 
     const activeTermId = await getActiveTermId();
-    // ✅ Calculate is_archived for the dashboard
     const [quizzes] = await db.query(
       `SELECT *, IF(term_id = ?, 0, 1) as is_archived FROM quizzes WHERE created_by = ? ORDER BY created_at DESC`,
       [activeTermId, instructorId]
@@ -425,7 +327,74 @@ app.get('/instructor/dashboard/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// UPDATE QUIZ
+// ==========================
+// INSTRUCTOR: QUIZ MANAGEMENT
+// ==========================
+app.get('/quizzes', async (req, res) => {
+  try {
+    const activeTermId = await getActiveTermId();
+    const [quizzes] = await db.query(`
+      SELECT quizzes.*, users.full_name as author, IF(quizzes.term_id = ?, 0, 1) as is_archived
+      FROM quizzes 
+      JOIN users ON quizzes.created_by = users.id 
+      ORDER BY created_at DESC
+    `, [activeTermId]);
+    res.json(quizzes);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/quizzes/:id', async (req, res) => {
+  try {
+    const [quiz] = await db.query("SELECT * FROM quizzes WHERE id = ?", [req.params.id]);
+    if (quiz.length === 0) return res.status(404).json({ error: "Quiz not found" });
+
+    const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [req.params.id]);
+    for (const q of questions) {
+      const [options] = await db.query("SELECT option_text FROM question_options WHERE question_id = ? ORDER BY option_order ASC", [q.id]);
+      q.options = options.map(o => o.option_text);
+      q.correctIndex = q.correct_index;
+      q.correctAnswerText = q.correct_answer_text;
+      q.questionText = q.question_text;
+      q.type = q.question_type;
+    }
+    res.json({ ...quiz[0], questions });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/quizzes', async (req, res) => {
+  const { title, description, targetYear, targetSection, dueDate, createdBy, questions, isRetake, parentQuizId, targetStudents, penalty } = req.body;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const activeTermId = await getActiveTermId();
+
+    const [quizResult] = await connection.query(
+      `INSERT INTO quizzes (title, description, target_year, target_section, due_date, created_by, term_id, is_retake, parent_quiz_id, target_students, penalty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title, description, targetYear, targetSection, dueDate, createdBy, activeTermId, isRetake ? 1 : 0, parentQuizId || null, targetStudents ? JSON.stringify(targetStudents) : null, penalty || 0]
+    );
+    const quizId = quizResult.insertId;
+
+    for (const q of questions) {
+      const [qResult] = await connection.query(
+        `INSERT INTO quiz_questions (quiz_id, question_text, question_type, correct_index, correct_answer_text, is_required) VALUES (?, ?, ?, ?, ?, ?)`,
+        [quizId, q.questionText, q.type, q.correctIndex || 0, q.correctAnswerText || '', q.required]
+      );
+      const qId = qResult.insertId;
+
+      if (q.options && q.options.length > 0) {
+        for (let i = 0; i < q.options.length; i++) {
+          await connection.query(`INSERT INTO question_options (question_id, option_text, option_order) VALUES (?, ?, ?)`, [qId, q.options[i], i]);
+        }
+      }
+    }
+    await connection.commit();
+    res.json({ success: true, quizId });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
+  } finally { connection.release(); }
+});
+
 app.put('/quizzes/:id', async (req, res) => {
   const { id } = req.params;
   const { title, description, targetYear, targetSection, dueDate, questions } = req.body;
@@ -458,34 +427,53 @@ app.put('/quizzes/:id', async (req, res) => {
   } finally { connection.release(); }
 });
 
-app.get('/quizzes/:id', async (req, res) => {
+app.patch('/quizzes/:id/status', async (req, res) => {
   try {
-    const [quiz] = await db.query("SELECT * FROM quizzes WHERE id = ?", [req.params.id]);
-    if (quiz.length === 0) return res.status(404).json({ error: "Quiz not found" });
+    const [result] = await db.query("UPDATE quizzes SET status = ? WHERE id = ?", [req.body.status, req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, error: "Quiz not found" });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
 
-    const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [req.params.id]);
-    for (const q of questions) {
-      const [options] = await db.query("SELECT option_text FROM question_options WHERE question_id = ? ORDER BY option_order ASC", [q.id]);
-      q.options = options.map(o => o.option_text);
-      q.correctIndex = q.correct_index;
-      q.correctAnswerText = q.correct_answer_text;
-      q.questionText = q.question_text;
-      q.type = q.question_type;
-    }
-    res.json({ ...quiz[0], questions });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+app.delete('/quizzes/:id', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query("DELETE FROM student_grades WHERE quiz_id = ?", [req.params.id]);
+    await connection.query("DELETE FROM quizzes WHERE id = ?", [req.params.id]);
+    await connection.commit();
+    res.json({ success: true });
+  } catch (err) { 
+    await connection.rollback();
+    res.status(500).json({ error: err.message }); 
+  } finally { connection.release(); }
 });
 
 app.post('/grades', async (req, res) => {
   const { userId, quizId, score, totalItems, subjectTitle } = req.body;
   try {
+    const [quizRows] = await db.query("SELECT * FROM quizzes WHERE id = ?", [quizId]);
+    const quiz = quizRows[0];
+
+    let finalScore = score;
+    let finalTitle = subjectTitle;
+
+    // 🚀 RETAKE ENGINE: Apply deductions and overwrite old grade!
+    if (quiz && quiz.is_retake) {
+       const deduction = (score * quiz.penalty) / 100;
+       finalScore = Math.max(0, score - deduction); 
+       
+       await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
+       finalTitle = subjectTitle + ` (-${quiz.penalty}% Penalty Applied)`;
+    }
+
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
     if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
-    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
+    const activeTermId = await getActiveTermId(); 
     await db.query(
       `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, quizId, score, totalItems || 100, subjectTitle, activeTermId]
+      [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId]
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -494,7 +482,6 @@ app.post('/grades', async (req, res) => {
 app.get('/grades', async (req, res) => {
   try {
     const activeTermId = await getActiveTermId();
-    // ✅ Attach is_archived to grades
     const [grades] = await db.query(`
       SELECT id, user_id, quiz_id, score as grade, total_items, subject_title as subjectTitle, date_taken as dateTaken, IF(term_id = ?, 0, 1) as is_archived
       FROM student_grades ORDER BY date_taken DESC
@@ -515,23 +502,21 @@ app.delete('/grades/:id', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ANNOUNCEMENT ROUTES ---
-app.put('/announcements/:id', async (req, res) => {
-  const { title, content, targetYear, targetSection } = req.body;
+// ==========================
+// ANNOUNCEMENT ROUTES
+// ==========================
+app.get('/announcements/all', async (req, res) => {
   try {
-    await db.query("UPDATE announcements SET title = ?, content = ?, target_year = ?, target_section = ? WHERE id = ?", [title, content, targetYear, targetSection, req.params.id]);
-    res.json({ success: true });
+    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND author_role = 'ADMIN' ORDER BY created_at DESC");
+    res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-
-// --- ANNOUNCEMENT ROUTES ---
 
 app.get('/announcements/student/:id', async (req, res) => {
   try {
     const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     
-    // ✅ Removed 'term_id' filter so announcements persist across semesters
     const [announcements] = await db.query(`
       SELECT * FROM announcements 
       WHERE is_deleted = 0 
@@ -545,26 +530,13 @@ app.get('/announcements/student/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/announcements/all', async (req, res) => {
-  try {
-    // ✅ Removed 'term_id' filter
-    const [rows] = await db.query("SELECT * FROM announcements WHERE is_deleted = 0 AND author_role = 'ADMIN' ORDER BY created_at DESC");
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.get('/announcements/admin-to-instructor/:instructorId', async (req, res) => {
   try {
     const instructorId = req.params.instructorId;
-    
-    // ✅ Removed 'term_id' filter
     const [rows] = await db.query(`
       SELECT * FROM announcements 
       WHERE is_deleted = 0 AND author_role = 'ADMIN' 
-      AND (
-        target_year = 'ALL' 
-        OR (target_year = 'INSTRUCTORS' AND (target_section = 'ALL' OR target_section = ?))
-      ) 
+      AND (target_year = 'ALL' OR (target_year = 'INSTRUCTORS' AND (target_section = 'ALL' OR target_section = ?))) 
       ORDER BY created_at DESC
     `, [instructorId]);
     res.json(rows);
@@ -573,20 +545,12 @@ app.get('/announcements/admin-to-instructor/:instructorId', async (req, res) => 
 
 app.get('/announcements/instructor/:id', async (req, res) => {
   try {
-    // ✅ Removed 'term_id' filter, setting is_archived to 0 permanently for UI consistency
     const [rows] = await db.query("SELECT *, 0 as is_archived FROM announcements WHERE is_deleted = 0 AND author_id = ? ORDER BY created_at DESC", [req.params.id]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Skip trash functions to keep clean
-app.put('/announcements/:id/soft-delete', async (req, res) => {
-  try { await db.query("UPDATE announcements SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.post('/announcements', async (req, res) => {
-    // We now accept 'targets' (Array) for multiple posts, OR targetYear/targetSection for single posts
     const { title, content, authorRole, authorName, authorId, targets, targetYear, targetSection } = req.body;
     const connection = await db.getConnection();
     
@@ -595,7 +559,6 @@ app.post('/announcements', async (req, res) => {
         const activeTermId = await getActiveTermId(); 
 
         if (targets && Array.isArray(targets) && targets.length > 0) {
-            // ✅ Loop through the array and post to multiple classes/instructors at once
             for (const t of targets) {
                 await connection.query(
                     "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section, term_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -603,26 +566,35 @@ app.post('/announcements', async (req, res) => {
                 );
             }
         } else {
-            // ✅ Single insert (Used for backward compatibility and Editing)
             await connection.query(
                 "INSERT INTO announcements (title, content, author_role, author_name, author_id, target_year, target_section, term_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [title, content, authorRole, authorName, authorId || null, targetYear, targetSection, activeTermId]
             );
         }
-        
         await connection.commit();
         res.json({success: true});
     } catch(err) { 
         await connection.rollback();
         res.status(500).json({error: err.message}); 
-    } finally {
-        connection.release();
-    }
+    } finally { connection.release(); }
 });
 
-// ----------------------------------------------------
+app.put('/announcements/:id', async (req, res) => {
+  const { title, content, targetYear, targetSection } = req.body;
+  try {
+    await db.query("UPDATE announcements SET title = ?, content = ?, target_year = ?, target_section = ? WHERE id = ?", [title, content, targetYear, targetSection, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/announcements/:id/soft-delete', async (req, res) => {
+  try { await db.query("UPDATE announcements SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?", [req.params.id]); res.json({ success: true }); } 
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================
 // WHITELIST MANAGEMENT
-// ----------------------------------------------------
+// ==========================
 app.post('/upload-allowed-students', async (req, res) => {
   const { students } = req.body;
   if (!students || !Array.isArray(students)) return res.status(400).json({ error: "Invalid data format" });
@@ -654,9 +626,7 @@ app.put('/allowed-students/:id', async (req, res) => {
   try {
     await db.query("UPDATE allowed_students SET student_id = ?, email = ? WHERE id = ?", [studentId, email, req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/register', async (req, res) => {
@@ -691,7 +661,7 @@ app.post('/modules', upload.single('pdfFile'), async (req, res) => {
     let classesJSON = '[]';
     if (targetClasses) { try { classesJSON = JSON.stringify(JSON.parse(targetClasses)); } catch(e) {} }
 
-    const activeTermId = await getActiveTermId(); // ✅ Tag with active term
+    const activeTermId = await getActiveTermId(); 
     await db.query(
       `INSERT INTO modules (title, description, file_name, file_url, target_classes, uploaded_by, term_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [title, description, fileName, fileUrl, classesJSON, uploadedBy, activeTermId]
@@ -726,7 +696,6 @@ app.get('/modules/student/:id', async (req, res) => {
     const { year_level, section } = students[0];
 
     const activeTermId = await getActiveTermId();
-    // ✅ Removed the hard term_id filter. Added is_archived flag.
     const [modules] = await db.query(`
       SELECT modules.*, users.full_name as author, IF(modules.term_id = ?, 0, 1) as is_archived 
       FROM modules 
@@ -758,9 +727,7 @@ app.post('/promote-student', upload.single('corImage'), async (req, res) => {
     
     if (student.cor_image_url) {
         const oldFilePath = path.join(__dirname, student.cor_image_url);
-        if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-        }
+        if (fs.existsSync(oldFilePath)) { fs.unlinkSync(oldFilePath); }
     }
 
     const safeName = student.full_name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
@@ -769,7 +736,6 @@ app.post('/promote-student', upload.single('corImage'), async (req, res) => {
     
     const newFileName = `${safeName}_${safeId}${ext}`;
     const newPath = path.join(__dirname, 'uploads', newFileName);
-    
     fs.renameSync(req.file.path, newPath);
     
     const corUrl = `/uploads/${newFileName}`;
@@ -782,16 +748,11 @@ app.post('/promote-student', upload.single('corImage'), async (req, res) => {
 
     res.json({ success: true, message: "Promotion requested successfully!" });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-    }
+    if (req.file && fs.existsSync(req.file.path)) { fs.unlinkSync(req.file.path); }
     res.status(500).json({ error: err.message });
   }
 });
 
-// ==========================================
-// ADMIN: PROMOTION VALIDATION ROUTES
-// ==========================================
 app.get('/admin/promotions/pending', async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -801,33 +762,38 @@ app.get('/admin/promotions/pending', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- GET PENDING PROMOTIONS FOR A SPECIFIC INSTRUCTOR ---
-app.get('/instructor/:instructorId/promotions/pending', (req, res) => {
+app.get('/instructor/:instructorId/promotions/pending', async (req, res) => {
     const { instructorId } = req.params;
-    
-    // Join the users (students) table with the classes table based on the requested promotion target
-    const query = `
-        SELECT DISTINCT u.id, u.full_name, u.student_id, u.program, u.year_level, u.section, 
-               u.pending_year, u.pending_section, u.pending_status, u.cor_image_url
-        FROM users u
-        JOIN classes c ON u.program = c.program 
-             AND u.pending_year = c.year_level 
-             AND u.pending_section = c.section
-        WHERE u.role = 'student' 
-          AND u.pending_status = 'pending'
-          AND c.instructor_id = ?
-    `;
-    
-    db.query(query, [instructorId], (err, results) => {
-        if (err) {
-            console.error("Error fetching instructor promotions:", err);
-            return res.status(500).json({ error: "Database error fetching instructor promotions" });
-        }
+    try {
+        const [instructors] = await db.query("SELECT assigned_classes FROM users WHERE id = ?", [instructorId]);
+        if (instructors.length === 0) return res.status(404).json({ error: "Instructor not found" });
+        
+        let assignedClasses = [];
+        try {
+            assignedClasses = instructors[0].assigned_classes ? JSON.parse(instructors[0].assigned_classes) : [];
+            if (typeof assignedClasses === 'string') assignedClasses = JSON.parse(assignedClasses);
+        } catch(e) { assignedClasses = []; }
+
+        if (assignedClasses.length === 0) return res.json([]); 
+
+        const conditions = assignedClasses.map(() => `(pending_year = ? AND pending_section = ?)`).join(' OR ');
+        const params = assignedClasses.flatMap(c => [c.year, c.section]);
+
+        const query = `
+            SELECT id, full_name, student_id, program, year_level, section, 
+                   pending_year, pending_section, pending_status, cor_image_url, cor_status
+            FROM users 
+            WHERE role = 'STUDENT' AND cor_status = 'Pending' AND (${conditions})
+        `;
+        
+        const [results] = await db.query(query, params);
         res.json(results);
-    });
+    } catch (err) {
+        console.error("Error fetching instructor promotions:", err);
+        res.status(500).json({ error: "Database error fetching instructor promotions" });
+    }
 });
 
-// SINGLE APPROVE
 app.put('/admin/promotions/:id/approve', async (req, res) => {
   try {
     await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
@@ -835,34 +801,65 @@ app.put('/admin/promotions/:id/approve', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 🚀 NEW: MASS APPROVE
 app.put('/admin/promotions/mass-approve', async (req, res) => {
   const { ids } = req.body;
   if (!ids || ids.length === 0) return res.status(400).json({ error: "No IDs provided" });
   try {
-    // Updates all selected students at once!
     await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id IN (?)", [ids]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// SINGLE REJECT
 app.put('/admin/promotions/:id/reject', async (req, res) => {
   try {
     const [users] = await db.query("SELECT cor_image_url FROM users WHERE id = ?", [req.params.id]);
-    
     if (users.length > 0 && users[0].cor_image_url) {
         const filePath = path.join(__dirname, users[0].cor_image_url);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath); 
-        }
+        if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
     }
-
     await db.query("UPDATE users SET cor_status = 'Rejected', cor_image_url = NULL, pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==========================================
+// AUTOMATED SYSTEM: MISSED QUIZ SCANNER
+// ==========================================
+const autoAssignMissedZeros = async () => {
+  try {
+      const activeTermId = await getActiveTermId();
+      
+      const [expiredQuizzes] = await db.query(
+          `SELECT * FROM quizzes WHERE term_id = ? AND due_date < NOW() AND status != 'deleted' AND is_retake = 0`,
+          [activeTermId]
+      );
+
+      for (const quiz of expiredQuizzes) {
+          let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0`;
+          let params = [];
+          if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
+          if (quiz.target_section !== 'ALL') { query += ` AND section = ?`; params.push(quiz.target_section); }
+
+          const [targetStudents] = await db.query(query, params);
+
+          for (const student of targetStudents) {
+              const [existingGrade] = await db.query(`SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?`, [student.id, quiz.id]);
+
+              if (existingGrade.length === 0) {
+                  const missedTitle = quiz.title + " (Missed)";
+                  await db.query(
+                      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, 0, 100, ?, ?)`,
+                      [student.id, quiz.id, missedTitle, activeTermId]
+                  );
+                  console.log(`[Auto-Grader] Assigned 0 to Student ID: ${student.id} for Quiz: ${quiz.title}`);
+              }
+          }
+      }
+  } catch (error) { console.error("[Auto-Grader Error]", error); }
+};
+
+setTimeout(autoAssignMissedZeros, 5000);
+setInterval(autoAssignMissedZeros, 5 * 60 * 1000);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => { console.log(`🚀 Server running on http://localhost:${PORT}`); });

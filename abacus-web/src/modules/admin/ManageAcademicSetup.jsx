@@ -230,7 +230,7 @@ export default function ManageAcademicSetup() {
 
                 <div style={{padding: '24px'}}>
                     <p style={{fontSize: '14px', color: '#4b5563', lineHeight: '1.6', marginBottom: '20px'}}>
-                        Activating a new academic term will automatically archive all active <strong>Quizzes, Modules, Grades, and Announcements</strong> from the previous semester. They will be moved to the "Archives" tab for Instructors and Students.
+                        Activating a new academic term will automatically archive all active <strong>Quizzes, Modules, and Grades</strong> from the previous semester. They will be moved to the "Archives" tab for Instructors and Students.
                     </p>
 
                     <div style={{background: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb'}}>

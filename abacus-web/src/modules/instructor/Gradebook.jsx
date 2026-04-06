@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   Search, Filter, Eye, Edit3, 
   Save, X, CheckCircle, AlertCircle, Users, Ban, Trash2, History, LayoutGrid
@@ -12,7 +12,6 @@ export default function Gradebook() {
   const [loading, setLoading] = useState(true);
   const [quizStatusMap, setQuizStatusMap] = useState({}); 
 
-  // ✅ NEW: View Mode State (Active vs Archived)
   const [viewMode, setViewMode] = useState('active'); 
 
   const [search, setSearch] = useState("");
@@ -33,8 +32,6 @@ export default function Gradebook() {
     let validGradesCount = 0;
     
     gradesList.forEach(g => {
-      // Logic: If viewing active, only count non-archived grades that are NOT deleted.
-      // If viewing archived, only count archived grades.
       const matchArchiveState = isArchivedView ? g.is_archived === 1 : g.is_archived === 0;
       
       if (matchArchiveState && currentStatusMap[g.quiz_id] !== 'deleted') {
@@ -49,45 +46,47 @@ export default function Gradebook() {
     return ((totalScore / totalItems) * 100).toFixed(1);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const userStr = localStorage.getItem('user');
-        if (!userStr) { navigate('/login'); return; }
-        const user = JSON.parse(userStr);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) { navigate('/login'); return; }
+      const user = JSON.parse(userStr);
 
-        const dashboardRes = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
-        const dashboardData = await dashboardRes.json();
-        if (dashboardData.error) throw new Error(dashboardData.error);
-        const assignedStudents = dashboardData.students || [];
+      const dashboardRes = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const dashboardData = await dashboardRes.json();
+      if (dashboardData.error) throw new Error(dashboardData.error);
+      const assignedStudents = dashboardData.students || [];
 
-        const gradesRes = await fetch('http://localhost:5000/grades');
-        const gradesData = await gradesRes.json();
+      const gradesRes = await fetch('http://localhost:5000/grades');
+      const gradesData = await gradesRes.json();
 
-        // The dashboard fetch already includes quizzes (both active and archived depending on term)
-        const quizData = dashboardData.quizzes || [];
+      const quizData = dashboardData.quizzes || [];
 
-        const statusMap = {};
-        quizData.forEach(q => { statusMap[q.id] = q.status; });
-        setQuizStatusMap(statusMap);
+      const statusMap = {};
+      quizData.forEach(q => { statusMap[q.id] = q.status; });
+      setQuizStatusMap(statusMap);
 
-        const mergedData = assignedStudents.map(student => {
-            const studentGrades = gradesData.filter(g => g.user_id === student.id);
-            return {
-                id: student.id, fullName: student.full_name, email: student.email,
-                program: student.program || 'BSIT', yearLevel: student.year_level,
-                section: student.section, gradesList: studentGrades 
-            };
-        });
+      const mergedData = assignedStudents.map(student => {
+          // The zeros are now in the database natively! Just pull them straight out.
+          const studentGrades = gradesData.filter(g => g.user_id === student.id);
 
-        setStudents(mergedData);
-        setFilteredStudents(mergedData);
-      } catch (err) { console.error("Error fetching data:", err); } 
-      finally { setLoading(false); }
-    };
-    fetchData();
+          return {
+              id: student.id, fullName: student.full_name, email: student.email,
+              program: student.program || 'BSIT', yearLevel: student.year_level,
+              section: student.section, gradesList: studentGrades 
+          };
+      });
+
+      setStudents(mergedData);
+      setFilteredStudents(mergedData);
+    } catch (err) { console.error("Error fetching data:", err); } 
+    finally { setLoading(false); }
   }, [navigate]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const uniquePrograms = ['All', ...new Set(students.map(s => s.program))];
   const uniqueYears = ['All', ...new Set(students.map(s => s.yearLevel))].sort();
@@ -132,6 +131,9 @@ export default function Gradebook() {
     if (!selectedStudent) return;
     try {
       const updatePromises = editGrades.map(grade => {
+          // If the teacher edits a Missed quiz and gives it a grade, we clean up the title.
+          const cleanTitle = grade.subjectTitle ? grade.subjectTitle.replace(' (Missed)', '') : '';
+          
           return fetch(`http://localhost:5000/grades/${grade.id}`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ score: grade.grade, total_items: grade.total_items || 100 })
@@ -139,10 +141,7 @@ export default function Gradebook() {
       });
       await Promise.all(updatePromises);
       
-      const updatedStudents = students.map(s => s.id === selectedStudent.id ? { ...s, gradesList: editGrades } : s);
-      setStudents(updatedStudents);
-      setFilteredStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, gradesList: editGrades } : s));
-      
+      fetchData();
       setSelectedStudent(null); setIsEditing(false); 
       alert("Grades updated successfully!");
     } catch (error) { alert("Failed to save grades."); }
@@ -207,7 +206,6 @@ export default function Gradebook() {
             ) : filteredStudents.length === 0 ? ( <tr><td colSpan="5" className="text-center p-4">No students assigned to your classes yet.</td></tr>
             ) : (
               filteredStudents.map(student => {
-                // Filter grades locally to calculate counts
                 const targetGrades = student.gradesList.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0);
                 const avg = calculateAverage(student.gradesList, quizStatusMap, viewMode === 'archived');
 
@@ -254,18 +252,34 @@ export default function Gradebook() {
                         const currentScore = parseFloat(grade.grade || 0);
                         const currentTotal = parseFloat(grade.total_items || 100);
                         const percentage = currentTotal > 0 ? ((currentScore / currentTotal) * 100) : 0;
-                        
-                        // We need the absolute index for the edit/delete mapping, not the filtered index
                         const absoluteIdx = editGrades.findIndex(eg => eg.id === grade.id);
+                        
+                        // Check if the backend auto-grader tagged it as Missed
+                        const isMissed = grade.subjectTitle && grade.subjectTitle.includes('(Missed)');
 
                         return (
                           <tr key={grade.id} style={isDeleted ? {backgroundColor: '#f9f9f9', color: '#999'} : {}}>
-                            <td><div style={{display:'flex', alignItems:'center', gap:'8px'}}><span style={{fontWeight: isDeleted ? 'normal' : '600', color: isDeleted ? '#999' : '#333', textDecoration: isDeleted ? 'line-through' : 'none'}}>{grade.subjectTitle}</span>{isDeleted && <span style={{fontSize:'10px', background:'#eee', color:'#666', padding:'2px 6px', borderRadius:'4px', display:'flex', alignItems:'center', gap:'3px'}}><Ban size={10}/> Disabled</span>}</div></td>
-                            <td style={{color: isDeleted ? '#bbb' : '#666', fontSize: '13px'}}>{grade.dateTaken ? new Date(grade.dateTaken).toLocaleDateString() : "-"}</td>
-                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.grade} onChange={(e) => handleGradeChange(absoluteIdx, 'grade', e.target.value)}/> : <span className="score-display" style={{color: isDeleted ? '#999' : '#111'}}>{currentScore}</span>}</td>
+                            <td>
+                                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                                    <span style={{fontWeight: isDeleted ? 'normal' : '600', color: isDeleted ? '#999' : (isMissed ? '#ef4444' : '#333'), textDecoration: isDeleted ? 'line-through' : 'none'}}>
+                                        {grade.subjectTitle}
+                                    </span>
+                                    {isDeleted && <span style={{fontSize:'10px', background:'#eee', color:'#666', padding:'2px 6px', borderRadius:'4px', display:'flex', alignItems:'center', gap:'3px'}}><Ban size={10}/> Disabled</span>}
+                                </div>
+                            </td>
+                            <td style={{color: isDeleted ? '#bbb' : (isMissed ? '#ef4444' : '#666'), fontSize: '13px'}}>
+                                {isMissed ? "Expired" : (grade.dateTaken ? new Date(grade.dateTaken).toLocaleDateString() : "-")}
+                            </td>
+                            <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.grade} onChange={(e) => handleGradeChange(absoluteIdx, 'grade', e.target.value)}/> : <span className="score-display" style={{color: isDeleted ? '#999' : (isMissed ? '#ef4444' : '#111')}}>{currentScore}</span>}</td>
                             <td className="text-center">{isEditing && !isDeleted ? <input type="number" className="sheet-input-score" style={{width: '60px', textAlign: 'center'}} value={grade.total_items || 100} onChange={(e) => handleGradeChange(absoluteIdx, 'total_items', e.target.value)}/> : <span style={{color: isDeleted ? '#999' : '#666'}}>{currentTotal}</span>}</td>
                             <td className="text-center">{percentage >= 75 ? <span className={`status-badge ${isDeleted ? '' : 'pass'}`} style={isDeleted ? {background:'#eee', color:'#888'} : {}}><CheckCircle size={12}/> Passed</span> : <span className={`status-badge ${isDeleted ? '' : 'fail'}`} style={isDeleted ? {background:'#eee', color:'#888'} : {}}><AlertCircle size={12}/> Failed</span>}</td>
-                            {isEditing && <td className="text-center"><button onClick={() => handleDeleteGrade(absoluteIdx)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer'}} title="Delete Grade Record"><Trash2 size={18}/></button></td>}
+                            {isEditing && (
+                                <td className="text-center">
+                                    {!isDeleted && (
+                                        <button onClick={() => handleDeleteGrade(absoluteIdx)} style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer'}} title="Delete Grade Record"><Trash2 size={18}/></button>
+                                    )}
+                                </td>
+                            )}
                           </tr>
                         );
                       })

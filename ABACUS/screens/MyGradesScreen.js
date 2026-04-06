@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, ActivityIndicator, TouchableOpacity, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
@@ -11,36 +11,39 @@ export default function MyGradesScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [quizStatusMap, setQuizStatusMap] = useState({}); 
 
-  // ✅ NEW: Toggle State
-  const [viewMode, setViewMode] = useState('active'); // 'active' or 'archived'
+  const [viewMode, setViewMode] = useState('active'); 
 
-  useEffect(() => {
-    fetchGradesAndStatus();
-  }, []);
-
-  const fetchGradesAndStatus = async () => {
+  const fetchGradesAndStatus = useCallback(async () => {
     try {
       if (!user) return;
+      setLoading(true);
 
-      const gradesResponse = await fetch(`${API_URL}/grades`);
+      const [gradesResponse, quizzesResponse] = await Promise.all([
+          fetch(`${API_URL}/grades`),
+          fetch(`${API_URL}/quizzes`)
+      ]);
+
       const allGrades = await gradesResponse.json();
-
-      const myGrades = allGrades.filter(g => g.user_id === user.id);
-      setGrades(myGrades);
-
-      const quizzesResponse = await fetch(`${API_URL}/quizzes`);
       const allQuizzes = await quizzesResponse.json();
+
+      // The 0s are native to the DB now. Just pull them normally!
+      const myGrades = allGrades.filter(g => g.user_id === user.id);
       
       const statusMap = {};
       allQuizzes.forEach((q) => { statusMap[q.id] = q.status; });
       setQuizStatusMap(statusMap);
+      setGrades(myGrades);
 
     } catch (error) {
       console.error("Error fetching grades:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchGradesAndStatus();
+  }, [fetchGradesAndStatus]);
 
   const renderGradeItem = ({ item }) => {
     const score = parseFloat(item.grade || 0);
@@ -48,38 +51,54 @@ export default function MyGradesScreen({ navigation }) {
     const percentage = total > 0 ? (score / total) * 100 : 0;
     const isPassing = percentage >= 75;
     const isDisabled = quizStatusMap[item.quiz_id] === 'deleted';
+    
+    // Check if the backend auto-grader tagged it as missed
+    const isMissed = item.subjectTitle && item.subjectTitle.includes('(Missed)');
 
     return (
-      <View style={[styles.gradeCard, isDisabled && styles.disabledCard, viewMode === 'archived' && {borderColor: '#e2e8f0', borderWidth: 1, shadowOpacity: 0}]}>
+      <View style={[
+          styles.gradeCard, 
+          isDisabled && styles.disabledCard, 
+          viewMode === 'archived' && {borderColor: '#e2e8f0', borderWidth: 1, shadowOpacity: 0}
+      ]}>
         <View style={styles.cardLeft}>
-          <Text style={[styles.subjectCode, isDisabled && styles.disabledText]}>
-            QUIZ {isDisabled && " (DISABLED)"} {viewMode === 'archived' && !isDisabled && " (ARCHIVED)"}
+          <Text style={[styles.subjectCode, isDisabled && styles.disabledText, isMissed && {color: '#ef4444'}]}>
+            QUIZ 
+            {isDisabled && " (DISABLED)"} 
+            {viewMode === 'archived' && !isDisabled && " (ARCHIVED)"}
+            {isMissed && " (EXPIRED)"}
           </Text>
-          <Text style={[styles.subjectTitle, isDisabled && styles.disabledText]}>
+          <Text style={[styles.subjectTitle, isDisabled && styles.disabledText, isMissed && {color: '#991b1b'}]}>
             {item.subjectTitle}
           </Text>
-          <Text style={styles.date}>
-             {item.dateTaken ? new Date(item.dateTaken).toDateString() : "Just now"}
+          <Text style={[styles.date, isMissed && {color: '#ef4444', fontStyle: 'italic'}]}>
+             {isMissed ? "Deadline Passed" : (item.dateTaken ? new Date(item.dateTaken).toDateString() : "Just now")}
           </Text>
         </View>
         
         <View style={styles.cardRight}>
           <Text style={[
               styles.gradeText, 
-              isDisabled ? styles.disabledText : (viewMode === 'archived' ? {color: '#475569'} : { color: isPassing ? '#104a28' : '#d32f2f' })
+              isDisabled ? styles.disabledText : 
+              isMissed ? {color: '#ef4444'} :
+              (viewMode === 'archived' ? {color: '#475569'} : { color: isPassing ? '#104a28' : '#d32f2f' })
             ]}>
             {score} / {total}
           </Text>
           
           <View style={[
               styles.badge, 
-              isDisabled ? { backgroundColor: '#e0e0e0' } : (viewMode === 'archived' ? {backgroundColor: '#f1f5f9'} : { backgroundColor: isPassing ? '#e8f5e9' : '#ffebee' })
+              isDisabled ? { backgroundColor: '#e0e0e0' } : 
+              isMissed ? { backgroundColor: '#fee2e2' } :
+              (viewMode === 'archived' ? {backgroundColor: '#f1f5f9'} : { backgroundColor: isPassing ? '#e8f5e9' : '#ffebee' })
             ]}>
             <Text style={[
                 styles.badgeText, 
-                isDisabled ? { color: '#888' } : (viewMode === 'archived' ? {color: '#64748b'} : { color: isPassing ? '#104a28' : '#d32f2f' })
+                isDisabled ? { color: '#888' } : 
+                isMissed ? { color: '#ef4444' } :
+                (viewMode === 'archived' ? {color: '#64748b'} : { color: isPassing ? '#104a28' : '#d32f2f' })
               ]}>
-              {isDisabled ? "DELETED" : (isPassing ? "PASSED" : "FAILED")}
+              {isDisabled ? "DELETED" : isMissed ? "MISSED" : (isPassing ? "PASSED" : "FAILED")}
             </Text>
           </View>
         </View>
@@ -87,7 +106,6 @@ export default function MyGradesScreen({ navigation }) {
     );
   };
 
-  // ✅ FILTER BASED ON ARCHIVE FLAG
   const displayedGrades = grades.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0);
 
   return (
@@ -102,7 +120,6 @@ export default function MyGradesScreen({ navigation }) {
         <View style={{width: 24}} /> 
       </View>
 
-      {/* ✅ TOGGLE TABS */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={[styles.tab, viewMode === 'active' && styles.activeTab]} onPress={() => setViewMode('active')}>
           <Text style={[styles.tabText, viewMode === 'active' && styles.activeTabText]}>Current</Text>

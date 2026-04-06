@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, FileText, ArrowRight, BarChart2, Activity, Megaphone, History, Maximize2, X, Filter } from 'lucide-react';
+import { Users, FileText, ArrowRight, BarChart2, Activity, Megaphone, History, Maximize2, X, Filter, ShieldCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './Instructor.css';
 
@@ -11,6 +11,9 @@ export default function InstructorDashboard() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
   
+  // ✅ NEW: Pending Promotions State
+  const [pendingCount, setPendingCount] = useState(0);
+
   // Analytics States
   const [assignedStudents, setAssignedStudents] = useState([]);
   const [allGrades, setAllGrades] = useState([]);
@@ -60,6 +63,13 @@ export default function InstructorDashboard() {
           setAllGrades(gradesData || []);
       } catch (err) { console.error("Could not process grades:", err); }
 
+      // 🚀 4. NEW: Fetch Pending Verification Count
+      try {
+          const pendingRes = await fetch(`http://localhost:5000/instructor/${user.id}/promotions/pending`);
+          const pendingData = await pendingRes.json();
+          setPendingCount(pendingData.length || 0);
+      } catch (err) { console.error("Could not process pending verifications:", err); }
+
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -76,11 +86,9 @@ export default function InstructorDashboard() {
   const targetQuizzes = chartViewMode === 'active' ? activeQuizzes : archivedQuizzes;
   
   const currentChartData = targetQuizzes.filter(q => {
-      // Step 1: Only include quizzes that apply to the selected class filter
       if (chartClassFilter === 'ALL') return true;
       return q.target_year === 'ALL' || `${q.target_year}-${q.target_section}` === chartClassFilter;
   }).map(quiz => {
-      // Step 2: Determine exactly which students should be counted based on the filter
       let filteredStudentsInClass = [];
       
       if (chartClassFilter === 'ALL') {
@@ -93,7 +101,6 @@ export default function InstructorDashboard() {
               );
           }
       } else {
-          // If viewing a specific class, strictly count ONLY students in that class (Even if quiz is "ALL")
           const [fYear, fSec] = chartClassFilter.split('-');
           filteredStudentsInClass = assignedStudents.filter(s => 
               String(s.year_level) === String(fYear) && 
@@ -101,7 +108,6 @@ export default function InstructorDashboard() {
           );
       }
 
-      // Step 3: Check how many of those specific students submitted grades
       let participatingStudentIds = new Set();
       filteredStudentsInClass.forEach(student => {
           const hasTaken = allGrades.some(g => 
@@ -124,7 +130,6 @@ export default function InstructorDashboard() {
   });
 
 
-  // Custom Tooltip for the Recharts BarChart
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -175,13 +180,13 @@ export default function InstructorDashboard() {
               <div style={iconBgStyle('#fefce8')}><FileText size={32} color="#eab308" /></div>
           </div>
 
-          <div style={boxStyle('#8b5cf6')} onClick={() => navigate('/instructor/ManageQuizzes')}>
+          <div style={boxStyle(pendingCount > 0 ? '#f59e0b' : '#8b5cf6')} onClick={() => navigate('/instructor/InstructorPromotions')}>
               <div>
-                  <h4 style={titleStyle}>Archived History</h4>
-                  <span style={numberStyle}>{archivedQuizzes.length}</span>
-                  <div style={linkStyle('#8b5cf6')}>View Archives <ArrowRight size={14} style={{marginLeft:'4px'}}/></div>
+                  <h4 style={titleStyle}>Pending Verification</h4>
+                  <span style={numberStyle}>{pendingCount}</span>
+                  <div style={linkStyle(pendingCount > 0 ? '#f59e0b' : '#8b5cf6')}>Review Pending COR <ArrowRight size={14} style={{marginLeft:'4px'}}/></div>
               </div>
-              <div style={iconBgStyle('#f5f3ff')}><History size={32} color="#8b5cf6" /></div>
+              <div style={iconBgStyle(pendingCount > 0 ? '#fef3c7' : '#f5f3ff')}><ShieldCheck size={32} color={pendingCount > 0 ? '#f59e0b' : '#8b5cf6'} /></div>
           </div>
           
         </div>

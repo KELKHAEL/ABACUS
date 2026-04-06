@@ -12,15 +12,12 @@ export default function ManageQuizzes() {
   const [loading, setLoading] = useState(true);
   
   const [viewingQuiz, setViewingQuiz] = useState(null);
-  
-  // ✅ NEW: View Mode State (Active vs Archived)
   const [viewMode, setViewMode] = useState('active'); 
 
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashList, setTrashList] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
 
-  // --- FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterYear, setFilterYear] = useState('ALL');
   const [filterSection, setFilterSection] = useState('ALL');
@@ -42,8 +39,7 @@ export default function ManageQuizzes() {
       if (user.assigned_classes) {
           try {
               const classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
-              const finalClasses = typeof classes === 'string' ? JSON.parse(classes) : classes;
-              setAssignedClasses(Array.isArray(finalClasses) ? finalClasses : []);
+              setAssignedClasses(Array.isArray(classes) ? classes : []);
           } catch(e) {}
       }
 
@@ -57,30 +53,28 @@ export default function ManageQuizzes() {
 
   useEffect(() => { fetchQuizzesAndUser(); }, []);
 
-  const handleEditQuiz = async (quizId) => {
+  const handleEditQuiz = async (quizId, isRetakeMode = false) => {
     setLoading(true);
     try {
       const res = await fetch(`http://localhost:5000/quizzes/${quizId}`);
       const fullQuiz = await res.json();
       
-      if (fullQuiz.error) {
-        alert(fullQuiz.error); setLoading(false); return;
-      }
+      if (fullQuiz.error) { alert(fullQuiz.error); setLoading(false); return; }
       
-      navigate('/instructor/CreateQuiz', { state: { quizToEdit: fullQuiz } });
+      if (isRetakeMode) {
+          navigate('/instructor/CreateQuiz', { state: { retakeParentQuiz: fullQuiz } });
+      } else {
+          navigate('/instructor/CreateQuiz', { state: { quizToEdit: fullQuiz } });
+      }
     } catch (error) {
-      alert("Failed to load quiz details for editing.");
+      alert("Failed to load quiz details.");
       setLoading(false);
     }
   };
 
-  // --- TRASH LOGIC ---
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const res = await fetch(`http://localhost:5000/trash/quizzes/instructor/${user.id}`);
-        // If you don't have this endpoint yet, we will filter the existing `quizzes` state:
         const trashed = quizzes.filter(q => q.status === 'deleted');
         setTrashList(trashed);
     } catch (error) { console.error("Error fetching trash:", error); } 
@@ -91,7 +85,7 @@ export default function ManageQuizzes() {
 
   const handleMoveToTrash = async (quizId, e) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Move this quiz to the trashbin? Students will no longer see it.")) {
+    if (window.confirm("Move this quiz to the trashbin?")) {
       try {
         const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
@@ -121,18 +115,15 @@ export default function ManageQuizzes() {
     }
   };
 
-  // ✅ EXTRACT UNIQUE YEARS & SECTIONS FOR FILTERS
   const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
   const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
 
-  // ✅ VIEW MODE LOGIC & FILTERING
   const filteredQuizzes = quizzes.filter(q => {
-      // 1. Check if it matches the current tab (Active vs Archived)
       const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
       if (!isTargetMode || q.status === 'deleted') return false;
 
-      // 2. Apply Text/Class Filters
-      const matchSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase());
+      // ✅ FIX: Safe checks to prevent crash if title is somehow null
+      const matchSearch = (q.title || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchYear = filterYear === 'ALL' || q.target_year === 'ALL' || String(q.target_year) === String(filterYear);
       const matchSection = filterSection === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterSection);
       
@@ -156,27 +147,18 @@ export default function ManageQuizzes() {
         </div>
       </div>
 
-      {/* ✅ TOGGLE TABS (ACTIVE / ARCHIVED) */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          <button 
-            onClick={() => setViewMode('active')} 
-            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'active' ? '#104a28' : '#e5e7eb', color: viewMode === 'active' ? 'white' : '#4b5563' }}
-          >
+          <button onClick={() => setViewMode('active')} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'active' ? '#104a28' : '#e5e7eb', color: viewMode === 'active' ? 'white' : '#4b5563' }}>
               <FileText size={18}/> Active Quizzes
           </button>
-          <button 
-            onClick={() => setViewMode('archived')} 
-            style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'archived' ? '#104a28' : '#e5e7eb', color: viewMode === 'archived' ? 'white' : '#4b5563' }}
-          >
+          <button onClick={() => setViewMode('archived')} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: viewMode === 'archived' ? '#104a28' : '#e5e7eb', color: viewMode === 'archived' ? 'white' : '#4b5563' }}>
               <History size={18}/> Archived Quizzes
           </button>
       </div>
 
-      {/* FILTER BAR */}
       <div className="gb-filters-card" style={{marginBottom: '25px', flexDirection: 'row', alignItems: 'center'}}>
         <div className="filter-title" style={{marginRight: '15px'}}>
-            <Filter size={18} color="#eab308"/> 
-            <span>Filters:</span>
+            <Filter size={18} color="#eab308"/> <span>Filters:</span>
         </div>
         <div className="filters-content" style={{flex: 1}}>
             <div className="search-box" style={{flex: 2}}>
@@ -208,11 +190,12 @@ export default function ManageQuizzes() {
       ) : (
         <div className="inst-quiz-grid">
           {filteredQuizzes.map((quiz) => (
-            <div key={quiz.id} className="inst-quiz-card" style={{opacity: viewMode === 'archived' ? 0.8 : 1}}>
-              <div className="card-top-accent" style={{background: viewMode === 'active' ? '#eab308' : '#8b5cf6'}}></div>
+            <div key={quiz.id} className="inst-quiz-card" style={{opacity: viewMode === 'archived' ? 0.8 : 1, border: quiz.is_retake ? '2px solid #eab308' : 'none'}}>
+              <div className="card-top-accent" style={{background: quiz.is_retake ? '#eab308' : (viewMode === 'active' ? '#104a28' : '#8b5cf6')}}></div>
               <div className="card-content">
                 <h3 className="card-title">{quiz.title}</h3>
                 <div className="card-tags">
+                    {quiz.is_retake ? <span className="tag" style={{background:'#fef08a', color:'#854d0e', fontWeight:'bold'}}>Retake Quiz (-{quiz.penalty}%)</span> : null}
                     {quiz.target_year && <span className="tag tag-year"><Target size={12}/> {quiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${quiz.target_year}-${quiz.target_section}`}</span>}
                     {quiz.due_date && (
                         <span style={{fontSize: '11px', background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
@@ -228,7 +211,10 @@ export default function ManageQuizzes() {
                   
                   {viewMode === 'active' && (
                     <>
-                      <button className="btn-action btn-edit" onClick={() => handleEditQuiz(quiz.id)} title="Edit Quiz & Questions"><Edit size={16}/></button>
+                      {!quiz.is_retake && (
+                         <button className="btn-action btn-edit" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}} onClick={() => handleEditQuiz(quiz.id, true)} title="Assign Retake for this Quiz"><RefreshCcw size={16}/></button>
+                      )}
+                      <button className="btn-action btn-edit" onClick={() => handleEditQuiz(quiz.id, false)} title="Edit Quiz"><Edit size={16}/></button>
                       <button className="btn-action btn-delete" onClick={(e) => handleMoveToTrash(quiz.id, e)} title="Move to Trash"><Trash2 size={16}/></button>
                     </>
                   )}
