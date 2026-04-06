@@ -21,6 +21,7 @@ import MyClassList from './modules/instructor/MyClassList';
 import UploadModules from './modules/instructor/UploadModules';
 import InstructorAnnouncements from './modules/instructor/InstructorAnnouncements';
 import ManageQuizzes from './modules/instructor/ManageQuizzes';
+import InstructorPromotions from './modules/instructor/InstructorPromotions';
 
 // Auth
 import Login from './auth/Login';
@@ -85,6 +86,7 @@ function App() {
            <Route path="/instructor/MyClassList" element={<MyClassList />} />
            <Route path="/instructor/UploadModules" element={<UploadModules />} />
            <Route path="/instructor/Announcements" element={<InstructorAnnouncements />} />
+           <Route path="/instructor/InstructorPromotions" element={<InstructorPromotions />} />
         </Route>
 
         {/* FALLBACK */}

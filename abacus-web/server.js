@@ -801,6 +801,32 @@ app.get('/admin/promotions/pending', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- GET PENDING PROMOTIONS FOR A SPECIFIC INSTRUCTOR ---
+app.get('/instructor/:instructorId/promotions/pending', (req, res) => {
+    const { instructorId } = req.params;
+    
+    // Join the users (students) table with the classes table based on the requested promotion target
+    const query = `
+        SELECT DISTINCT u.id, u.full_name, u.student_id, u.program, u.year_level, u.section, 
+               u.pending_year, u.pending_section, u.pending_status, u.cor_image_url
+        FROM users u
+        JOIN classes c ON u.program = c.program 
+             AND u.pending_year = c.year_level 
+             AND u.pending_section = c.section
+        WHERE u.role = 'student' 
+          AND u.pending_status = 'pending'
+          AND c.instructor_id = ?
+    `;
+    
+    db.query(query, [instructorId], (err, results) => {
+        if (err) {
+            console.error("Error fetching instructor promotions:", err);
+            return res.status(500).json({ error: "Database error fetching instructor promotions" });
+        }
+        res.json(results);
+    });
+});
+
 // SINGLE APPROVE
 app.put('/admin/promotions/:id/approve', async (req, res) => {
   try {

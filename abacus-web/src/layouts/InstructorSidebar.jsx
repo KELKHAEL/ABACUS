@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom'; 
-import { LayoutDashboard, FilePlus, BookOpen, Users, LogOut, Triangle, UploadCloud, Megaphone, List } from 'lucide-react';
+import { LayoutDashboard, FilePlus, BookOpen, Users, LogOut, Triangle, UploadCloud, Megaphone, List, ShieldCheck } from 'lucide-react';
 import './InstructorSidebar.css'; 
 
 export default function InstructorSidebar() {
@@ -50,6 +50,10 @@ export default function InstructorSidebar() {
       
         <Link to="/instructor/Announcements" className={`nav-item ${isActive('/instructor/Announcements') ? 'active' : ''}`}>
           <Megaphone size={20} /><span>Announcements</span>
+        </Link>
+
+        <Link to="/instructor/InstructorPromotions" className={`nav-item ${isActive('/instructor/InstructorPromotions') ? 'active' : ''}`}>
+          <ShieldCheck size={20} /><span>Promotions</span>
         </Link>
       </nav>
 
