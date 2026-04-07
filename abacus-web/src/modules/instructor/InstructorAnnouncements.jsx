@@ -22,17 +22,39 @@ export default function InstructorAnnouncements() {
   const [showModal, setShowModal] = useState(false);
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState(null); // Now stores an Array of IDs for the batch
   
   const [trashList, setTrashList] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
 
   const [formData, setFormData] = useState({ title: '', content: '' });
-  
-  // Array of class objects {year, section} that are currently checked
   const [selectedClasses, setSelectedClasses] = useState([]); 
 
   const navigate = useNavigate();
+
+  // ✅ NEW: Helper function to group mass-postings into a single UI card
+  const groupAnnouncements = (rawList) => {
+    const grouped = [];
+    const map = {};
+    (rawList || []).forEach(ann => {
+      // Group by exact Title, Content, and the minute it was posted
+      const timeKey = new Date(ann.created_at).toISOString().slice(0, 16); 
+      const key = `${ann.title}-${ann.content}-${timeKey}`;
+      
+      if (!map[key]) {
+        map[key] = {
+          ...ann,
+          grouped_ids: [ann.id],
+          target_classes: [{ year: ann.target_year, section: ann.target_section }]
+        };
+        grouped.push(map[key]);
+      } else {
+        map[key].grouped_ids.push(ann.id);
+        map[key].target_classes.push({ year: ann.target_year, section: ann.target_section });
+      }
+    });
+    return grouped;
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -58,7 +80,9 @@ export default function InstructorAnnouncements() {
 
       const res = await fetch(`http://localhost:5000/announcements/instructor/${user.id}`);
       const data = await res.json();
-      setAnnouncements(data || []);
+      
+      // ✅ Apply Grouping so it doesn't flood the UI
+      setAnnouncements(groupAnnouncements(data));
 
       const adminRes = await fetch(`http://localhost:5000/announcements/admin-to-instructor/${user.id}`);
       const adminData = await adminRes.json();
@@ -76,35 +100,38 @@ export default function InstructorAnnouncements() {
         const user = JSON.parse(localStorage.getItem('user'));
         const res = await fetch(`http://localhost:5000/trash/announcements/instructor/${user.id}`);
         const data = await res.json();
-        setTrashList(data || []);
+        
+        // ✅ Apply Grouping to Trash Bin as well
+        setTrashList(groupAnnouncements(data));
     } catch (error) { console.error("Error fetching trash:", error); } 
     finally { setTrashLoading(false); }
   };
 
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
-  const handleSoftDelete = async (id) => {
+  // ✅ Batch Deletions
+  const handleSoftDelete = async (groupedIds) => {
     if (window.confirm("Move this announcement to Trash? It will be removed from the students' app immediately.")) {
       try {
-        const res = await fetch(`http://localhost:5000/announcements/${id}/soft-delete`, { method: 'PUT' });
-        if (res.ok) fetchDashboardData();
+        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/soft-delete`, { method: 'PUT' })));
+        fetchDashboardData();
       } catch (e) { alert("Failed to trash announcement."); }
     }
   };
 
-  const handleRestore = async (id) => {
+  const handleRestore = async (groupedIds) => {
     if(!window.confirm("Restore this announcement?")) return;
     try {
-        const res = await fetch(`http://localhost:5000/announcements/${id}/restore`, { method: 'PUT' });
-        if (res.ok) { fetchTrash(); fetchDashboardData(); }
+        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/restore`, { method: 'PUT' })));
+        fetchTrash(); fetchDashboardData();
     } catch (e) { alert("Failed to restore"); }
   };
 
-  const handlePermanentDelete = async (id) => {
-    if(!window.confirm("WARNING: This will permanently delete the announcement.")) return;
+  const handlePermanentDelete = async (groupedIds) => {
+    if(!window.confirm("WARNING: This will permanently delete the announcement for ALL assigned classes.")) return;
     try {
-        const res = await fetch(`http://localhost:5000/announcements/${id}/permanent`, { method: 'DELETE' });
-        if (res.ok) fetchTrash();
+        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/permanent`, { method: 'DELETE' })));
+        fetchTrash();
     } catch (e) { alert("Failed to delete permanently"); }
   };
 
@@ -112,19 +139,15 @@ export default function InstructorAnnouncements() {
     setIsEditing(false);
     setEditId(null);
     setFormData({ title: '', content: '' });
-    
-    // Auto-select all classes for convenience on new posts
     setSelectedClasses(assignedClasses);
     setShowModal(true);
   };
 
   const openEditModal = (ann) => {
     setIsEditing(true);
-    setEditId(ann.id);
+    setEditId(ann.grouped_ids); // Pass array of batch IDs
     setFormData({ title: ann.title, content: ann.content });
-    
-    // Load the specific class this single record targets
-    setSelectedClasses([{ year: ann.target_year, section: ann.target_section }]);
+    setSelectedClasses(ann.target_classes); 
     setShowModal(true);
   };
 
@@ -136,33 +159,44 @@ export default function InstructorAnnouncements() {
     const userStr = localStorage.getItem('user');
     const user = JSON.parse(userStr);
 
-    const payload = {
-        title: formData.title, 
-        content: formData.content, 
-        authorRole: 'INSTRUCTOR', 
-        authorName: user.fullName, 
-        authorId: user.id
-    };
-
-    if (isEditing) {
-        payload.targetYear = selectedClasses[0].year;
-        payload.targetSection = selectedClasses[0].section;
-    } else {
-        payload.targets = selectedClasses.map(c => ({ targetYear: c.year, targetSection: c.section }));
-    }
-
     setSaving(true);
     try {
-      let url = isEditing ? `http://localhost:5000/announcements/${editId}` : 'http://localhost:5000/announcements';
-      let method = isEditing ? 'PUT' : 'POST';
-
-      const res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) {
-        alert(isEditing ? "Announcement updated!" : "Announcements posted!");
-        setShowModal(false);
-        fetchDashboardData();
-      } else { alert("Failed to save: " + data.error); }
+      if (isEditing) {
+          // ✅ Edit ALL announcements in this batch grouping at once
+          await Promise.all(editId.map((id, index) => {
+              return fetch(`http://localhost:5000/announcements/${id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      title: formData.title,
+                      content: formData.content,
+                      targetYear: selectedClasses[index].year,
+                      targetSection: selectedClasses[index].section
+                  })
+              });
+          }));
+          alert("Announcement updated successfully!");
+      } else {
+          // ✅ Post new announcement (Backend loop handles multiple targets)
+          const payload = {
+              title: formData.title, 
+              content: formData.content, 
+              authorRole: 'INSTRUCTOR', 
+              authorName: user.fullName, 
+              authorId: user.id,
+              targets: selectedClasses.map(c => ({ targetYear: c.year, targetSection: c.section }))
+          };
+          const res = await fetch('http://localhost:5000/announcements', { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify(payload) 
+          });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          alert("Announcements posted successfully!");
+      }
+      setShowModal(false);
+      fetchDashboardData();
     } catch (err) { alert("Server error."); } 
     finally { setSaving(false); }
   };
@@ -188,12 +222,11 @@ export default function InstructorAnnouncements() {
   const months = Array.from({length: 12}, (_, i) => i + 1);
   const days = Array.from({length: 31}, (_, i) => i + 1);
 
-  // --- HELPER: Handle Select All ---
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedClasses([...assignedClasses]); // Select all
+      setSelectedClasses([...assignedClasses]); 
     } else {
-      setSelectedClasses([]); // Deselect all
+      setSelectedClasses([]); 
     }
   };
 
@@ -269,8 +302,8 @@ export default function InstructorAnnouncements() {
             ) : filteredList.length === 0 ? (
               <tr><td colSpan="5" className="text-center p-4" style={{color: '#888'}}>No announcements found.</td></tr>
             ) : (
-              filteredList.map((ann) => (
-                  <tr key={ann.id}>
+              filteredList.map((ann, i) => (
+                  <tr key={ann.id || i}>
                     <td>
                       <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
                         <Megaphone size={16} color={viewMode === 'inbox' ? "#dc2626" : "#eab308"}/> {ann.title}
@@ -282,9 +315,16 @@ export default function InstructorAnnouncements() {
                     
                     {viewMode === 'sent' && (
                         <td>
-                            <span style={{fontSize:'11px', background:'#f3f4f6', padding:'4px 8px', borderRadius:'4px', border:'1px solid #e5e7eb', fontWeight: 'bold'}}>
-                                Yr {ann.target_year} - Sec {ann.target_section}
-                            </span>
+                            {/* ✅ DISPLAY GROUPED BADGE */}
+                            {ann.target_classes && ann.target_classes.length > 1 ? (
+                                <span style={{fontSize:'11px', background:'#f3f4f6', color: '#104a28', padding:'4px 8px', borderRadius:'4px', border:'1px solid #bbf7d0', fontWeight: 'bold'}}>
+                                    {ann.target_classes.length} Classes Selected
+                                </span>
+                            ) : (
+                                <span style={{fontSize:'11px', background:'#f3f4f6', padding:'4px 8px', borderRadius:'4px', border:'1px solid #e5e7eb', fontWeight: 'bold'}}>
+                                    Yr {ann.target_year} - Sec {ann.target_section}
+                                </span>
+                            )}
                         </td>
                     )}
                     {viewMode === 'inbox' && (
@@ -301,7 +341,7 @@ export default function InstructorAnnouncements() {
                         <td style={{textAlign: 'right'}}>
                             <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
                                 <button className="btn-icon btn-edit" onClick={() => openEditModal(ann)} title="Edit Announcement"><Edit size={18} /></button>
-                                <button className="btn-icon btn-delete" onClick={() => handleSoftDelete(ann.id)} title="Move to Trash"><Trash2 size={18} /></button>
+                                <button className="btn-icon btn-delete" onClick={() => handleSoftDelete(ann.grouped_ids)} title="Move to Trash"><Trash2 size={18} /></button>
                             </div>
                         </td>
                     )}
@@ -326,15 +366,25 @@ export default function InstructorAnnouncements() {
                         <table className="data-table">
                             <thead><tr><th width="40%">Title</th><th width="20%">Target Class</th><th width="15%">Days Left</th><th width="25%" style={{textAlign: 'right'}}>Actions</th></tr></thead>
                             <tbody>
-                                {trashList.map((item) => (
-                                    <tr key={item.id}>
+                                {trashList.map((item, i) => (
+                                    <tr key={item.id || i}>
                                         <td><div style={{fontWeight:'bold', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '6px'}}><Megaphone size={14} color="#9ca3af"/> {item.title}</div></td>
-                                        <td><span style={{fontSize:'11px', background:'#f3f4f6', color: '#6b7280', padding:'4px 8px', borderRadius:'4px'}}>Yr {item.target_year} - Sec {item.target_section}</span></td>
+                                        <td>
+                                            {item.target_classes && item.target_classes.length > 1 ? (
+                                                <span style={{fontSize:'11px', background:'#f3f4f6', color: '#6b7280', padding:'4px 8px', borderRadius:'4px', fontWeight: 'bold'}}>
+                                                    {item.target_classes.length} Classes Selected
+                                                </span>
+                                            ) : (
+                                                <span style={{fontSize:'11px', background:'#f3f4f6', color: '#6b7280', padding:'4px 8px', borderRadius:'4px', fontWeight: 'bold'}}>
+                                                    Yr {item.target_year} - Sec {item.target_section}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td><div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}><Clock size={14} color="#dc2626" />{getDaysLeft(item.deleted_at)} Days</div></td>
                                         <td style={{textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.id)}><RotateCcw size={14} style={{marginRight: 5}}/> Restore</button>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.id)}><Trash2 size={14} style={{marginRight: 5}}/> Delete</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.grouped_ids)}><RotateCcw size={14} style={{marginRight: 5}}/> Restore</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.grouped_ids)}><Trash2 size={14} style={{marginRight: 5}}/> Delete</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -371,7 +421,6 @@ export default function InstructorAnnouncements() {
                             
                             {assignedClasses.length > 0 ? (
                                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', background: 'white', border: '1px solid #d1d5db', padding: '10px', borderRadius: '6px'}}>
-                                    {/* --- NEW: SELECT ALL CHECKBOX --- */}
                                     <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#111', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '4px'}}>
                                         <input 
                                             type="checkbox" 

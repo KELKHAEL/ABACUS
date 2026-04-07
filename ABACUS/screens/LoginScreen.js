@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   form: { width: '100%' },
   label: { fontSize: 12, fontWeight: 'bold', color: '#555', marginBottom: 8, textTransform: 'uppercase' },
   input: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#eee', fontSize: 16, marginBottom: 20, color: '#333' },
-  loginBtn: { backgroundColor: '#104a28', padding: 18, borderRadius: 12, alignItems: 'center', marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  loginBtn: { backgroundColor: '#000000', padding: 18, borderRadius: 12, alignItems: 'center', marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   loginText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
   registerLink: { alignItems: 'center', padding: 10 },
   forgotText: { color: '#888', fontSize: 14 },
