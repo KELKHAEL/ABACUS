@@ -151,8 +151,10 @@ export default function ManageQuizzes() {
   const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
 
   const filteredQuizzes = quizzes.filter(q => {
+      // ✅ FIX: Completely hide Retake clones so they don't look like duplicates
+      if (q.is_retake) return false; 
+
       const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
-      // Hide deleted items from the main views
       if (!isTargetMode || q.status === 'deleted') return false;
 
       const matchSearch = (q.title || "").toLowerCase().includes(searchTerm.toLowerCase());

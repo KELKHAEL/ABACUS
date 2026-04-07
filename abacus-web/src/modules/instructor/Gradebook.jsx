@@ -69,11 +69,11 @@ export default function Gradebook() {
       setQuizStatusMap(statusMap);
 
       const mergedData = assignedStudents.map(student => {
-          const studentGrades = gradesData.filter(g => g.user_id === student.id);
+          // ✅ FIX: Ignore the invisible retake records in the gradebook, the parent record holds the final grade
+          const studentGrades = gradesData.filter(g => g.user_id === student.id && !quizData.find(q => q.id === g.quiz_id)?.is_retake);
 
           return {
               id: student.id, 
-              // ✅ FIX: Force the name to uppercase immediately when downloading from the database
               fullName: student.full_name ? student.full_name.toUpperCase() : '', 
               email: student.email,
               program: student.program || 'BSIT', 

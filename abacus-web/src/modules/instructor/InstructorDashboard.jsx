@@ -79,8 +79,8 @@ export default function InstructorDashboard() {
 
   useEffect(() => { fetchDashboardData(); }, []);
 
-  const activeQuizzes = quizzes.filter(q => (q.status === 'active' || !q.status) && !q.is_archived);
-  const archivedQuizzes = quizzes.filter(q => q.is_archived && q.status !== 'deleted');
+  const activeQuizzes = quizzes.filter(q => (q.status === 'active' || !q.status) && !q.is_archived && !q.is_retake);
+  const archivedQuizzes = quizzes.filter(q => q.is_archived && q.status !== 'deleted' && !q.is_retake);
 
   // --- DYNAMIC CHART DATA GENERATION ---
   const targetQuizzes = chartViewMode === 'active' ? activeQuizzes : archivedQuizzes;

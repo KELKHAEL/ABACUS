@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
+import { useFocusEffect } from '@react-navigation/native'; // ✅ NEW: Import useFocusEffect
 
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
@@ -14,7 +15,7 @@ export default function QuizListScreen({ navigation }) {
   const [archivedQuizzes, setArchivedQuizzes] = useState([]); 
   
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('available'); // 'available', 'uncompleted', 'completed', 'archived'
+  const [viewMode, setViewMode] = useState('available'); 
   const [refreshing, setRefreshing] = useState(false);
 
   const formatDueDate = (dateString) => {
@@ -41,17 +42,13 @@ export default function QuizListScreen({ navigation }) {
         const matchYear = !q.target_year || q.target_year === 'ALL' || String(q.target_year) === String(user.yearLevel);
         const matchSec = !q.target_section || q.target_section === 'ALL' || String(q.target_section) === String(user.section);
         
-        if (q.status !== 'active' || q.is_archived || !matchYear || !matchSec) {
-            return false;
-        }
+        if (q.status !== 'active' || q.is_archived || !matchYear || !matchSec) return false;
 
         if (q.is_retake) {
             try {
                 const targets = JSON.parse(q.target_students || '[]');
                 if (!targets.includes(user.id)) return false; 
-            } catch (e) {
-                return false; 
-            }
+            } catch (e) { return false; }
         }
         return true;
       });
@@ -62,7 +59,6 @@ export default function QuizListScreen({ navigation }) {
 
       activeRelevant.forEach(q => {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
-          
           if (gradeEntry) {
               if (gradeEntry.subjectTitle && gradeEntry.subjectTitle.includes('(Missed)')) {
                   uncompleted.push(q); 
@@ -96,7 +92,15 @@ export default function QuizListScreen({ navigation }) {
     }
   };
 
-  useEffect(() => { if (user) fetchData(); }, [user]);
+  // ✅ FIX: Forces a live refresh of the list EVERY time the screen comes into view
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+          setLoading(true);
+          fetchData();
+      }
+    }, [user])
+  );
 
   const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
 
@@ -173,8 +177,6 @@ export default function QuizListScreen({ navigation }) {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>My Quizzes</Text>
         </View>
-
-        {/* ✅ NEW: Refresh Button */}
         <TouchableOpacity onPress={onRefresh} style={{padding: 5}}>
           <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>

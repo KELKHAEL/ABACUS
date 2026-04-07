@@ -473,22 +473,32 @@ app.post('/grades', async (req, res) => {
 
     let finalScore = score;
     let finalTitle = subjectTitle;
+    const activeTermId = await getActiveTermId();
 
     if (quiz && quiz.is_retake) {
        const deduction = (score * quiz.penalty) / 100;
        finalScore = Math.max(0, score - deduction); 
+       
+       // Delete the old grade from the ORIGINAL quiz
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
        finalTitle = subjectTitle + ` (-${quiz.penalty}% Penalty Applied)`;
+
+       // ✅ FIX: Inject the Retake grade back into the ORIGINAL parent quiz so the Gradebook updates smoothly
+       await db.query(
+         `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
+         [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId]
+       );
     }
 
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
     if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
-    const activeTermId = await getActiveTermId(); 
+    // Save the grade to the current quiz (so the mobile app knows it's completed)
     await db.query(
       `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
       [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId]
     );
+
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
