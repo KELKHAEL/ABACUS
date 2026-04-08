@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
-// ✅ Fix: API_URL must be defined so the sync fetch doesn't crash!
+// ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
 export const AuthContext = createContext();
@@ -21,6 +22,21 @@ export const AuthProvider = ({ children }) => {
                 try {
                     const res = await fetch(`${API_URL}/users/sync/${parsedUser.id}`);
                     const freshData = await res.json();
+                    
+                    // ✅ ANTI-CRASH FIX: If Admin deleted this user from the database, 
+                    // instantly destroy the cached session and log them out!
+                    if (res.status === 404 || freshData.error === "Not found") {
+                        await AsyncStorage.removeItem('token');
+                        await AsyncStorage.removeItem('user');
+                        setUser(null);
+                        setLoading(false);
+                        Alert.alert(
+                            "Session Expired", 
+                            "Your account was removed by the Administrator or your session expired. Please log in again."
+                        );
+                        return; 
+                    }
+
                     if (freshData && !freshData.error) {
                         parsedUser = { 
                             ...parsedUser, 
@@ -39,7 +55,6 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error("Failed to load user from AsyncStorage", error);
         } finally {
-            // ✅ Fix: We must ALWAYS set loading to false, or the app gets stuck!
             setLoading(false); 
         }
     };

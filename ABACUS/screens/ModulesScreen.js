@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
 import { 
   View, Text, FlatList, TouchableOpacity, StyleSheet, 
   ActivityIndicator, StatusBar, Alert 
@@ -6,8 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
+import { useFocusEffect } from '@react-navigation/native'; // ✅ NEW: Auto-refresh hook
 
-import * as FileSystem from 'expo-file-system/legacy'; 
+// ✅ FIX: Removed the broken '/legacy' path from the import
+import * as FileSystem from 'expo-file-system'; 
 import * as Sharing from 'expo-sharing';
 
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
@@ -20,7 +22,6 @@ export default function ModulesScreen({ navigation }) {
   
   const [viewMode, setViewMode] = useState('active'); 
 
-  // ✅ Extracted to useCallback so we can call it manually
   const fetchModules = useCallback(async () => {
     setLoading(true);
     try {
@@ -37,9 +38,14 @@ export default function ModulesScreen({ navigation }) {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (user) fetchModules();
-  }, [user, fetchModules]);
+  // ✅ FIX: Instantly fetches new modules every time the student opens this screen!
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchModules();
+      }
+    }, [user, fetchModules])
+  );
 
   const handleDownloadAndOpen = async (fileUrl, fileName, moduleId) => {
     try {
@@ -118,7 +124,7 @@ export default function ModulesScreen({ navigation }) {
           <Text style={styles.headerTitle}>Posted Modules</Text>
         </View>
         
-        {/* ✅ NEW: Refresh Button */}
+        {/* Manual Refresh Button (Still useful for laggy connections) */}
         <TouchableOpacity onPress={fetchModules} style={{padding: 5}}>
           <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
