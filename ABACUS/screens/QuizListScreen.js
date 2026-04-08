@@ -2,7 +2,7 @@ import React, { useState, useContext, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
-import { useFocusEffect } from '@react-navigation/native'; // ✅ NEW: Import useFocusEffect
+import { useFocusEffect } from '@react-navigation/native'; 
 
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
 
@@ -24,7 +24,21 @@ export default function QuizListScreen({ navigation }) {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  // ✅ DYNAMIC GUARD: Account for MySQL VARCHAR(10) truncation ('To be assi')
+  const sectionStr = String(user?.section || '').toLowerCase();
+  const isUnassigned = !sectionStr || sectionStr.includes('assign') || sectionStr.includes('assi');
+
   const fetchData = async () => {
+    if (isUnassigned) {
+      setAvailableQuizzes([]);
+      setUncompletedQuizzes([]);
+      setCompletedQuizzes([]);
+      setArchivedQuizzes([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       const [quizRes, gradeRes] = await Promise.all([
         fetch(`${API_URL}/quizzes`),
@@ -92,14 +106,13 @@ export default function QuizListScreen({ navigation }) {
     }
   };
 
-  // ✅ FIX: Forces a live refresh of the list EVERY time the screen comes into view
   useFocusEffect(
     useCallback(() => {
       if (user) {
           setLoading(true);
           fetchData();
       }
-    }, [user])
+    }, [user, isUnassigned])
   );
 
   const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
@@ -153,17 +166,26 @@ export default function QuizListScreen({ navigation }) {
     );
   };
 
-  let currentData = availableQuizzes;
-  let emptyMessage = "No pending quizzes for you!";
-  if (viewMode === 'completed') {
-      currentData = completedQuizzes;
-      emptyMessage = "You haven't finished any quizzes yet.";
-  } else if (viewMode === 'uncompleted') {
-      currentData = uncompletedQuizzes;
-      emptyMessage = "Great job! You haven't missed any quizzes.";
-  } else if (viewMode === 'archived') {
-      currentData = archivedQuizzes;
-      emptyMessage = "No archived quizzes from past terms.";
+  let currentData = [];
+  let emptyMessage = "";
+
+  if (isUnassigned) {
+      emptyMessage = "You must be officially assigned to a class section before you can view quizzes. Please check your Profile.";
+      currentData = []; 
+  } else {
+      if (viewMode === 'available') {
+          currentData = availableQuizzes;
+          emptyMessage = "No pending quizzes for you!";
+      } else if (viewMode === 'uncompleted') {
+          currentData = uncompletedQuizzes;
+          emptyMessage = "Great job! You haven't missed any quizzes.";
+      } else if (viewMode === 'completed') {
+          currentData = completedQuizzes;
+          emptyMessage = "You haven't finished any quizzes yet.";
+      } else if (viewMode === 'archived') {
+          currentData = archivedQuizzes;
+          emptyMessage = "No archived quizzes from past terms.";
+      }
   }
 
   return (
@@ -185,19 +207,19 @@ export default function QuizListScreen({ navigation }) {
       <View style={{backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee'}}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
             <TouchableOpacity style={[styles.tab, viewMode === 'available' && styles.activeTab]} onPress={() => setViewMode('available')}>
-                <Text style={[styles.tabText, viewMode === 'available' && styles.activeTabText]}>Active ({availableQuizzes.length})</Text>
+                <Text style={[styles.tabText, viewMode === 'available' && styles.activeTabText]}>Active ({isUnassigned ? 0 : availableQuizzes.length})</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tab, viewMode === 'uncompleted' && styles.activeTab]} onPress={() => setViewMode('uncompleted')}>
-                <Text style={[styles.tabText, viewMode === 'uncompleted' && styles.activeTabText, {color: viewMode === 'uncompleted' ? '#e11d48' : '#888'}]}>Missed ({uncompletedQuizzes.length})</Text>
+                <Text style={[styles.tabText, viewMode === 'uncompleted' && styles.activeTabText, {color: viewMode === 'uncompleted' ? '#e11d48' : '#888'}]}>Missed ({isUnassigned ? 0 : uncompletedQuizzes.length})</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tab, viewMode === 'completed' && styles.activeTab]} onPress={() => setViewMode('completed')}>
-                <Text style={[styles.tabText, viewMode === 'completed' && styles.activeTabText]}>Done ({completedQuizzes.length})</Text>
+                <Text style={[styles.tabText, viewMode === 'completed' && styles.activeTabText]}>Done ({isUnassigned ? 0 : completedQuizzes.length})</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tab, viewMode === 'archived' && styles.activeTab]} onPress={() => setViewMode('archived')}>
-                <Text style={[styles.tabText, viewMode === 'archived' && styles.activeTabText, {color: viewMode === 'archived' ? '#475569' : '#888'}]}>Past Terms ({archivedQuizzes.length})</Text>
+                <Text style={[styles.tabText, viewMode === 'archived' && styles.activeTabText, {color: viewMode === 'archived' ? '#475569' : '#888'}]}>Past Terms ({isUnassigned ? 0 : archivedQuizzes.length})</Text>
             </TouchableOpacity>
         </ScrollView>
       </View>
@@ -213,7 +235,7 @@ export default function QuizListScreen({ navigation }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} color="#104a28" />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name={viewMode === 'uncompleted' ? "star-outline" : (viewMode === 'archived' ? 'archive-outline' : 'document-text-outline')} size={60} color="#ccc" />
+              <Ionicons name={isUnassigned ? "lock-closed-outline" : (viewMode === 'uncompleted' ? "star-outline" : (viewMode === 'archived' ? 'archive-outline' : 'document-text-outline'))} size={60} color="#ccc" />
               <Text style={styles.emptyText}>{emptyMessage}</Text>
             </View>
           }
@@ -246,5 +268,5 @@ const styles = StyleSheet.create({
   subtitleMissed: { fontSize: 13, color: '#e11d48', marginTop: 4, fontWeight: '600' },
   
   emptyState: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: '#999', marginTop: 15, textAlign: 'center', width: '80%', fontSize: 15 }
+  emptyText: { color: '#999', marginTop: 15, textAlign: 'center', width: '85%', fontSize: 14, lineHeight: 22 }
 });

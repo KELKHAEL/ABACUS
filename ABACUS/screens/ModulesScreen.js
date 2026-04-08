@@ -6,9 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
-import { useFocusEffect } from '@react-navigation/native'; // ✅ NEW: Auto-refresh hook
+import { useFocusEffect } from '@react-navigation/native'; 
 
-// ✅ FIX: Removed the broken '/legacy' path from the import
 import * as FileSystem from 'expo-file-system'; 
 import * as Sharing from 'expo-sharing';
 
@@ -22,7 +21,17 @@ export default function ModulesScreen({ navigation }) {
   
   const [viewMode, setViewMode] = useState('active'); 
 
+  // ✅ DYNAMIC GUARD: Check if the user is unassigned (Case-Insensitive)
+  const sectionStr = String(user?.section || '').toLowerCase();
+  const isUnassigned = !sectionStr || sectionStr.includes('assign');
+
   const fetchModules = useCallback(async () => {
+    if (isUnassigned) {
+        setModules([]);
+        setLoading(false);
+        return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/modules/student/${user.id}`);
@@ -36,9 +45,8 @@ export default function ModulesScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isUnassigned]);
 
-  // ✅ FIX: Instantly fetches new modules every time the student opens this screen!
   useFocusEffect(
     useCallback(() => {
       if (user) {
@@ -110,7 +118,14 @@ export default function ModulesScreen({ navigation }) {
     );
   };
 
-  const displayedModules = modules.filter(m => viewMode === 'archived' ? m.is_archived === 1 : m.is_archived === 0);
+  const displayedModules = isUnassigned ? [] : modules.filter(m => viewMode === 'archived' ? m.is_archived === 1 : m.is_archived === 0);
+
+  let emptyMessage = "";
+  if (isUnassigned) {
+      emptyMessage = "You must be officially assigned to a class section before you can view lecture modules. Please check your Profile.";
+  } else {
+      emptyMessage = viewMode === 'active' ? 'No active modules available.' : 'No archived modules found.';
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -124,7 +139,6 @@ export default function ModulesScreen({ navigation }) {
           <Text style={styles.headerTitle}>Posted Modules</Text>
         </View>
         
-        {/* Manual Refresh Button (Still useful for laggy connections) */}
         <TouchableOpacity onPress={fetchModules} style={{padding: 5}}>
           <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
@@ -148,9 +162,12 @@ export default function ModulesScreen({ navigation }) {
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 20 }}
           ListEmptyComponent={
-              <Text style={{textAlign:'center', marginTop: 40, color: '#888', fontSize: 15}}>
-                  {viewMode === 'active' ? 'No active modules available.' : 'No archived modules found.'}
-              </Text>
+              <View style={{alignItems: 'center', marginTop: 40}}>
+                 {isUnassigned && <Ionicons name="lock-closed-outline" size={60} color="#ccc" style={{marginBottom: 15}} />}
+                 <Text style={{textAlign:'center', color: '#888', fontSize: 15, paddingHorizontal: 20, lineHeight: 22}}>
+                     {emptyMessage}
+                 </Text>
+              </View>
           }
         />
       )}

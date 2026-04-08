@@ -48,9 +48,24 @@ const db = mysql.createPool({
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
+    try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
     
-    // 🚀 NEW: This instantly deletes all the ghost requests created by the old rollover bug!
+    // 🚀 NEW: Expand the section column so "To be assigned" doesn't get truncated to "To be assi"
+    try { await connection.query("ALTER TABLE users MODIFY COLUMN section VARCHAR(50)"); } catch(e){}
+    try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
+
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
+    
+    // 🚀 UPDATED SWEEP: Hunts down truncated variations too
+    try { 
+        await connection.query(`
+            DELETE sg FROM student_grades sg 
+            JOIN users u ON sg.user_id = u.id 
+            WHERE (LOWER(u.section) LIKE '%assign%' OR LOWER(u.section) LIKE '%assi%' OR u.section IS NULL) 
+            AND sg.subject_title LIKE '%(Missed)%'
+        `); 
+        console.log("🧹 Cleaned up invalid auto-grades for unassigned students.");
+    } catch(e) { console.error("Cleanup error:", e.message); }
     
     connection.release();
   } catch (err) {
@@ -289,7 +304,6 @@ app.put('/academic-setup/term/active/:id', async (req, res) => {
         await connection.query("UPDATE users SET assigned_classes = '[]' WHERE role = 'INSTRUCTOR'");
     }
     if (resetStudents) {
-        // 🚀 FIXED: Sets cor_status to 'Unassigned' instead of 'Pending' so it doesn't flood the verification queue!
         await connection.query(`
             UPDATE users 
             SET section = 'To be assigned', cor_status = 'Unassigned', cor_image_url = NULL, pending_year = NULL, pending_section = NULL 
@@ -479,11 +493,9 @@ app.post('/grades', async (req, res) => {
        const deduction = (score * quiz.penalty) / 100;
        finalScore = Math.max(0, score - deduction); 
        
-       // Delete the old grade from the ORIGINAL quiz
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
        finalTitle = subjectTitle + ` (-${quiz.penalty}% Penalty Applied)`;
 
-       // ✅ FIX: Inject the Retake grade back into the ORIGINAL parent quiz so the Gradebook updates smoothly
        await db.query(
          `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
          [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId]
@@ -493,7 +505,6 @@ app.post('/grades', async (req, res) => {
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
     if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
-    // Save the grade to the current quiz (so the mobile app knows it's completed)
     await db.query(
       `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
       [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId]
@@ -532,7 +543,7 @@ app.delete('/grades/:id', async (req, res) => {
 });
 
 // ==========================
-// RESTORED TRASH ENDPOINTS (ANNOUNCEMENTS & MODULES)
+// RESTORED TRASH ENDPOINTS
 // ==========================
 app.get('/trash/announcements', async (req, res) => {
   try {
@@ -723,7 +734,6 @@ app.post('/register', upload.single('corImage'), async (req, res) => {
     const [existing] = await db.query("SELECT * FROM users WHERE email = ? OR student_id = ?", [email, studentId]);
     if (existing.length > 0) return res.status(409).json({ success: false, error: "Account already exists." });
 
-    // ✅ NEW: Handle Image Upload processing
     let corUrl = null;
     if (req.file) {
       const safeName = fullName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
@@ -739,7 +749,6 @@ app.post('/register', upload.single('corImage'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // ✅ NEW: Saves COR image, sets section to 'To be assigned', and pushes them into 'Pending' verification!
     await db.query(
       `INSERT INTO users (full_name, student_id, email, password_hash, year_level, section, role, program, status, is_deleted, pending_year, pending_section, pending_status, cor_image_url, cor_status) 
        VALUES (?, ?, ?, ?, ?, 'To be assigned', 'STUDENT', ?, 'Regular', 0, ?, ?, 'Regular', ?, 'Pending')`,
@@ -800,6 +809,11 @@ app.get('/modules/student/:id', async (req, res) => {
     const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     const { year_level, section } = students[0];
+
+    // 🚨 BULLETPROOF ENROLLMENT GUARD: Block ALL modules if unassigned (case-insensitive check for 'assi' and 'assign')
+    if (!section || section.toLowerCase().includes('assign') || section.toLowerCase().includes('assi')) {
+        return res.json([]);
+    }
 
     const activeTermId = await getActiveTermId();
     const [modules] = await db.query(`
@@ -941,8 +955,8 @@ const autoAssignMissedZeros = async () => {
       );
 
       for (const quiz of expiredQuizzes) {
-          // ✅ FIX: Ignore students whose status is 'Dropped'
-          let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped'`;
+          // ✅ ENROLLMENT GUARD: Ignore students who are 'Dropped' OR 'To be assigned' using case-insensitive LIKE
+          let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped' AND LOWER(section) NOT LIKE '%assign%' AND LOWER(section) NOT LIKE '%assi%'`;
           let params = [];
           if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
           if (quiz.target_section !== 'ALL') { query += ` AND section = ?`; params.push(quiz.target_section); }
@@ -975,7 +989,6 @@ app.post('/student-forgot-password', async (req, res) => {
   if (!email || !newPassword) return res.status(400).json({ success: false, error: "Missing email or password" });
   
   try {
-    // Check if the user exists and is a student (or instructor)
     const [users] = await db.query("SELECT id FROM users WHERE email = ? AND is_deleted = 0", [email]);
     
     if (users.length === 0) {
@@ -983,11 +996,8 @@ app.post('/student-forgot-password', async (req, res) => {
     }
 
     const userId = users[0].id;
-
-    // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update the database
     await db.query("UPDATE users SET password_hash = ? WHERE id = ?", [hashedPassword, userId]);
     
     res.json({ success: true, message: "Password updated successfully" });
