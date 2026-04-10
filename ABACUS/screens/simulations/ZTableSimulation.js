@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Line, Text as SvgText } from 'react-native-svg';
 
@@ -9,13 +9,44 @@ export default function ZTableSimulation({ navigation }) {
   const [z2, setZ2] = useState(''); 
   const [result, setResult] = useState(null);
   const [steps, setSteps] = useState([]);
+  const [showTheory, setShowTheory] = useState(false);
   
   // Table View State
   const [showTable, setShowTable] = useState(false);
-  const [tableType, setTableType] = useState('POSITIVE'); // 'POSITIVE' or 'NEGATIVE'
+  const [tableType, setTableType] = useState('POSITIVE'); 
   
-  // Changed from single variables to an array to support multiple highlights in 'between' mode
   const [highlights, setHighlights] = useState([]);
+
+  // ✅ STRICT DECIMAL & NEGATIVE SIGN VALIDATION
+  const handleInput = (text, setter) => {
+    let cleanText = text.replace(/[^0-9.-]/g, ''); 
+    
+    // Ensure negative sign is only at the beginning
+    if (cleanText.lastIndexOf('-') > 0) {
+      cleanText = cleanText.replace(/-/g, '');
+      if (text.startsWith('-')) cleanText = '-' + cleanText;
+    }
+
+    // Prevent multiple decimals
+    const parts = cleanText.split('.');
+    if (parts.length > 2) {
+      cleanText = parts[0] + '.' + parts.slice(1).join('');
+    }
+
+    // Auto-pad with 0 if starting with a decimal point
+    if (cleanText.startsWith('.')) cleanText = '0' + cleanText;
+    if (cleanText.startsWith('-.')) cleanText = '-0.' + cleanText.substring(2);
+    
+    setter(cleanText);
+  };
+
+  // ✅ PRESET EXAMPLES
+  const loadExample = (exMode, val1, val2 = '') => {
+      setMode(exMode);
+      setZ1(val1);
+      setZ2(val2);
+      setResult(null);
+  };
 
   // --- MATHEMATICAL LOGIC (CDF) ---
   const calculateCDF = (x) => {
@@ -29,11 +60,12 @@ export default function ZTableSimulation({ navigation }) {
   };
 
   const handleCalculate = () => {
+    Keyboard.dismiss();
     const val1 = parseFloat(z1);
     const val2 = parseFloat(z2);
 
-    if (isNaN(val1)) {
-      Alert.alert("Input Error", "Please enter a valid Z-score.");
+    if (isNaN(val1) || val1 < -3.49 || val1 > 3.49) {
+      Alert.alert("Input Error", "Please enter a valid Z-score between -3.49 and 3.49.");
       return;
     }
 
@@ -51,27 +83,27 @@ export default function ZTableSimulation({ navigation }) {
         newHighlights.push({ rowStr: r, colIdx: c, type: zValue < 0 ? 'NEGATIVE' : 'POSITIVE' });
     };
 
-    // Always process the first Z-score
     processHighlight(val1);
 
     if (mode === 'left') {
       area = calculateCDF(val1);
-      stepLog.push(`Step 1: Identify Z-Score: ${val1}`);
-      stepLog.push(`Step 2: Open the Z-Table and find row ${newHighlights[0].rowStr} and column .0${newHighlights[0].colIdx}`);
-      stepLog.push(`Step 3: The intersection gives the area to the left.`);
+      stepLog.push(`1. Look up Z = ${val1} in the Z-Table.`);
+      stepLog.push(`2. Find row ${newHighlights[0].rowStr} and column .0${newHighlights[0].colIdx}.`);
+      stepLog.push(`3. The table gives the exact area to the LEFT.`);
       stepLog.push(`Result: P(Z < ${val1}) = ${area.toFixed(4)}`);
     } else if (mode === 'right') {
       const leftArea = calculateCDF(val1);
       area = 1 - leftArea;
-      stepLog.push(`Step 1: Identify Z-Score: ${val1}`);
-      stepLog.push(`Step 2: Find area to the left: ${leftArea.toFixed(4)}`);
-      stepLog.push(`Step 3: Since total area = 1, subtract left area from 1.`);
-      stepLog.push(`Calculation: 1 - ${leftArea.toFixed(4)} = ${area.toFixed(4)}`);
-      stepLog.push(`Result: P(Z > ${val1}) = ${area.toFixed(4)}`);
+      stepLog.push(`1. Look up Z = ${val1} in the Z-Table.`);
+      stepLog.push(`2. The table gives the area to the left: ${leftArea.toFixed(4)}.`);
+      stepLog.push(`3. Since the TOTAL area under a curve is exactly 1.0, we subtract the left area from 1 to find the remaining right area.`);
+      stepLog.push(`Calculation: 1.0000 - ${leftArea.toFixed(4)} = ${area.toFixed(4)}`);
     } else if (mode === 'between') {
-      if (isNaN(val2)) { Alert.alert("Input Error", "Please enter the second Z-score."); return; }
+      if (isNaN(val2) || val2 < -3.49 || val2 > 3.49) { 
+          Alert.alert("Input Error", "Please enter a valid second Z-score between -3.49 and 3.49."); 
+          return; 
+      }
       
-      // Process the second Z-score for the table highlighter
       processHighlight(val2);
 
       const lower = Math.min(val1, val2);
@@ -80,15 +112,15 @@ export default function ZTableSimulation({ navigation }) {
       const areaLow = calculateCDF(lower);
       area = areaHigh - areaLow;
 
-      stepLog.push(`Step 1: Identify bounds: Lower Z = ${lower}, Upper Z = ${higher}`);
-      stepLog.push(`Step 2: Find area left of ${higher}: ${areaHigh.toFixed(4)}`);
-      stepLog.push(`Step 3: Find area left of ${lower}: ${areaLow.toFixed(4)}`);
-      stepLog.push(`Step 4: Subtract smaller area from larger area.`);
+      stepLog.push(`1. Identify bounds: Lower Z = ${lower}, Upper Z = ${higher}.`);
+      stepLog.push(`2. Look up the upper bound (${higher}) in the Z-Table: ${areaHigh.toFixed(4)}.`);
+      stepLog.push(`3. Look up the lower bound (${lower}) in the Z-Table: ${areaLow.toFixed(4)}.`);
+      stepLog.push(`4. Subtract the smaller "tail" area from the larger area to isolate the chunk in the middle.`);
       stepLog.push(`Calculation: ${areaHigh.toFixed(4)} - ${areaLow.toFixed(4)} = ${area.toFixed(4)}`);
     }
 
     setHighlights(newHighlights);
-    setTableType(val1 < 0 ? 'NEGATIVE' : 'POSITIVE'); // Default to the table of the first value
+    setTableType(val1 < 0 ? 'NEGATIVE' : 'POSITIVE');
     setResult({ val1, val2: mode === 'between' ? val2 : null, area: area.toFixed(4) });
     setSteps(stepLog);
   };
@@ -176,7 +208,6 @@ export default function ZTableSimulation({ navigation }) {
     );
   };
 
-  // Determine active highlights for the currently viewed table page
   const currentTableHighlights = highlights.filter(h => h.type === tableType);
   const activeCols = currentTableHighlights.map(h => h.colIdx);
 
@@ -192,15 +223,51 @@ export default function ZTableSimulation({ navigation }) {
             <View style={{width:24}} />
         </View>
 
-        {/* 📚 THEORY CARD */}
-        <View style={styles.theoryCard}>
-            <Text style={styles.theoryTitle}>How to use the Z-Table</Text>
-            <Text style={styles.theoryText}>The Z-table shows the cumulative probability (area to the <Text style={{fontWeight:'bold'}}>LEFT</Text>) of a given Z-score.</Text>
-            <TouchableOpacity style={styles.viewTableBtn} onPress={() => setShowTable(true)}>
-                <Ionicons name="grid" size={18} color="#fff" />
-                <Text style={styles.viewTableBtnText}>View Interactive Z-Table</Text>
-            </TouchableOpacity>
+        {/* ✅ GUIDELINES CARD */}
+        <View style={styles.guidelinesCard}>
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+                <Ionicons name="information-circle" size={22} color="#0284c7" />
+                <Text style={styles.guidelinesTitle}>Simulation Guidelines</Text>
+            </View>
+            <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Z-Score Limit:</Text> Values must be between -3.49 and +3.49.</Text>
+            <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Decimals:</Text> Use a period (.) for decimals. Maximum 2 decimal places are used for table lookups.</Text>
+            <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>What is it?</Text> A Z-score tells you exactly how many standard deviations a value is away from the mean.</Text>
         </View>
+
+        {/* 📚 THEORY CARD */}
+        <TouchableOpacity style={styles.theoryToggle} onPress={() => setShowTheory(!showTheory)}>
+          <Ionicons name="book" size={20} color="#104a28" />
+          <Text style={styles.theoryToggleText}>How to use the Z-Table</Text>
+          <Ionicons name={showTheory ? "chevron-up" : "chevron-down"} size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
+        </TouchableOpacity>
+        
+        {showTheory && (
+          <View style={styles.theoryCard}>
+              <Text style={styles.theoryText}>The standard Z-table ONLY shows the cumulative probability (the shaded area to the <Text style={{fontWeight:'bold'}}>LEFT</Text>) of a given Z-score.</Text>
+              <Text style={styles.theoryText}>To find the area to the <Text style={{fontWeight:'bold'}}>RIGHT</Text>, you must subtract the table's value from 1.0.</Text>
+              <TouchableOpacity style={styles.viewTableBtn} onPress={() => setShowTable(true)}>
+                  <Ionicons name="grid" size={18} color="#fff" />
+                  <Text style={styles.viewTableBtnText}>View Interactive Z-Table</Text>
+              </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ✅ PRESET EXAMPLES */}
+        <Text style={styles.sectionHeader}>Try a Real-World Scenario</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exampleScroll}>
+            <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('right', '1.33')}>
+                <Ionicons name="body-outline" size={16} color="#b45309" />
+                <Text style={styles.exampleBtnText}>High IQ Score (Z = 1.33, Right)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('left', '-0.85')}>
+                <Ionicons name="trending-down-outline" size={16} color="#b45309" />
+                <Text style={styles.exampleBtnText}>Below Average Height (Z = -0.85, Left)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('between', '-1.00', '1.00')}>
+                <Ionicons name="swap-horizontal-outline" size={16} color="#b45309" />
+                <Text style={styles.exampleBtnText}>Average Majority (Between ±1.0)</Text>
+            </TouchableOpacity>
+        </ScrollView>
 
         {/* INPUT SECTION */}
         <View style={styles.card}>
@@ -221,13 +288,13 @@ export default function ZTableSimulation({ navigation }) {
             <View style={styles.inputRow}>
                 <View style={styles.inputWrapper}>
                     <Text style={styles.inputLabel}>{mode === 'between' ? 'Lower Z1' : 'Z Score'}</Text>
-                    <TextInput style={styles.input} placeholder="e.g. 1.96" keyboardType="numeric" value={z1} onChangeText={setZ1} />
+                    <TextInput style={styles.input} placeholder="e.g. 1.96" keyboardType="numeric" value={z1} onChangeText={(t) => handleInput(t, setZ1)} />
                 </View>
                 
                 {mode === 'between' && (
                     <View style={styles.inputWrapper}>
                         <Text style={styles.inputLabel}>Upper Z2</Text>
-                        <TextInput style={styles.input} placeholder="e.g. 2.58" keyboardType="numeric" value={z2} onChangeText={setZ2} />
+                        <TextInput style={styles.input} placeholder="e.g. 2.58" keyboardType="numeric" value={z2} onChangeText={(t) => handleInput(t, setZ2)} />
                     </View>
                 )}
             </View>
@@ -252,7 +319,10 @@ export default function ZTableSimulation({ navigation }) {
                 </View>
 
                 <View style={styles.stepsBox}>
-                    <Text style={styles.stepTitle}>Solution Logic:</Text>
+                    <View style={{flexDirection:'row', marginBottom: 10, alignItems:'center', gap: 6}}>
+                       <Ionicons name="school" size={18} color="#2D7FF9" />
+                       <Text style={styles.stepTitle}>Solution Logic:</Text>
+                    </View>
                     {steps.map((step, index) => (
                         <Text key={index} style={styles.stepText}>{step}</Text>
                     ))}
@@ -284,7 +354,6 @@ export default function ZTableSimulation({ navigation }) {
                   Values inside table represent Area to the LEFT of Z.
               </Text>
               
-              {/* Inform the user if their 'between' values are split across both tables */}
               {highlights.length === 2 && highlights[0].type !== highlights[1].type && (
                   <Text style={styles.splitNote}>
                       Note: Your Z-Scores span both Negative and Positive values. Toggle the view to see both lookups!
@@ -294,7 +363,6 @@ export default function ZTableSimulation({ navigation }) {
               <ScrollView horizontal showsHorizontalScrollIndicator={true} bounces={false}>
                   <ScrollView style={{flex: 1}} bounces={false}>
                       <View style={styles.tableWrapper}>
-                          {/* Table Header */}
                           <View style={styles.tableRowHeader}>
                               <View style={[styles.cellHeader, {width: 50}]}><Text style={styles.cellHeaderText}>Z</Text></View>
                               {[0,1,2,3,4,5,6,7,8,9].map(c => (
@@ -304,7 +372,6 @@ export default function ZTableSimulation({ navigation }) {
                               ))}
                           </View>
                           
-                          {/* Table Body */}
                           {zTableData[tableType].map((row, rIdx) => {
                               const rowHighlights = currentTableHighlights.filter(h => h.rowStr === row.zBase);
                               const isRowActive = rowHighlights.length > 0;
@@ -344,6 +411,17 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   title: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
   
+  guidelinesCard: { backgroundColor: '#e0f2fe', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#bae6fd' },
+  guidelinesTitle: { fontSize: 15, fontWeight: 'bold', color: '#0369a1' },
+  guidelinesText: { fontSize: 13, color: '#0f172a', marginBottom: 4, lineHeight: 18 },
+
+  sectionHeader: { fontSize: 14, fontWeight: 'bold', color: '#4b5563', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  exampleScroll: { marginBottom: 20, flexGrow: 0 },
+  exampleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#fde68a', gap: 6 },
+  exampleBtnText: { color: '#92400e', fontWeight: 'bold', fontSize: 13 },
+
+  theoryToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f5e9', padding: 15, borderRadius: 10, marginBottom: 15 },
+  theoryToggleText: { color: '#104a28', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
   theoryCard: { backgroundColor: '#f0fdf4', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' },
   theoryTitle: { fontSize: 16, fontWeight: 'bold', color: '#166534', marginBottom: 8 },
   theoryText: { fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 15 },
@@ -369,7 +447,7 @@ const styles = StyleSheet.create({
 
   resultContainer: { gap: 15, paddingBottom: 30 },
   
-  svgWrapper: { backgroundColor: '#white', borderRadius: 12, padding: 20, elevation: 2, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  svgWrapper: { backgroundColor: 'white', borderRadius: 12, padding: 20, elevation: 2, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
   vizLabel: { fontWeight: 'bold', color: '#334155', marginBottom: 10, fontSize: 15 },
   vizSubText: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginTop: 10 },
 
@@ -379,9 +457,9 @@ const styles = StyleSheet.create({
   viewHighlightBtn: { marginTop: 10 },
   viewHighlightText: { color: '#059669', fontWeight: 'bold', fontSize: 13, textDecorationLine: 'underline' },
 
-  stepsBox: { backgroundColor: '#white', padding: 20, borderRadius: 12, elevation: 2, borderWidth: 1, borderColor: '#e2e8f0' },
-  stepTitle: { fontSize: 16, fontWeight: 'bold', color: '#334155', marginBottom: 10 },
-  stepText: { fontSize: 14, color: '#475569', marginBottom: 6, lineHeight: 22, fontFamily: 'monospace' },
+  stepsBox: { backgroundColor: '#f8fafc', padding: 20, borderRadius: 12, elevation: 2, borderWidth: 1, borderColor: '#e2e8f0', borderLeftWidth: 4, borderLeftColor: '#2D7FF9' },
+  stepTitle: { fontSize: 15, fontWeight: 'bold', color: '#1565C0' },
+  stepText: { fontSize: 14, color: '#475569', marginBottom: 6, lineHeight: 22, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   // --- MODAL Z-TABLE STYLES ---
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },

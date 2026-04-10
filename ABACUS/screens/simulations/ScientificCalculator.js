@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform, ScrollView 
+  View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, Alert 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,19 @@ import { Ionicons } from '@expo/vector-icons';
 export default function ScientificCalculator({ navigation }) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
+  const [isDegree, setIsDegree] = useState(true); // Toggle for Deg/Rad
+
+  // Helper for Factorial (Discrete Math Essential)
+  const factorial = (n) => {
+    if (n < 0) return NaN;
+    if (n === 0) return 1;
+    let res = 1;
+    for (let i = 1; i <= n; i++) res *= i;
+    return res;
+  };
 
   const handlePress = (val) => {
-    if (result && result !== 'Error' && !['+', '-', '×', '÷', '^'].includes(val)) {
+    if (result && result !== 'Error' && !['+', '-', '×', '÷', '^', '%'].includes(val)) {
       setInput(val);
       setResult('');
     } else if (result && result !== 'Error') {
@@ -19,16 +29,6 @@ export default function ScientificCalculator({ navigation }) {
     } else {
       setInput((prev) => prev + val);
     }
-  };
-
-  const handleClear = () => {
-    setInput('');
-    setResult('');
-  };
-
-  const handleDelete = () => {
-    setInput((prev) => prev.slice(0, -1));
-    setResult('');
   };
 
   const calculateResult = () => {
@@ -40,23 +40,35 @@ export default function ScientificCalculator({ navigation }) {
         .replace(/÷/g, '/')
         .replace(/π/g, 'Math.PI')
         .replace(/e/g, 'Math.E')
-        .replace(/sin\(/g, 'Math.sin(')
-        .replace(/cos\(/g, 'Math.cos(')
-        .replace(/tan\(/g, 'Math.tan(')
+        .replace(/abs\(/g, 'Math.abs(')
+        .replace(/\^/g, '**');
+
+      // Adjust Trig for Degrees if active
+      const angleMultiplier = isDegree ? '(Math.PI/180)' : '1';
+      
+      formattedInput = formattedInput
+        .replace(/sin\(/g, `Math.sin(${angleMultiplier}*`)
+        .replace(/cos\(/g, `Math.cos(${angleMultiplier}*`)
+        .replace(/tan\(/g, `Math.tan(${angleMultiplier}*`)
+        .replace(/asin\(/g, `(180/Math.PI)*Math.asin(`)
+        .replace(/acos\(/g, `(180/Math.PI)*Math.acos(`)
+        .replace(/atan\(/g, `(180/Math.PI)*Math.atan(`)
         .replace(/log\(/g, 'Math.log10(')
         .replace(/ln\(/g, 'Math.log(')
-        .replace(/√\(/g, 'Math.sqrt(')
-        .replace(/\^/g, '**'); 
+        .replace(/√\(/g, 'Math.sqrt(');
+
+      // Handle Factorials (Simple regex for integers like 5!)
+      formattedInput = formattedInput.replace(/(\d+)!/g, (match, num) => {
+        return factorial(parseInt(num));
+      });
 
       const evalResult = new Function('return ' + formattedInput)();
       
-      if (!isFinite(evalResult) || isNaN(evalResult)) {
-        throw new Error('Math Error');
-      }
+      if (!isFinite(evalResult) || isNaN(evalResult)) throw new Error();
 
       const finalResult = Number.isInteger(evalResult) 
         ? evalResult.toString() 
-        : parseFloat(evalResult.toFixed(6)).toString();
+        : parseFloat(evalResult.toFixed(8)).toString();
 
       setResult(finalResult);
     } catch (error) {
@@ -64,9 +76,14 @@ export default function ScientificCalculator({ navigation }) {
     }
   };
 
-  const buttons = [
-    ['sin(', 'cos(', 'tan(', 'π'],
+  const sciButtons = [
+    ['sin(', 'cos(', 'tan(', 'deg/rad'],
+    ['asin(', 'acos(', 'atan(', 'abs('],
     ['log(', 'ln(', '√(', '^'],
+    ['π', 'e', '!', '%']
+  ];
+
+  const standardButtons = [
     ['C', '⌫', '(', ')'],
     ['7', '8', '9', '÷'],
     ['4', '5', '6', '×'],
@@ -74,69 +91,78 @@ export default function ScientificCalculator({ navigation }) {
     ['.', '0', '=', '+']
   ];
 
-  const getButtonColor = (btn) => {
-    if (['C', '⌫'].includes(btn)) return '#ef4444'; 
-    if (['=', '+', '-', '×', '÷'].includes(btn)) return '#eab308'; 
-    if (['sin(', 'cos(', 'tan(', 'π', 'log(', 'ln(', '√(', '^', '(', ')'].includes(btn)) return '#e2e8f0'; 
-    return '#f8fafc'; 
-  };
-
-  const getTextColor = (btn) => {
-    if (['C', '⌫', '=', '+', '-', '×', '÷'].includes(btn)) return '#ffffff';
-    if (['sin(', 'cos(', 'tan(', 'π', 'log(', 'ln(', '√(', '^', '(', ')'].includes(btn)) return '#334155';
-    return '#0f172a';
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Standard App Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#104a28" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Scientific Calculator</Text>
+        <View style={styles.modeBadge}>
+            <Text style={styles.modeText}>{isDegree ? 'DEG' : 'RAD'}</Text>
+        </View>
       </View>
 
-      {/* Main Content Area */}
-      <View style={styles.content}>
-        <View style={styles.calculatorCard}>
-            
-          {/* Display Screen */}
-          <View style={styles.displayContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inputScroll}>
-                <Text style={styles.inputText}>{input || '0'}</Text>
-            </ScrollView>
-            <Text style={[styles.resultText, result === 'Error' && {color: '#ef4444'}]}>
-                {result ? `= ${result}` : ''}
-            </Text>
-          </View>
+      <View style={styles.displayContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inputScroll}>
+            <Text style={styles.inputText}>{input || '0'}</Text>
+        </ScrollView>
+        <Text style={[styles.resultText, result === 'Error' && {color: '#ef4444'}]}>
+            {result ? `= ${result}` : ''}
+        </Text>
+      </View>
 
-          {/* Keypad */}
-          <View style={styles.keypadContainer}>
-            {buttons.map((row, rowIndex) => (
+      <View style={styles.keypadContainer}>
+        {/* Scientific Panel (Scrollable horizontally if needed) */}
+        <View style={styles.sciPanel}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {sciButtons.map((row, rIdx) => (
+                    <View key={rIdx} style={styles.sciRow}>
+                        {row.map((btn) => (
+                            <TouchableOpacity 
+                                key={btn} 
+                                style={styles.sciButton}
+                                onPress={() => btn === 'deg/rad' ? setIsDegree(!isDegree) : handlePress(btn)}
+                            >
+                                <Text style={styles.sciButtonText}>{btn === 'deg/rad' ? (isDegree ? 'RAD' : 'DEG') : btn}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+
+        {/* Standard Panel */}
+        <View style={styles.standardPanel}>
+            {standardButtons.map((row, rowIndex) => (
               <View key={rowIndex} style={styles.row}>
                 {row.map((btn) => (
                   <TouchableOpacity
                     key={btn}
-                    style={[styles.button, { backgroundColor: getButtonColor(btn) }]}
+                    style={[
+                        styles.button, 
+                        (btn === '=' || ['+', '-', '×', '÷'].includes(btn)) && styles.opButton,
+                        (btn === 'C' || btn === '⌫') && styles.delButton
+                    ]}
                     onPress={() => {
-                      if (btn === 'C') handleClear();
-                      else if (btn === '⌫') handleDelete();
+                      if (btn === 'C') { setInput(''); setResult(''); }
+                      else if (btn === '⌫') setInput(prev => prev.slice(0, -1));
                       else if (btn === '=') calculateResult();
                       else handlePress(btn);
                     }}
                   >
-                    <Text style={[styles.buttonText, { color: getTextColor(btn) }]}>
+                    <Text style={[
+                        styles.buttonText, 
+                        (btn === '=' || ['+', '-', '×', '÷', 'C', '⌫'].includes(btn)) && {color: '#fff'}
+                    ]}>
                       {btn === '⌫' ? <Ionicons name="backspace-outline" size={22} /> : btn}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             ))}
-          </View>
-          
         </View>
       </View>
     </SafeAreaView>
@@ -144,68 +170,58 @@ export default function ScientificCalculator({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // Matches the rest of your app
   container: { flex: 1, backgroundColor: '#F8F9FD' },
   header: { 
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, 
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee',
-    elevation: 2, shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.05
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', justifyContent: 'space-between'
   },
-  backBtn: { marginRight: 15 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#104a28' },
+  modeBadge: { backgroundColor: '#e0f2fe', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  modeText: { fontSize: 12, fontWeight: '900', color: '#0369a1' },
   
-  // Center the calculator on the screen
-  content: {
-    flex: 1,
-    padding: 15,
-    justifyContent: 'center'
-  },
-  
-  // The Calculator Body
-  calculatorCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#e2e8f0'
-  },
-
-  // Display Screen Styling
   displayContainer: { 
-      backgroundColor: '#f8fafc', 
-      borderRadius: 16, 
-      padding: 20, 
-      height: 120, // Fixed height so it doesn't expand
+      backgroundColor: '#fff', 
+      padding: 25, 
+      height: 160, 
       justifyContent: 'flex-end',
       alignItems: 'flex-end',
-      marginBottom: 15,
-      borderWidth: 1,
-      borderColor: '#cbd5e1'
+      borderBottomWidth: 1,
+      borderColor: '#eee'
   },
   inputScroll: { alignItems: 'flex-end', justifyContent: 'flex-end', flexGrow: 1 },
-  inputText: { fontSize: 32, color: '#334155', fontWeight: '400', letterSpacing: 1 },
-  resultText: { fontSize: 24, color: '#10b981', fontWeight: 'bold', marginTop: 5 },
+  inputText: { fontSize: 36, color: '#334155', fontWeight: '300' },
+  resultText: { fontSize: 28, color: '#10b981', fontWeight: 'bold', marginTop: 10 },
   
-  // Keypad Styling
-  keypadContainer: { },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  keypadContainer: { flex: 1, padding: 10, backgroundColor: '#fff' },
+  
+  // Scientific Section
+  sciPanel: { marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingBottom: 10 },
+  sciRow: { flexDirection: 'column', marginRight: 10 },
+  sciButton: { 
+      backgroundColor: '#f1f5f9', 
+      paddingHorizontal: 15, 
+      paddingVertical: 10, 
+      borderRadius: 8, 
+      margin: 4, 
+      minWidth: 70, 
+      alignItems: 'center' 
+  },
+  sciButtonText: { color: '#475569', fontWeight: 'bold', fontSize: 13 },
+
+  // Standard Section
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   button: { 
       flex: 1, 
-      height: 55, // Fixed height instead of aspect ratio
-      marginHorizontal: 4, 
-      borderRadius: 12, 
+      height: 60, 
+      marginHorizontal: 5, 
+      borderRadius: 16, 
       justifyContent: 'center', 
       alignItems: 'center',
-      shadowColor: '#000', 
-      shadowOffset: {width: 0, height: 1}, 
-      shadowOpacity: 0.05, 
-      shadowRadius: 2, 
-      elevation: 1
+      backgroundColor: '#f8fafc',
+      borderWidth: 1,
+      borderColor: '#f1f5f9'
   },
-  buttonText: { fontSize: 18, fontWeight: '700' }
+  opButton: { backgroundColor: '#104a28', borderColor: '#104a28' },
+  delButton: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
+  buttonText: { fontSize: 20, fontWeight: '600', color: '#334155' }
 });

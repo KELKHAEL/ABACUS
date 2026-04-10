@@ -3,18 +3,35 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Scro
 import { Ionicons } from '@expo/vector-icons';
 
 export default function FrequencyDistributionSimulation({ navigation }) {
-  const EXAMPLE_DATA = "82, 82, 83, 79, 72, 71, 84, 59, 77, 73, 83, 82, 63, 75, 50, 85, 76, 79, 68, 81, 79, 69, 74, 53, 73, 71, 50, 76, 57, 89, 72, 88, 84, 80, 68, 50, 74, 84, 71, 66, 71, 80, 72, 60, 81, 89, 94, 80, 84, 84, 84, 76, 75, 82, 76, 53, 91, 69, 60, 96, 59, 62, 79, 82, 72, 81, 60, 84, 68, 52, 77, 78, 87, 75, 86, 82, 74, 73, 50, 72, 50, 69, 75, 70, 77, 87, 86, 77, 69, 75, 87, 73, 84, 68, 85, 62, 87, 92, 81, 69";
+  // ✅ 3 DISTINCT REAL-WORLD DATASETS
+  const EXAMPLES = {
+    scores: "82, 82, 83, 79, 72, 71, 84, 59, 77, 73, 83, 82, 63, 75, 50, 85, 76, 79, 68, 81, 79, 69, 74, 53, 73, 71, 50, 76, 57, 89, 72, 88, 84, 80, 68, 50, 74, 84, 71, 66, 71, 80, 72, 60, 81, 89, 94, 80, 84, 84, 84, 76, 75, 82, 76, 53, 91, 69, 60, 96, 59, 62, 79, 82, 72, 81, 60, 84, 68, 52, 77, 78, 87, 75, 86, 82, 74, 73, 50, 72, 50, 69, 75, 70, 77, 87, 86, 77, 69, 75, 87, 73, 84, 68, 85, 62, 87, 92, 81, 69",
+    ages: "18, 19, 20, 22, 19, 18, 21, 23, 20, 19, 18, 19, 24, 21, 20, 19, 18, 19, 22, 21, 18, 19, 20, 23, 19, 18, 20, 21, 19, 22",
+    temps: "32, 34, 31, 29, 35, 36, 33, 30, 28, 32, 35, 37, 34, 31, 33, 32, 36, 38, 30, 29, 31, 33, 34, 35, 32, 30, 28, 31, 33, 36"
+  };
 
   const [rawData, setRawData] = useState('');
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState('FDT'); 
 
+  // ✅ STRICT INPUT FILTERING
+  const handleInput = (text) => {
+    // Strips all letters and special characters except numbers, spaces, commas, and minus signs
+    const cleanText = text.replace(/[^0-9,\s-]/g, '');
+    setRawData(cleanText);
+  };
+
+  const loadExample = (type) => {
+    setRawData(EXAMPLES[type]);
+    setResult(null);
+  };
+
   const calculateFDT = () => {
     Keyboard.dismiss();
-    const data = rawData.split(/[\s,]+/).map(n => parseFloat(n)).filter(n => !isNaN(n));
+    const data = rawData.split(/[\s,]+/).map(n => parseInt(n, 10)).filter(n => !isNaN(n));
 
     if (data.length < 5) {
-      Alert.alert("Insufficient Data", "Please enter at least 5 valid numbers.");
+      Alert.alert("Insufficient Data", "Please enter at least 5 valid numbers to build a meaningful distribution table.");
       return;
     }
 
@@ -24,12 +41,16 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     const LV = data[0];
     const Range = HV - LV;
 
-    // ✨ MATHEMATICAL FIX: Sturges' Formula for Number of Classes
+    if (Range === 0) {
+      Alert.alert("Logic Error", "All numbers in your dataset are exactly the same. A frequency distribution table cannot be built without a range of different values.");
+      return;
+    }
+
+    // Sturges' Formula for Number of Classes
     const k_exact = 1 + (3.322 * Math.log10(N));
     const k = Math.round(k_exact);
     
-    // ✨ MATHEMATICAL FIX: Class width must strictly round UP to fit all data.
-    // Using (Range + 1) ensures inclusive integer boundaries
+    // Class width must strictly round UP to fit all data.
     const c_calc = (HV - LV + 1) / k; 
     const c = Math.ceil(c_calc); 
 
@@ -38,7 +59,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     let cumFreqLess = 0;
     let sum_fx = 0;
 
-    for (let i = 0; i < k + 2; i++) { // Safety buffer in loop
+    for (let i = 0; i < k + 2; i++) { 
       const currentUpper = currentLower + c - 1;
       const classData = data.filter(n => n >= currentLower && n <= currentUpper);
       const f = classData.length;
@@ -63,7 +84,6 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       });
 
       currentLower = currentUpper + 1;
-      // Stop strictly when we have counted all N items
       if (cumFreqLess >= N) break;
     }
 
@@ -132,7 +152,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
       },
       disp: {
         meanDeviation: (sum_f_abs_dev / N).toFixed(2),
-        variance: (sum_f_sq_dev / (N - 1)).toFixed(2), // Note: Sample Variance (N-1)
+        variance: (sum_f_sq_dev / (N - 1)).toFixed(2),
         stdDev: Math.sqrt(sum_f_sq_dev / (N - 1)).toFixed(2),
         sum_f_abs_dev: sum_f_abs_dev.toFixed(2),
         sum_f_sq_dev: sum_f_sq_dev.toFixed(2)
@@ -140,7 +160,6 @@ export default function FrequencyDistributionSimulation({ navigation }) {
     });
   };
 
-  const loadExample = () => setRawData(EXAMPLE_DATA);
   const clear = () => { setRawData(''); setResult(null); setActiveTab('FDT'); };
 
   return (
@@ -154,6 +173,35 @@ export default function FrequencyDistributionSimulation({ navigation }) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          
+          {/* ✅ GUIDELINES CARD */}
+          <View style={styles.guidelinesCard}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+                  <Ionicons name="information-circle" size={22} color="#0284c7" />
+                  <Text style={styles.guidelinesTitle}>Simulation Guidelines</Text>
+              </View>
+              <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Whole Numbers Only:</Text> To ensure proper integer-based class limits, this calculator strictly accepts whole numbers.</Text>
+              <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Formatting:</Text> Separate your numbers using spaces or commas.</Text>
+              <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Minimum Data:</Text> Provide at least 5 different numbers to build a valid distribution table.</Text>
+          </View>
+
+          {/* ✅ PRESET SCENARIOS */}
+          <Text style={styles.sectionHeader}>Try a Preset Dataset</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exampleScroll}>
+              <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('scores')}>
+                  <Ionicons name="document-text-outline" size={16} color="#b45309" />
+                  <Text style={styles.exampleBtnText}>Exam Scores (N=100)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('ages')}>
+                  <Ionicons name="people-outline" size={16} color="#b45309" />
+                  <Text style={styles.exampleBtnText}>Student Ages (N=30)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('temps')}>
+                  <Ionicons name="thermometer-outline" size={16} color="#b45309" />
+                  <Text style={styles.exampleBtnText}>Temperatures (N=30)</Text>
+              </TouchableOpacity>
+          </ScrollView>
+
           <View style={styles.card}>
             <Text style={styles.cardTitle}>DATA SET INPUT</Text>
             <TextInput 
@@ -161,15 +209,14 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                 multiline 
                 placeholder="e.g. 50, 55, 60..." 
                 value={rawData} 
-                onChangeText={setRawData} 
+                onChangeText={handleInput} 
+                // ✅ FORCES THE PHONE TO USE THE NUMBER/SYMBOL KEYBOARD
+                keyboardType="numbers-and-punctuation"
             />
             <View style={styles.btnContainer}>
               <View style={styles.secondaryBtnRow}>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={clear}>
                     <Text style={styles.secondaryBtnText}>Clear Input</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.secondaryBtn, styles.loadBtn]} onPress={loadExample}>
-                    <Text style={[styles.secondaryBtnText, styles.loadBtnText]}>Load Example</Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity style={styles.primaryBtn} onPress={calculateFDT}>
@@ -204,9 +251,10 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                   </View>
 
                   <View style={styles.stepCard}>
-                    <Text style={styles.stepTitle}>FDT Construction Steps:</Text>
-                    <Text style={styles.stepItem}>1. Range (R) = HV - LV = {result.stats.Range}</Text>
-                    <Text style={styles.stepItem}>2. Classes (k) via Sturges' Formula ≈ {result.stats.k_rounded}</Text>
+                    <Text style={styles.stepTitle}>FDT Construction Steps (Sturges' Formula):</Text>
+                    <Text style={styles.theoryNote}>We use Sturges' rule to mathematically determine the ideal number of classes (rows) so the data isn't too squished or too spread out.</Text>
+                    <Text style={styles.stepItem}>1. Range (R) = High ({result.stats.HV}) - Low ({result.stats.LV}) = {result.stats.Range}</Text>
+                    <Text style={styles.stepItem}>2. Classes (k) = 1 + 3.322 log({result.stats.N}) ≈ {result.stats.k_rounded}</Text>
                     <Text style={styles.stepItem}>3. Class Width (c) = (Range + 1) / k ≈ {result.stats.c_rounded}</Text>
                   </View>
 
@@ -400,15 +448,23 @@ const styles = StyleSheet.create({
   backButton: { marginRight: 15 },
   headerTitle: { color: '#104a28', fontSize: 18, fontWeight: '900' },
   content: { padding: 20, paddingBottom: 50 },
+
+  guidelinesCard: { backgroundColor: '#e0f2fe', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#bae6fd' },
+  guidelinesTitle: { fontSize: 15, fontWeight: 'bold', color: '#0369a1' },
+  guidelinesText: { fontSize: 13, color: '#0f172a', marginBottom: 4, lineHeight: 18 },
+
+  sectionHeader: { fontSize: 14, fontWeight: 'bold', color: '#4b5563', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  exampleScroll: { marginBottom: 20, flexGrow: 0 },
+  exampleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#fde68a', gap: 6 },
+  exampleBtnText: { color: '#92400e', fontWeight: 'bold', fontSize: 13 },
+
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#104a28', marginBottom: 10, textTransform: 'uppercase' },
-  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', minHeight: 100, textAlignVertical: 'top', fontSize: 15, fontFamily: 'monospace' },
+  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', minHeight: 100, textAlignVertical: 'top', fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   btnContainer: { marginTop: 15, gap: 10 },
   secondaryBtnRow: { flexDirection: 'row', gap: 10 },
   secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' },
   secondaryBtnText: { fontWeight: 'bold', color: '#475569' },
-  loadBtn: { backgroundColor: '#e0f2fe', borderColor: '#38bdf8' },
-  loadBtnText: { color: '#0284c7' },
   primaryBtn: { width: '100%', paddingVertical: 16, borderRadius: 12, backgroundColor: '#104a28', alignItems: 'center' },
   primaryBtnText: { fontWeight: '900', color: '#fff', fontSize: 16 },
   
@@ -424,7 +480,8 @@ const styles = StyleSheet.create({
   ctValue: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
   
   stepCard: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#e2e8f0' },
-  stepTitle: { fontWeight: 'bold', marginBottom: 10, color: '#334155', fontSize: 14 },
+  stepTitle: { fontWeight: 'bold', marginBottom: 5, color: '#334155', fontSize: 14 },
+  theoryNote: { fontSize: 12, color: '#64748b', fontStyle: 'italic', marginBottom: 10, lineHeight: 18 },
   stepItem: { fontSize: 13, color: '#475569', marginBottom: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   
   tableCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', elevation: 1 },
@@ -445,7 +502,6 @@ const styles = StyleSheet.create({
   
   statCard: { backgroundColor: '#fff', padding: 25, borderRadius: 16, alignItems: 'center', marginBottom: 20, borderLeftWidth: 5, elevation: 1, borderColor: '#e2e8f0' },
   statTitleCentered: { fontSize: 14, fontWeight: 'bold', color: '#64748b', marginBottom: 5 },
-  theoryNote: { fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginBottom: 10 },
   statResultBig: { fontSize: 36, fontWeight: '900', marginVertical: 10 },
   subStep: { marginTop: 15, backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', borderWidth: 1, borderColor: '#e2e8f0' },
   stepTextCentered: { fontSize: 13, color: '#334155', textAlign: 'center', fontWeight: 'bold', marginVertical: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }
