@@ -15,7 +15,8 @@ export const AuthProvider = ({ children }) => {
     const loadUser = async () => {
         try {
             const storedUser = await AsyncStorage.getItem('user');
-            if (storedUser) {
+            const storedToken = await AsyncStorage.getItem('token');
+            if (storedUser && storedToken) {
                 let parsedUser = JSON.parse(storedUser);
                 
                 // Silent Background Sync
@@ -23,16 +24,16 @@ export const AuthProvider = ({ children }) => {
                     const res = await fetch(`${API_URL}/users/sync/${parsedUser.id}`);
                     const freshData = await res.json();
                     
-                    // ✅ ANTI-CRASH FIX: If Admin deleted this user from the database, 
-                    // instantly destroy the cached session and log them out!
-                    if (res.status === 404 || freshData.error === "Not found") {
+                    // ✅ ANTI-CRASH & SINGLE SESSION FIX: 
+                    // If Admin deleted this user OR the token doesn't match the active database token, log out.
+                    if (res.status === 404 || freshData.error === "Not found" || (freshData.session_token && freshData.session_token !== storedToken)) {
                         await AsyncStorage.removeItem('token');
                         await AsyncStorage.removeItem('user');
                         setUser(null);
                         setLoading(false);
                         Alert.alert(
                             "Session Expired", 
-                            "Your account was removed by the Administrator or your session expired. Please log in again."
+                            "Your account was logged in from another device, removed by the Administrator, or your session expired. Please log in again."
                         );
                         return; 
                     }

@@ -39,6 +39,55 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
+/**
+ * ✅ SMART NAME PARSER (Helper)
+ * Ensures multi-word names (e.g. "Juan Carlos") stay in First Name,
+ * and extracts middle initial only if explicitly provided in Last, First M. format.
+ */
+const smartFormatName = (inputName) => {
+    if (!inputName) return { first: "", middle: "", last: "" };
+    let last = "", first = "", middle = "";
+    const cleanInput = inputName.trim();
+    
+    if (cleanInput.includes(',')) {
+        const parts = cleanInput.split(',');
+        last = parts[0].trim();
+        let rest = parts[1].trim().split(' ');
+        const lastWord = rest[rest.length - 1];
+        if (rest.length > 1 && (lastWord.length <= 2 || lastWord.endsWith('.'))) {
+            middle = rest.pop().replace('.', ''); 
+            first = rest.join(' ');
+        } else {
+            first = rest.join(' '); 
+            middle = "";
+        }
+    } else {
+        const parts = cleanInput.split(' ');
+        if (parts.length >= 3) {
+            last = parts.pop();
+            const potentialMid = parts[parts.length - 1];
+            if (potentialMid.length <= 2 || potentialMid.endsWith('.')) {
+                middle = parts.pop().replace('.', '');
+                first = parts.join(' ');
+            } else {
+                first = parts.join(' ');
+                middle = "";
+            }
+        } else if (parts.length === 2) {
+            last = parts[1];
+            first = parts[0];
+            middle = "";
+        } else {
+            first = parts[0];
+        }
+    }
+    return {
+        first: first.toUpperCase(),
+        middle: middle ? middle.charAt(0).toUpperCase() + "." : "",
+        last: last.toUpperCase()
+    };
+};
+
 // ✅ AUTO-MIGRATE COLUMNS & DATABASE CLEANUP
 (async () => {
   try {
@@ -693,7 +742,7 @@ app.put('/announcements/:id/soft-delete', async (req, res) => {
 });
 
 // ==========================
-// WHITELIST MANAGEMENT
+// WHITELIST MANAGEMENT (WITH ALERTS & SMART PARSING)
 // ==========================
 app.post('/upload-allowed-students', async (req, res) => {
     const { students } = req.body;
@@ -707,17 +756,21 @@ app.post('/upload-allowed-students', async (req, res) => {
 
         for (const s of students) {
             // Validation: Student ID format (20xx...)
-            if (!s.studentId.startsWith('20')) { continue; }
+            if (!String(s.studentId).startsWith('20')) { continue; }
             if (!s.email.endsWith('@cvsu.edu.ph')) { continue; }
+
+            let nameObj = (s.firstName && s.lastName) 
+                ? { first: s.firstName, middle: s.middleName, last: s.lastName }
+                : smartFormatName(s.rawName);
 
             const [existing] = await connection.query("SELECT * FROM allowed_students WHERE student_id = ?", [s.studentId]);
             
             if (existing.length > 0) {
-                if (existing[0].email !== s.email || existing[0].first_name !== s.firstName) {
+                if (existing[0].email !== s.email || existing[0].first_name !== nameObj.first.toUpperCase()) {
                     // Modification
                     await connection.query(
                         "UPDATE allowed_students SET email = ?, first_name = ?, last_name = ?, middle_name = ? WHERE student_id = ?",
-                        [s.email, s.firstName, s.lastName, s.middleName, s.studentId]
+                        [s.email, nameObj.first.toUpperCase(), nameObj.last.toUpperCase(), nameObj.middle.toUpperCase(), s.studentId]
                     );
                     modified++;
                 } else {
@@ -727,7 +780,7 @@ app.post('/upload-allowed-students', async (req, res) => {
                 // New Entry
                 await connection.query(
                     "INSERT INTO allowed_students (student_id, email, first_name, last_name, middle_name) VALUES (?, ?, ?, ?, ?)",
-                    [s.studentId, s.email, s.firstName, s.lastName, s.middleName]
+                    [s.studentId, s.email, nameObj.first.toUpperCase(), nameObj.last.toUpperCase(), nameObj.middle.toUpperCase()]
                 );
                 newlyAdded++;
             }
@@ -741,59 +794,7 @@ app.post('/upload-allowed-students', async (req, res) => {
     } finally { connection.release(); }
 });
 
-// --- ADDED: Helper for Name Trimming/Formatting ---
-const formatStudentName = (fName, mName, lName) => {
-    const first = fName ? fName.trim().toUpperCase() : "";
-    const last = lName ? lName.trim().toUpperCase() : "";
-    let middleInitial = "";
-    if (mName && mName.trim().length > 0) {
-        middleInitial = mName.trim().charAt(0).toUpperCase() + ".";
-    }
-    return middleInitial ? `${last}, ${first} ${middleInitial}` : `${last}, ${first}`;
-};
-
-const smartFormatName = (inputName) => {
-    if (!inputName) return { first: "", middle: "", last: "" };
-    
-    let last = "", first = "", middle = "";
-    
-    if (inputName.includes(',')) {
-        // Format: Lastname, Firstname Middle
-        const parts = inputName.split(',');
-        last = parts[0].trim();
-        const firstMiddle = parts[1].trim().split(' ');
-        
-        if (firstMiddle.length > 1) {
-            middle = firstMiddle.pop().replace('.', ''); // Extract last word as middle
-            first = firstMiddle.join(' ');
-        } else {
-            first = firstMiddle[0];
-        }
-    } else {
-        // Format: First Middle Last
-        const parts = inputName.trim().split(' ');
-        if (parts.length >= 3) {
-            last = parts.pop();
-            middle = parts.pop().replace('.', '');
-            first = parts.join(' ');
-        } else if (parts.length === 2) {
-            last = parts[1];
-            first = parts[0];
-        } else {
-            first = parts[0];
-        }
-    }
-
-    return {
-        first: first.toUpperCase(),
-        middle: middle ? middle.charAt(0).toUpperCase() + "." : "",
-        last: last.toUpperCase()
-    };
-};
-
-// ==========================
-// UPDATED: WHITELIST VERIFICATION (For Mobile Registration)
-// ==========================
+// ✅ VERIFY WHITELIST (For Mobile Registration)
 app.post('/verify-whitelist', async (req, res) => {
     const { studentId, email } = req.body;
     try {
@@ -812,7 +813,13 @@ app.post('/verify-whitelist', async (req, res) => {
             ? `${s.last_name}, ${s.first_name} ${s.middle_name.charAt(0).toUpperCase()}.`
             : `${s.last_name}, ${s.first_name}`;
 
-        res.json({ success: true, fullName: formattedFullName });
+        res.json({ 
+            success: true, 
+            fullName: formattedFullName,
+            firstName: s.first_name,
+            lastName: s.last_name,
+            middleName: s.middle_name
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Added for Device ID
 
 // ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
 const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
@@ -54,10 +55,17 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
+      // ✅ SINGLE DEVICE ENFORCEMENT: Grab or create a persistent Device ID
+      let deviceId = await AsyncStorage.getItem('deviceId');
+      if (!deviceId) {
+          deviceId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+          await AsyncStorage.setItem('deviceId', deviceId);
+      }
+
       const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, deviceId })
       });
 
       const data = await response.json();

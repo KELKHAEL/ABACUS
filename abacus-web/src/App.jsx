@@ -12,6 +12,7 @@ import ManageInstructors from './modules/admin/ManageInstructors';
 import ManageAnnouncements from './modules/admin/ManageAnnouncements';
 import ManageAcademicSetup from './modules/admin/ManageAcademicSetup';
 import ManagePromotions from './modules/admin/ManagePromotions';
+import ManageWhitelist from './modules/admin/ManageWhitelist';
 
 // Pages - INSTRUCTOR
 import InstructorDashboard from './modules/instructor/InstructorDashboard';
@@ -75,6 +76,7 @@ function App() {
           <Route path="/admin/ManageAnnouncements" element={<ManageAnnouncements />} />
           <Route path="/admin/ManageAcademicSetup" element={<ManageAcademicSetup />} />
           <Route path="/admin/ManagePromotions" element={<ManagePromotions />} />
+          <Route path="/admin/ManageWhitelist" element={<ManageWhitelist />} />
         </Route>
 
         {/* --- INSTRUCTOR ROUTES --- */}

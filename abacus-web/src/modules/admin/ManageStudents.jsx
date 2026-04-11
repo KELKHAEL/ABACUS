@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, RefreshCw, User, Mail, Key, Upload, Eye, RotateCcw, X, Save, Filter } from 'lucide-react';
-import * as XLSX from 'xlsx'; 
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Edit, Trash2, User, Mail, Key, Eye, RotateCcw, X } from 'lucide-react';
 import './ManageStudents.css';
 
 export default function ManageStudents() {
@@ -9,129 +8,10 @@ export default function ManageStudents() {
   
   const [academicYears, setAcademicYears] = useState([]);
   const [academicSections, setAcademicSections] = useState([]);
-  
-  const [allowedList, setAllowedList] = useState([]);
-  const [showWhitelistModal, setShowWhitelistModal] = useState(false);
-  const [whitelistLoading, setWhitelistLoading] = useState(false);
-  
-  const [editingWhitelistId, setEditingWhitelistId] = useState(null);
-  const [whitelistEditData, setWhitelistEditData] = useState({ studentId: '', email: '' });
-  const [whitelistFilterYear, setWhitelistFilterYear] = useState('ALL');
 
   const [trashList, setTrashList] = useState([]);
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
-
-  const fileInputRef = useRef(null);
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const bstr = evt.target.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws);
-
-      const formattedData = data.map(row => {
-        // Collect whatever name data exists
-        const rawName = row['Full Name'] || row['Name'] || row['Student Name'] || "";
-        const fName = row['First Name'] || row['first_name'] || "";
-        const mName = row['Middle Name'] || row['middle_name'] || "";
-        const lName = row['Last Name'] || row['last_name'] || "";
-
-        return {
-          studentId: String(row['Student ID'] || row['student_id'] || '').trim(),
-          email: String(row['Email'] || row['email'] || '').trim(),
-          rawName: rawName,
-          firstName: fName,
-          middleName: mName,
-          lastName: lName
-        };
-      }).filter(s => String(s.studentId).startsWith('20') && s.email.endsWith('@cvsu.edu.ph'));
-
-      if (formattedData.length === 0) {
-        alert("Import Error: IDs must start with '20' and use @cvsu.edu.ph emails.");
-        return;
-      }
-
-      try {
-        const res = await fetch('http://localhost:5000/upload-allowed-students', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ students: formattedData })
-        });
-        const result = await res.json();
-        if (result.success) {
-            alert(`Whitelist Alert:\n\n✨ Newly Added: ${result.newlyAdded}\n📝 Modified: ${result.modified}\n🔁 Duplicates/Ignored: ${result.duplicates}`);
-            fetchWhitelist();
-        }
-      } catch (err) { alert("Server connection failed."); }
-    };
-    reader.readAsBinaryString(file);
-    e.target.value = null; 
-  };
-
-  const triggerFileInput = () => { fileInputRef.current.click(); };
-
-  const fetchWhitelist = async () => {
-    setWhitelistLoading(true);
-    try {
-        const res = await fetch('http://localhost:5000/allowed-students');
-        const data = await res.json();
-        setAllowedList(data);
-    } catch (error) { console.error("Error fetching whitelist:", error); }
-    setWhitelistLoading(false);
-  };
-
-  const openWhitelist = () => {
-      setShowWhitelistModal(true);
-      setEditingWhitelistId(null);
-      setWhitelistFilterYear('ALL'); 
-      fetchWhitelist();
-  };
-
-  const deleteFromWhitelist = async (id) => {
-      if(!window.confirm("Remove this student from the allowed list?")) return;
-      try {
-          await fetch(`http://localhost:5000/allowed-students/${id}`, { method: 'DELETE' });
-          fetchWhitelist(); 
-      } catch (e) { alert("Failed to delete"); }
-  };
-
-  const startEditingWhitelist = (item) => {
-      setEditingWhitelistId(item.id);
-      setWhitelistEditData({ studentId: item.student_id, email: item.email });
-  };
-
-  const saveWhitelistEdit = async (id) => {
-      if (!whitelistEditData.studentId || !whitelistEditData.email) return alert("Fields cannot be empty.");
-      try {
-          const res = await fetch(`http://localhost:5000/allowed-students/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(whitelistEditData)
-          });
-          const data = await res.json();
-          if (data.success) {
-              setEditingWhitelistId(null);
-              fetchWhitelist();
-          } else { alert("Failed to update: " + data.error); }
-      } catch (e) { alert("Server Error."); }
-  };
-
-  const whitelistBatchYears = [...new Set(
-      allowedList
-        .map(item => item.student_id ? String(item.student_id).substring(0, 4) : null)
-        .filter(year => year && year.startsWith('20')) 
-  )].sort((a, b) => b.localeCompare(a)); 
-
-  const filteredWhitelist = allowedList.filter(item => {
-      if (whitelistFilterYear === 'ALL') return true;
-      return item.student_id && String(item.student_id).startsWith(whitelistFilterYear);
-  });
 
   const fetchTrash = async () => {
     setTrashLoading(true);
@@ -354,15 +234,11 @@ export default function ManageStudents() {
         <h1 className="page-title">Manage Students</h1>
         
         <div style={{display: 'flex', gap: '10px'}}>
-            <input type="file" accept=".xlsx, .xls" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileUpload} />
             <button className="btn-secondary" style={{backgroundColor: '#ef4444'}} onClick={openTrash}>
               <Trash2 size={20} /> Trash Bin
             </button>
-            <button className="btn-secondary" style={{backgroundColor: '#6b7280'}} onClick={openWhitelist}>
-              <Eye size={20} /> Whitelist
-            </button>
-            <button className="btn-secondary" onClick={triggerFileInput}>
-              <Upload size={20} /> Upload List
+            <button className="btn-secondary" style={{backgroundColor: '#6b7280'}} onClick={() => window.location.href = '/admin/ManageWhitelist'}>
+              <Eye size={20} /> View Whitelist
             </button>
             <button className="btn-primary" onClick={openAddModal}>
               <Plus size={20} /> Add Student
@@ -421,7 +297,6 @@ export default function ManageStudents() {
                     <td>{isNew ? <span className="badge badge-new">Verification</span> : <span className={`badge ${getStatusClass(student.status)}`}>{student.status || 'Regular'}</span>}</td>
                     <td style={{fontFamily: 'monospace'}}>{student.studentId || 'N/A'}</td>
                     
-                    {/* ✅ FIX: Replaces the ugly 4-To be assigned text with a clean badge */}
                     <td>
                       {student.section === 'To be assigned' ? (
                           <span style={{background: '#f1f5f9', color: '#6b7280', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'}}>
@@ -446,86 +321,6 @@ export default function ManageStudents() {
           </tbody>
         </table>
       </div>
-
-      {showWhitelistModal && (
-        <div className="modal-overlay" onClick={() => setShowWhitelistModal(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '800px', maxWidth: '95vw', padding: 0, overflow: 'hidden'}}>
-                
-                <div style={{background: '#104a28', padding: '20px 24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Eye size={22}/> Allowed Students (Whitelist)</h2>
-                    <button onClick={() => setShowWhitelistModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>
-                </div>
-
-                <div style={{padding: '15px 24px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '10px'}}>
-                    <Filter size={16} color="#6b7280"/>
-                    <span style={{fontSize: '13px', fontWeight: 'bold', color: '#4b5563'}}>Filter by Batch:</span>
-                    <select
-                        value={whitelistFilterYear}
-                        onChange={(e) => setWhitelistFilterYear(e.target.value)}
-                        style={{padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none', cursor: 'pointer', minWidth: '150px'}}
-                    >
-                        <option value="ALL">All Batches</option>
-                        {whitelistBatchYears.map(year => (
-                            <option key={year} value={year}>Batch {year}</option>
-                        ))}
-                    </select>
-                    <span style={{marginLeft: 'auto', fontSize: '12px', color: '#6b7280', fontWeight: '500'}}>
-                        Showing {filteredWhitelist.length} students
-                    </span>
-                </div>
-
-                <div style={{padding: '0 24px 24px 24px', maxHeight: '60vh', overflowY: 'auto'}}>
-                    {whitelistLoading ? <p style={{textAlign: 'center', color: '#666', padding: '20px'}}>Loading whitelist...</p> : filteredWhitelist.length === 0 ? <p style={{color: '#888', textAlign:'center', padding: '20px'}}>No students found.</p> : (
-                        <table className="data-table" style={{width: '100%', borderCollapse: 'collapse'}}>
-                            <thead style={{background: '#ffffff', position: 'sticky', top: 0, zIndex: 10}}>
-                                <tr>
-                                    <th style={{padding: '16px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Student ID</th>
-                                    <th style={{padding: '16px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Email Address</th>
-                                    <th style={{padding: '16px 12px', textAlign: 'right', borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontSize: '13px', fontWeight: '700'}}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredWhitelist.map((item) => {
-                                    const isItemEditing = editingWhitelistId === item.id;
-                                    return (
-                                        <tr key={item.id} style={{borderBottom: '1px solid #f3f4f6', background: isItemEditing ? '#f0fdf4' : 'transparent'}}>
-                                            {isItemEditing ? (
-                                                <>
-                                                    <td style={{padding: '8px 12px'}}>
-                                                        <input autoFocus style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontFamily: 'monospace', fontSize: '13px'}} value={whitelistEditData.studentId} onChange={(e) => setWhitelistEditData({...whitelistEditData, studentId: e.target.value})} />
-                                                    </td>
-                                                    <td style={{padding: '8px 12px'}}>
-                                                        <input style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', outline: 'none', fontSize: '13px'}} value={whitelistEditData.email} onChange={(e) => setWhitelistEditData({...whitelistEditData, email: e.target.value})} />
-                                                    </td>
-                                                    <td style={{padding: '8px 12px', textAlign: 'right'}}>
-                                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px'}}>
-                                                            <button onClick={() => saveWhitelistEdit(item.id)} style={{background: '#10b981', color: 'white', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 'bold'}}><Save size={14}/> Save</button>
-                                                            <button onClick={() => setEditingWhitelistId(null)} style={{background: '#f3f4f6', color: '#4b5563', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold'}}>Cancel</button>
-                                                        </div>
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <td style={{padding: '12px', fontWeight:'600', fontFamily: 'monospace', color: '#111'}}>{item.student_id}</td>
-                                                    <td style={{padding: '12px', color: '#4b5563', fontSize: '14px'}}>{item.email}</td>
-                                                    <td style={{padding: '12px', textAlign: 'right'}}>
-                                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '8px'}}>
-                                                            <button className="btn-icon btn-edit" style={{background: '#f3f4f6', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#0ea5e9'}} onClick={() => startEditingWhitelist(item)} title="Edit Entry"><Edit size={16}/></button>
-                                                            <button className="btn-icon btn-delete" style={{background: '#fee2e2', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', color: '#dc2626'}} onClick={() => deleteFromWhitelist(item.id)} title="Remove from Whitelist"><Trash2 size={16}/></button>
-                                                        </div>
-                                                    </td>
-                                                </>
-                                            )}
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
 
       {showTrashModal && (
         <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>

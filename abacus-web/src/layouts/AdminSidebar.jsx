@@ -89,6 +89,16 @@ export default function AdminSidebar() {
           <ShieldCheck size={20} />
           <span>Verify Promotions</span>
         </Link>
+
+        {/* MANAGE PROMOTIONS LINK */}
+        <Link 
+          to="/admin/ManageWhitelist" 
+          className={`nav-item ${isActive('/admin/ManageWhitelist') ? 'active' : ''}`}
+        >
+          <Users size={20} />
+          <span>Manage Whitelist</span>
+        </Link>
+
       </nav>
 
       {/* Footer / Logout */}

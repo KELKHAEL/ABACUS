@@ -15,11 +15,14 @@ export default function RegisterScreen({ navigation }) {
   const [loadingSetup, setLoadingSetup] = useState(true);
 
   // --- FORM STATE ---
+  const [studentId, setStudentId] = useState('');
+  const [email, setEmail] = useState('');
+  
+  // These will be auto-filled from the server
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [studentId, setStudentId] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullServerName, setFullServerName] = useState('');
   
   const [program, setProgram] = useState('');
   const [yearLevel, setYearLevel] = useState('');
@@ -37,6 +40,7 @@ export default function RegisterScreen({ navigation }) {
   // --- LOGIC & TIMER STATE ---
   const [generatedOtp, setGeneratedOtp] = useState(null); 
   const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isOtpVerified, setIsOtpVerified] = useState(false); 
   const [loading, setLoading] = useState(false);     
   const [otpLoading, setOtpLoading] = useState(false); 
   const [countdown, setCountdown] = useState(0); 
@@ -76,15 +80,6 @@ export default function RegisterScreen({ navigation }) {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const getFormattedName = () => {
-    let name = `${lastName}, ${firstName}`;
-    if (middleName && middleName.trim() !== '') {
-      const initial = middleName.trim().charAt(0).toUpperCase();
-      name += ` ${initial}.`;
-    }
-    return name;
-  };
-
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -103,8 +98,8 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
+  // ✅ STEP 1: REQUEST OTP
   const handleRequestOtp = async () => {
-    if (!firstName || !lastName) return Alert.alert("Error", "Please enter your First and Last Name.");
     if (!studentId) return Alert.alert("Error", "Please enter your Student ID.");
     if (!email) return Alert.alert("Error", "Please enter your email.");
     
@@ -113,8 +108,6 @@ export default function RegisterScreen({ navigation }) {
     }
 
     setOtpLoading(true);
-    
-    const fullName = getFormattedName();
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
@@ -123,7 +116,7 @@ export default function RegisterScreen({ navigation }) {
         headers: { 'Content-Type': 'text/plain' }, 
         body: JSON.stringify({ 
             to_email: email, 
-            student_name: fullName, 
+            student_name: "Student", 
             otp_code: code 
         })
       });
@@ -148,8 +141,40 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
+  // ✅ STEP 2: VERIFY OTP AND FETCH NAME FROM WHITELIST
+  const handleVerifyOtpAndFetchName = async () => {
+      if (!otpInput) return Alert.alert("Error", "Please enter the OTP.");
+      if (otpInput !== generatedOtp) return Alert.alert("Incorrect OTP", "The code you entered is wrong.");
+      if (Date.now() - otpTimestamp > 300000) return Alert.alert("OTP Expired", "Your verification code has expired after 5 minutes.");
+
+      setLoading(true);
+      try {
+          const res = await fetch(`${API_URL}/verify-whitelist`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ studentId, email })
+          });
+          const data = await res.json();
+          
+          if (data.success) {
+              setFirstName(data.firstName || "");
+              setLastName(data.lastName || "");
+              setMiddleName(data.middleName || "");
+              setFullServerName(data.fullName);
+              setIsOtpVerified(true);
+              Alert.alert("Identity Verified", `Welcome, ${data.firstName || 'Student'}. Please complete your registration.`);
+          } else {
+              Alert.alert("Access Denied", data.error || "Your details are not in the allowed student list. Contact Coordinator.");
+          }
+      } catch (err) {
+          Alert.alert("Server Error", "Could not verify identity.");
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleRegister = async () => {
-    if (!firstName || !lastName || !studentId || !email || !program || !yearLevel || !section || !password || !confirmPassword || !otpInput) {
+    if (!program || !yearLevel || !section || !password || !confirmPassword) {
       return Alert.alert("Missing Fields", "Please fill in all details, including Program, Year, and Section.");
     }
     if (!corImage) {
@@ -161,20 +186,12 @@ export default function RegisterScreen({ navigation }) {
     if (password.length < 6) {
       return Alert.alert("Weak Password", "Password must be at least 6 characters.");
     }
-    if (otpInput !== generatedOtp) {
-      return Alert.alert("Incorrect OTP", "The code you entered is wrong.");
-    }
-    if (Date.now() - otpTimestamp > 300000) {
-      return Alert.alert("OTP Expired", "Your verification code has expired after 5 minutes. Please request a new one.");
-    }
 
     setLoading(true);
 
     try {
-      const fullName = getFormattedName();
-
       const formData = new FormData();
-      formData.append('fullName', fullName);
+      formData.append('fullName', fullServerName); // Guaranteed format from server
       formData.append('studentId', studentId);
       formData.append('email', email);
       formData.append('password', password);
@@ -259,100 +276,109 @@ export default function RegisterScreen({ navigation }) {
           </View>
 
           <View style={styles.form}>
-            <View style={{flexDirection: 'row', gap: 10}}>
-                <View style={{flex: 1}}>
-                    <Text style={styles.label}>First Name</Text>
-                    <TextInput style={styles.input} placeholder="Juan" value={firstName} onChangeText={setFirstName} />
+            
+            {/* STEP 1: INITIAL VERIFICATION */}
+            {!isOtpVerified ? (
+              <>
+                <Text style={styles.label}>Student ID</Text>
+                <TextInput style={styles.input} placeholder="e.g. 202312345" value={studentId} onChangeText={setStudentId} keyboardType="numeric" editable={!isOtpSent} />
+
+                <Text style={styles.label}>CvSU Email</Text>
+                <View style={styles.otpRow}>
+                  <TextInput 
+                    style={[styles.input, {flex: 1, marginBottom: 0}]} 
+                    placeholder="student@cvsu.edu.ph" autoCapitalize="none" keyboardType="email-address"
+                    value={email} onChangeText={setEmail} editable={!isOtpSent}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.otpBtn, (!email || !studentId || otpLoading || countdown > 0) && styles.disabledBtn]} 
+                    onPress={handleRequestOtp} 
+                    disabled={otpLoading || !email || !studentId || countdown > 0}
+                  >
+                    {otpLoading ? <ActivityIndicator color="#fff" size="small"/> : countdown > 0 ? <Text style={styles.otpText}>WAIT {countdown}s</Text> : <Text style={styles.otpText}>GET OTP</Text>}
+                  </TouchableOpacity>
                 </View>
-                <View style={{flex: 1}}>
-                    <Text style={styles.label}>Last Name</Text>
-                    <TextInput style={styles.input} placeholder="Dela Cruz" value={lastName} onChangeText={setLastName} />
-                </View>
-            </View>
+                <Text style={styles.helperText}>Click 'GET OTP' to verify you are on the list.</Text>
 
-            <Text style={styles.label}>Middle Name (Optional)</Text>
-            <TextInput style={styles.input} placeholder="Santos (or Middle Initial)" value={middleName} onChangeText={setMiddleName} />
-
-            <Text style={styles.label}>Student ID</Text>
-            <TextInput style={styles.input} placeholder="e.g. 202312345" value={studentId} onChangeText={setStudentId} keyboardType="numeric" />
-
-            {/* ✅ DYNAMIC PROGRAM DROPDOWN */}
-            <Text style={styles.label}>Program</Text>
-            <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowProgramModal(true)}>
-              <Text style={{color: program ? '#333' : '#aaa', fontSize: 14}}>{program || "Select your program"}</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.label}>CvSU Email</Text>
-            <View style={styles.otpRow}>
-              <TextInput 
-                style={[styles.input, {flex: 1, marginBottom: 0}]} 
-                placeholder="student@cvsu.edu.ph" autoCapitalize="none" keyboardType="email-address"
-                value={email} onChangeText={setEmail} 
-              />
-              <TouchableOpacity 
-                style={[styles.otpBtn, (!email || otpLoading || countdown > 0) && styles.disabledBtn]} 
-                onPress={handleRequestOtp} 
-                disabled={otpLoading || !email || countdown > 0}
-              >
-                {otpLoading ? (
-                  <ActivityIndicator color="#fff" size="small"/>
-                ) : countdown > 0 ? (
-                  <Text style={styles.otpText}>WAIT {countdown}s</Text>
-                ) : (
-                  <Text style={styles.otpText}>GET OTP</Text>
+                {isOtpSent && (
+                  <View style={styles.fadeContainer}>
+                    <Text style={styles.label}>Enter OTP Code</Text>
+                    <TextInput 
+                      style={[styles.input, {borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9'}]} 
+                      placeholder="123456" keyboardType="numeric" maxLength={6}
+                      value={otpInput} onChangeText={setOtpInput}
+                    />
+                    <TouchableOpacity style={styles.regBtn} onPress={handleVerifyOtpAndFetchName} disabled={loading}>
+                      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.regText}>VERIFY IDENTITY</Text>}
+                    </TouchableOpacity>
+                  </View>
                 )}
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.helperText}>Click 'GET OTP' to receive verification code.</Text>
+              </>
+            ) : (
+              /* STEP 2: FORM COMPLETION */
+              <>
+                <View style={{flexDirection: 'row', gap: 10}}>
+                    <View style={{flex: 1}}>
+                        <Text style={styles.label}>First Name</Text>
+                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={firstName} editable={false} />
+                    </View>
+                    <View style={{flex: 1}}>
+                        <Text style={styles.label}>Last Name</Text>
+                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={lastName} editable={false} />
+                    </View>
+                </View>
 
-            {isOtpSent && (
-              <View style={styles.fadeContainer}>
-                <Text style={styles.label}>Enter OTP Code</Text>
-                <TextInput 
-                  style={[styles.input, {borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9'}]} 
-                  placeholder="123456" keyboardType="numeric" maxLength={6}
-                  value={otpInput} onChangeText={setOtpInput}
-                />
-              </View>
+                {middleName ? (
+                    <View>
+                        <Text style={styles.label}>Middle Name / Initial</Text>
+                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={middleName} editable={false} />
+                    </View>
+                ) : null}
+
+                {/* ✅ DYNAMIC PROGRAM DROPDOWN */}
+                <Text style={styles.label}>Program</Text>
+                <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowProgramModal(true)}>
+                  <Text style={{color: program ? '#333' : '#aaa', fontSize: 14}}>{program || "Select your program"}</Text>
+                </TouchableOpacity>
+
+                <View style={{flexDirection: 'row', gap: 10}}>
+                  <View style={{flex: 1}}>
+                    <Text style={styles.label}>Year Level</Text>
+                    <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowYearModal(true)}>
+                      <Text style={{color: yearLevel ? '#333' : '#aaa', fontSize: 14}}>{yearLevel ? `Year ${yearLevel}` : "Select"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={styles.label}>Section</Text>
+                    <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowSectionModal(true)}>
+                      <Text style={{color: section ? '#333' : '#aaa', fontSize: 14}}>{section ? `Section ${section}` : "Select"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <Text style={styles.label}>Certificate of Registration (Proof)</Text>
+                <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
+                  {corImage ? (
+                    <Image source={{uri: corImage}} style={styles.previewImage} />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={30} color="#104a28" />
+                      <Text style={styles.uploadText}>Tap to upload COR image</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={styles.label}>Password</Text>
+                <TextInput style={styles.input} placeholder="Min. 6 characters" secureTextEntry value={password} onChangeText={setPassword} />
+
+                <Text style={styles.label}>Confirm Password</Text>
+                <TextInput style={styles.input} placeholder="Re-enter password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+
+                <TouchableOpacity style={styles.regBtn} onPress={handleRegister} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.regText}>REGISTER NOW</Text>}
+                </TouchableOpacity>
+              </>
             )}
-
-            {/* ✅ DYNAMIC YEAR & SECTION DROPDOWNS */}
-            <View style={{flexDirection: 'row', gap: 10}}>
-              <View style={{flex: 1}}>
-                <Text style={styles.label}>Year Level</Text>
-                <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowYearModal(true)}>
-                  <Text style={{color: yearLevel ? '#333' : '#aaa', fontSize: 14}}>{yearLevel ? `Year ${yearLevel}` : "Select"}</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{flex: 1}}>
-                <Text style={styles.label}>Section</Text>
-                <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowSectionModal(true)}>
-                  <Text style={{color: section ? '#333' : '#aaa', fontSize: 14}}>{section ? `Section ${section}` : "Select"}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <Text style={styles.label}>Certificate of Registration (Proof)</Text>
-            <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
-              {corImage ? (
-                <Image source={{uri: corImage}} style={styles.previewImage} />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload-outline" size={30} color="#104a28" />
-                  <Text style={styles.uploadText}>Tap to upload COR image</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.label}>Password</Text>
-            <TextInput style={styles.input} placeholder="Min. 6 characters" secureTextEntry value={password} onChangeText={setPassword} />
-
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput style={styles.input} placeholder="Re-enter password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
-
-            <TouchableOpacity style={styles.regBtn} onPress={handleRegister} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.regText}>REGISTER NOW</Text>}
-            </TouchableOpacity>
 
             <TouchableOpacity onPress={() => navigation.goBack()} style={{alignItems:'center', marginTop: 15, marginBottom: 30}}>
               <Text style={{color:'#666'}}>Already have an account? <Text style={{fontWeight:'bold', color:'#104a28'}}>Log In</Text></Text>
