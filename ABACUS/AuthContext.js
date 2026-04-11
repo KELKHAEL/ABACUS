@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
 // ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const AuthContext = createContext();
 

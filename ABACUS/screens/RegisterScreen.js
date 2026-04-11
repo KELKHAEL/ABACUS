@@ -6,8 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'; 
 import * as ImagePicker from 'expo-image-picker';
 
-// ❗ REPLACE THIS WITH YOUR PC'S IP ADDRESS OR NGROK URL
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function RegisterScreen({ navigation }) {
   // --- DYNAMIC SETUP STATE ---
