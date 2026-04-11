@@ -84,40 +84,44 @@ const getActiveTermId = async () => {
 // AUTHENTICATION ROUTES
 // ==========================
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const [users] = await db.query("SELECT * FROM users WHERE email = ? AND is_deleted = 0", [email]);
-    if (users.length === 0) return res.status(401).json({ success: false, error: "User not found or account disabled." });
+    const { email, password, deviceId } = req.body; // mobile should send unique deviceId
+    try {
+        const [users] = await db.query("SELECT * FROM users WHERE email = ? AND is_deleted = 0", [email]);
+        if (users.length === 0) return res.status(401).json({ success: false, error: "Account not found." });
 
-    const user = users[0];
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(401).json({ success: false, error: "Incorrect password." });
+        const user = users[0];
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role }, 
-      'abacus_secret_key_2026', 
-      { expiresIn: '30d' }
-    );
+        // 1. Check Lockout Status
+        if (user.lockout_until && new Date(user.lockout_until) > new Date()) {
+            const minutesLeft = Math.ceil((new Date(user.lockout_until) - new Date()) / 60000);
+            return res.status(403).json({ success: false, error: `Account locked. Try again in ${minutesLeft} minutes.` });
+        }
 
-    let assignedClasses = [];
-    if (user.assigned_classes) {
-        try {
-            assignedClasses = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
-            if (typeof assignedClasses === 'string') assignedClasses = JSON.parse(assignedClasses);
-        } catch(e) { assignedClasses = []; }
-    }
+        const match = await bcrypt.compare(password, user.password_hash);
 
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: user.id, fullName: user.full_name, email: user.email, studentId: user.student_id,
-        role: user.role, yearLevel: user.year_level, section: user.section, assigned_classes: assignedClasses 
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: "Server: " + err.message });
-  }
+        if (!match) {
+            // 2. Increment Login Attempts
+            const newAttempts = user.login_attempts + 1;
+            if (newAttempts >= 3) {
+                const lockoutTime = new Date(Date.now() + 5 * 60000); // 5 Minutes
+                await db.query("UPDATE users SET login_attempts = ?, lockout_until = ? WHERE id = ?", [newAttempts, lockoutTime, user.id]);
+                return res.status(403).json({ success: false, error: "Too many attempts. Account locked for 5 minutes." });
+            } else {
+                await db.query("UPDATE users SET login_attempts = ? WHERE id = ?", [newAttempts, user.id]);
+                return res.status(401).json({ success: false, error: `Incorrect password. ${3 - newAttempts} attempts left.` });
+            }
+        }
+
+        // 3. Reset attempts on success
+        const sessionToken = jwt.sign({ id: user.id, deviceId }, 'abacus_secret_key_2026');
+        await db.query("UPDATE users SET login_attempts = 0, lockout_until = NULL, session_token = ? WHERE id = ?", [sessionToken, user.id]);
+
+        res.json({
+            success: true,
+            token: sessionToken,
+            user: { id: user.id, fullName: user.full_name, role: user.role, email: user.email }
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
@@ -692,19 +696,124 @@ app.put('/announcements/:id/soft-delete', async (req, res) => {
 // WHITELIST MANAGEMENT
 // ==========================
 app.post('/upload-allowed-students', async (req, res) => {
-  const { students } = req.body;
-  if (!students || !Array.isArray(students)) return res.status(400).json({ error: "Invalid data format" });
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
-    const values = students.map(s => [s.studentId, s.email]);
-    if (values.length > 0) await connection.query(`INSERT IGNORE INTO allowed_students (student_id, email) VALUES ?`, [values]);
-    await connection.commit();
-    res.json({ success: true, message: `Processed ${values.length} entries.` });
-  } catch (err) {
-    await connection.rollback();
-    res.status(500).json({ error: err.message });
-  } finally { connection.release(); }
+    const { students } = req.body;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        let newlyAdded = 0;
+        let modified = 0;
+        let duplicates = 0;
+
+        for (const s of students) {
+            // Validation: Student ID format (20xx...)
+            if (!s.studentId.startsWith('20')) { continue; }
+            if (!s.email.endsWith('@cvsu.edu.ph')) { continue; }
+
+            const [existing] = await connection.query("SELECT * FROM allowed_students WHERE student_id = ?", [s.studentId]);
+            
+            if (existing.length > 0) {
+                if (existing[0].email !== s.email || existing[0].first_name !== s.firstName) {
+                    // Modification
+                    await connection.query(
+                        "UPDATE allowed_students SET email = ?, first_name = ?, last_name = ?, middle_name = ? WHERE student_id = ?",
+                        [s.email, s.firstName, s.lastName, s.middleName, s.studentId]
+                    );
+                    modified++;
+                } else {
+                    duplicates++;
+                }
+            } else {
+                // New Entry
+                await connection.query(
+                    "INSERT INTO allowed_students (student_id, email, first_name, last_name, middle_name) VALUES (?, ?, ?, ?, ?)",
+                    [s.studentId, s.email, s.firstName, s.lastName, s.middleName]
+                );
+                newlyAdded++;
+            }
+        }
+
+        await connection.commit();
+        res.json({ success: true, newlyAdded, modified, duplicates });
+    } catch (err) {
+        await connection.rollback();
+        res.status(500).json({ error: err.message });
+    } finally { connection.release(); }
+});
+
+// --- ADDED: Helper for Name Trimming/Formatting ---
+const formatStudentName = (fName, mName, lName) => {
+    const first = fName ? fName.trim().toUpperCase() : "";
+    const last = lName ? lName.trim().toUpperCase() : "";
+    let middleInitial = "";
+    if (mName && mName.trim().length > 0) {
+        middleInitial = mName.trim().charAt(0).toUpperCase() + ".";
+    }
+    return middleInitial ? `${last}, ${first} ${middleInitial}` : `${last}, ${first}`;
+};
+
+const smartFormatName = (inputName) => {
+    if (!inputName) return { first: "", middle: "", last: "" };
+    
+    let last = "", first = "", middle = "";
+    
+    if (inputName.includes(',')) {
+        // Format: Lastname, Firstname Middle
+        const parts = inputName.split(',');
+        last = parts[0].trim();
+        const firstMiddle = parts[1].trim().split(' ');
+        
+        if (firstMiddle.length > 1) {
+            middle = firstMiddle.pop().replace('.', ''); // Extract last word as middle
+            first = firstMiddle.join(' ');
+        } else {
+            first = firstMiddle[0];
+        }
+    } else {
+        // Format: First Middle Last
+        const parts = inputName.trim().split(' ');
+        if (parts.length >= 3) {
+            last = parts.pop();
+            middle = parts.pop().replace('.', '');
+            first = parts.join(' ');
+        } else if (parts.length === 2) {
+            last = parts[1];
+            first = parts[0];
+        } else {
+            first = parts[0];
+        }
+    }
+
+    return {
+        first: first.toUpperCase(),
+        middle: middle ? middle.charAt(0).toUpperCase() + "." : "",
+        last: last.toUpperCase()
+    };
+};
+
+// ==========================
+// UPDATED: WHITELIST VERIFICATION (For Mobile Registration)
+// ==========================
+app.post('/verify-whitelist', async (req, res) => {
+    const { studentId, email } = req.body;
+    try {
+        const [rows] = await db.query(
+            "SELECT * FROM allowed_students WHERE student_id = ? AND email = ?", 
+            [studentId, email]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: "Not found in whitelist." });
+        }
+
+        const s = rows[0];
+        // Combine into the requested format: Lastname, Firstname M.
+        const formattedFullName = s.middle_name 
+            ? `${s.last_name}, ${s.first_name} ${s.middle_name.charAt(0).toUpperCase()}.`
+            : `${s.last_name}, ${s.first_name}`;
+
+        res.json({ success: true, fullName: formattedFullName });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/allowed-students', async (req, res) => {

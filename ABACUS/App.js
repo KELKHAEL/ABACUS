@@ -40,6 +40,17 @@ import InclusionExclusionLab from './screens/simulations/InclusionExclusionLab';
 import BinomialTheoremLab from './screens/simulations/BinomialTheoremLab';
 import EulerPlanarGraphLab from './screens/simulations/EulerPlanarGraphLab';
 import ScientificCalculator from './screens/simulations/ScientificCalculator';
+import RecurrenceRelationLab from './screens/simulations/RecurrenceRelationLab';
+import ComplexityLab from './screens/simulations/ComplexityLab';
+import BayesianProbabilityLab from './screens/simulations/BayesianProbabilityLab';
+import MatrixRelationsLab from './screens/simulations/MatrixRelationsLab';
+import PathFinderLab from './screens/simulations/PathFinderLab';
+import ModularArithmeticLab from './screens/simulations/ModularArithmeticLab';
+import CaesarCipherLab from './screens/simulations/CaesarCipherLab';
+import AtbashCipherLab from './screens/simulations/AtbashCipherLab';
+import VigenereCipherLab from './screens/simulations/VigenereCipherLab';
+import RailFenceCipherLab from './screens/simulations/RailfenceCipherLab';
+import ColumnarCipherLab from './screens/simulations/ColumnarCipherLab';
 
 // Quizzes
 import QuizListScreen from './screens/QuizListScreen'; 
@@ -211,6 +222,17 @@ const AppNavigator = () => {
               <Stack.Screen name="BinomialTheoremLab" component={BinomialTheoremLab} />
               <Stack.Screen name="EulerPlanarGraphLab" component={EulerPlanarGraphLab} />
               <Stack.Screen name="ScientificCalculator" component={ScientificCalculator} />
+              <Stack.Screen name="RecurrenceRelationLab" component={RecurrenceRelationLab} />
+              <Stack.Screen name="ComplexityLab" component={ComplexityLab} />
+              <Stack.Screen name="BayesianProbabilityLab" component={BayesianProbabilityLab} />
+              <Stack.Screen name="MatrixRelationsLab" component={MatrixRelationsLab} />
+              <Stack.Screen name="PathFinderLab" component={PathFinderLab} />
+              <Stack.Screen name="ModularArithmeticLab" component={ModularArithmeticLab} />
+              <Stack.Screen name="CaesarCipherLab" component={CaesarCipherLab} />
+              <Stack.Screen name="AtbashCipherLab" component={AtbashCipherLab} />
+              <Stack.Screen name="VigenereCipherLab" component={VigenereCipherLab} />
+              <Stack.Screen name="RailfenceCipherLab" component={RailFenceCipherLab} />
+              <Stack.Screen name="ColumnarCipherLab" component={ColumnarCipherLab} />
               
               {/* Quizzes */}
               <Stack.Screen name="QuizListScreen" component={QuizListScreen} />

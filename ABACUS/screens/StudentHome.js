@@ -352,29 +352,40 @@ export default function StudentHome({ navigation }) {
       <Text style={styles.subText}>Interactive logic tools!</Text>
       
       <View style={{marginTop: 20, gap: 15}}>
+        <SimulationCard title="Scientific Calculator" desc="A built on scientific calculator on the app!" color="#104a28" onPress={() => navigation.navigate("ScientificCalculator")} />
         <SimulationCard title="Sets Builder" desc="Venn Diagrams & Operations" color="#2D7FF9" onPress={() => navigation.navigate('SetsSimulation')} />
         <SimulationCard title="Truth Tables" desc="Logic Generator" color="#7B61FF" onPress={() => navigation.navigate('TruthTableSimulation')} />
         <SimulationCard title="Bitwise Calculator" desc="AND, OR, XOR operations." color="#824055" onPress={() => navigation.navigate("BitwiseSimulation")} />
         <SimulationCard title="Logic Circuits" desc="Visualize gates (AND, OR, NOT)." color="#71328e" onPress={() => navigation.navigate("LogicCircuitSimulation")} />
         <SimulationCard title="Permutations" desc="Calculate nPr and nCr." color="#F25487" onPress={() => navigation.navigate("PermutationSimulation")} />
         <SimulationCard title="Probability Simulation" desc="Single, Double, and Series event odds." color="#00C853" onPress={() => navigation.navigate("ProbabilitySimulation")} />
+        <SimulationCard title="Bayesian Probability Lab" desc="Calculate Regions (Faces)." color="#69f575" onPress={() => navigation.navigate("BayesianProbabilityLab")} />
         <SimulationCard title="Frequency Distribution Table" desc="Convert raw data into a statistical table." color="#9C27B0" onPress={() => navigation.navigate("FrequencyDistributionTable")} />
         <SimulationCard title="Z-Table Simulation" desc="Find area under the normal curve (Left, Right, Between)." color="#E91E63" onPress={() => navigation.navigate("ZTableSimulation")} />
         <SimulationCard title="Prime Factorization" desc="Break down any integer into product of its prime building blocks." color="#38c974" onPress={() => navigation.navigate("PrimeFactorization")} />
         <SimulationCard title="Fibonacci Calculator" desc="Construct and experiment on fibonacci sequence." color="#1643d8" onPress={() => navigation.navigate("FibonacciCalculator")} />
-        <SimulationCard title="Modulo Calculator" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModuloCalculator")} />
         <SimulationCard title="Pigeonhole Calculator" desc="What is the guaranteed minimum number of items inside?" color="#4c7d96" onPress={() => navigation.navigate("PigeonholeCalculator")} />
+        <SimulationCard title="Modulo Calculator" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModuloCalculator")} />
+        <SimulationCard title="Modular Arithmetic Lab" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModularArithmeticLab")} />
         <SimulationCard title="Euclidean Lab" desc="Compute Greatest Common Divisor." color="#2700d5" onPress={() => navigation.navigate("EuclideanLab")} />
         <SimulationCard title="Linear Diophantine Lab" desc="Find the integer solutions using the Extended Euclidean Algrorithm." color="#a31d86" onPress={() => navigation.navigate("LinearDiophantineLab")} />
         <SimulationCard title="Chinese Remainder Lab" desc="Solve for 'x' in a system of two congruences." color="#ff00d4" onPress={() => navigation.navigate("ChineseRemainderLab")} />
         <SimulationCard title="Inclusion-Exclusion Lab" desc="This tool takes the cardinality (size) of individual sets and their intersections, and computes the total Union size." color="#a6202e" onPress={() => navigation.navigate("InclusionExclusionLab")} />
-        <SimulationCard title="Euler Planar Graph Lab" desc="Calculate Regions (Faces)." color="#ffd858" onPress={() => navigation.navigate("EulerPlanarGraphLab")} />
+        <SimulationCard title="Euler Planar Graph Lab" desc="Calculate Regions (Faces)." color="#ffebab" onPress={() => navigation.navigate("EulerPlanarGraphLab")} />
+        <SimulationCard title="Path Finder Lab" desc="This laboratory challenges the eulerian path and hamiltonian path that visualizes the nodes on the edges and vertices." color="#104a28" onPress={() => navigation.navigate("PathFinderLab")} />
+        <SimulationCard title="Recurrence Relation Lab" desc="Calculate and define a sequence using the recurrence relation." color="#5c4b12" onPress={() => navigation.navigate("RecurrenceRelationLab")} />
         <SimulationCard title="Binomial Theorem Lab" desc="Use combinatorics to expand binomial expressions." color="#800000" onPress={() => navigation.navigate("BinomialTheoremLab")} />
+        <SimulationCard title="Complexity Lab" desc="Big-O notation tells us how the work of an algorithm grows as we add more data." color="#d7a70b" onPress={() => navigation.navigate("ComplexityLab")} />
         <SimulationCard title="Dijkstra's Path Lab" desc="Compute shortest paths in a weighted graph." color="#104a28" onPress={() => navigation.navigate("DijkstraSimulation")} />
+        <SimulationCard title="Matrix Relations Lab" desc="This laboratory computes every indirect path in your matrix." color="#104a28" onPress={() => navigation.navigate("MatrixRelationsLab")} />
         <SimulationCard title="Relations Lab" desc="Analyze properties (Reflexive, Symmetric, Transitive) with Boolean Matrices." color="#104a28" onPress={() => navigation.navigate("RelationsLab")} />
         <SimulationCard title="Tree Traversal Lab" desc="Build a traversal sequence binary tree." color="#104a28" onPress={() => navigation.navigate("TreeTraversalLab")} />
-        <SimulationCard title="RSA Cryptography Lab" desc="A cryptography simulation that encrypts integer message." color="#104a28" onPress={() => navigation.navigate("RSACryptographyLab")} />
-        <SimulationCard title="Scientific Calculator" desc="A built on scientific calculator on the app!" color="#104a28" onPress={() => navigation.navigate("ScientificCalculator")} />
+        <SimulationCard title="RSA Cryptography Lab" desc="A RSA cryptography technique that encrypts integer message." color="#104a28" onPress={() => navigation.navigate("RSACryptographyLab")} />
+        <SimulationCard title="Caesar Cipher Lab" desc="A cryptography simulation technique that uses a shifting value that encrypts and decrypts secret message." color="#104a28" onPress={() => navigation.navigate("CaesarCipherLab")} />
+        <SimulationCard title="Atbash Cipher Lab" desc="A cryptography simulation technique that mirrors to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("AtbashCipherLab")} />
+        <SimulationCard title="Vigenere Cipher Lab" desc="A cryptography simulation technique that uses a certain key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("VigenereCipherLab")} />
+        <SimulationCard title="Rail Fence Cipher Lab" desc="A cryptography simulation technique that uses a rail-like fence to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("RailfenceCipherLab")} />
+        <SimulationCard title="Columnar Cipher Lab" desc="A cryptography simulation technique that uses a word as a key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("ColumnarCipherLab")} />
       </View>
       <View style={styles.spacer} />
     </ScrollView>

@@ -32,34 +32,43 @@ export default function ManageStudents() {
     reader.onload = async (evt) => {
       const bstr = evt.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
+      const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws);
 
-      const formattedData = data.map(row => ({
-        studentId: String(row['Student ID'] || row['student_id'] || row['id'] || '').trim(), 
-        email: String(row['Email'] || row['email'] || '').trim()
-      })).filter(item => item.studentId && item.email);
+      const formattedData = data.map(row => {
+        // Collect whatever name data exists
+        const rawName = row['Full Name'] || row['Name'] || row['Student Name'] || "";
+        const fName = row['First Name'] || row['first_name'] || "";
+        const mName = row['Middle Name'] || row['middle_name'] || "";
+        const lName = row['Last Name'] || row['last_name'] || "";
+
+        return {
+          studentId: String(row['Student ID'] || row['student_id'] || '').trim(),
+          email: String(row['Email'] || row['email'] || '').trim(),
+          rawName: rawName,
+          firstName: fName,
+          middleName: mName,
+          lastName: lName
+        };
+      }).filter(s => String(s.studentId).startsWith('20') && s.email.endsWith('@cvsu.edu.ph'));
 
       if (formattedData.length === 0) {
-        alert("No valid data found. Ensure columns are named 'Student ID' and 'Email'.");
+        alert("Import Error: IDs must start with '20' and use @cvsu.edu.ph emails.");
         return;
       }
 
-      if (window.confirm(`Found ${formattedData.length} students. Upload to whitelist?`)) {
-        try {
-          const res = await fetch('http://localhost:5000/upload-allowed-students', {
+      try {
+        const res = await fetch('http://localhost:5000/upload-allowed-students', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ students: formattedData })
-          });
-          const result = await res.json();
-          if (result.success) {
-            alert("Upload Successful! Students can now register.");
-            if (showWhitelistModal) fetchWhitelist(); 
-          } else { alert("Upload failed: " + result.error); }
-        } catch (err) { alert("Server Error"); }
-      }
+        });
+        const result = await res.json();
+        if (result.success) {
+            alert(`Whitelist Alert:\n\n✨ Newly Added: ${result.newlyAdded}\n📝 Modified: ${result.modified}\n🔁 Duplicates/Ignored: ${result.duplicates}`);
+            fetchWhitelist();
+        }
+      } catch (err) { alert("Server connection failed."); }
     };
     reader.readAsBinaryString(file);
     e.target.value = null; 

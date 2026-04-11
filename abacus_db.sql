@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 08, 2026 at 08:23 AM
+-- Generation Time: Apr 11, 2026 at 08:57 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -53,23 +53,27 @@ CREATE TABLE `allowed_students` (
   `id` int(11) NOT NULL,
   `student_id` varchar(50) NOT NULL,
   `email` varchar(100) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `first_name` varchar(100) DEFAULT NULL,
+  `middle_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `suffix` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `allowed_students`
 --
 
-INSERT INTO `allowed_students` (`id`, `student_id`, `email`, `created_at`) VALUES
-(1, '202218701', 'tc.marionadam.purugganan@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(2, '202218631', 'tc.vincenteyron.gadon@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(3, '202218660', 'tc.nieshaanne.maglaway@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(4, '202218810', 'tc.paulbryan.gado@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(5, '202218859', 'tc.maryanne.pagota@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(6, '202218867', 'tc.reymond.rapis@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(7, '202218715', 'tc.jhanzy.samar@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(8, '202218637', 'tc.mikhael.garcia@cvsu.edu.ph', '2026-02-18 07:06:00'),
-(29, '123456789', 'mikhaelgarcia', '2026-04-07 02:54:06');
+INSERT INTO `allowed_students` (`id`, `student_id`, `email`, `created_at`, `first_name`, `middle_name`, `last_name`, `suffix`) VALUES
+(1, '202218701', 'tc.marionadam.purugganan@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(2, '202218631', 'tc.vincenteyron.gadon@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(3, '202218660', 'tc.nieshaanne.maglaway@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(4, '202218810', 'tc.paulbryan.gado@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(5, '202218859', 'tc.maryanne.pagota@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(6, '202218867', 'tc.reymond.rapis@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(7, '202218715', 'tc.jhanzy.samar@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(8, '202218637', 'tc.mikhael.garcia@cvsu.edu.ph', '2026-02-18 07:06:00', NULL, NULL, NULL, NULL),
+(29, '123456789', 'mikhaelgarcia', '2026-04-07 02:54:06', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -355,8 +359,7 @@ INSERT INTO `student_grades` (`id`, `user_id`, `quiz_id`, `score`, `subject_titl
 (28, 9, 11, 1.60, '[RETAKE] try try (-20% Penalty Applied)', '1st Sem', '2026-04-07 02:15:30', 2, 2),
 (29, 9, 12, 0.00, 'TRY TRY', '1st Sem', '2026-04-07 02:24:46', 1, 2),
 (30, 4, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2),
-(31, 10, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2),
-(32, 11, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2);
+(31, 10, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2);
 
 -- --------------------------------------------------------
 
@@ -371,7 +374,7 @@ CREATE TABLE `users` (
   `email` varchar(100) NOT NULL,
   `password_hash` varchar(255) NOT NULL,
   `year_level` varchar(10) DEFAULT '1',
-  `section` varchar(10) DEFAULT '1',
+  `section` varchar(50) DEFAULT NULL,
   `role` enum('STUDENT','INSTRUCTOR','ADMIN') DEFAULT 'STUDENT',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `department` varchar(100) DEFAULT NULL,
@@ -383,20 +386,23 @@ CREATE TABLE `users` (
   `cor_status` varchar(20) DEFAULT NULL,
   `pending_year` varchar(50) DEFAULT NULL,
   `pending_section` varchar(50) DEFAULT NULL,
-  `pending_status` varchar(50) DEFAULT NULL
+  `pending_status` varchar(50) DEFAULT NULL,
+  `session_token` varchar(255) DEFAULT NULL,
+  `login_attempts` int(11) DEFAULT 0,
+  `lockout_until` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `student_id`, `full_name`, `email`, `password_hash`, `year_level`, `section`, `role`, `created_at`, `department`, `assigned_classes`, `program`, `status`, `is_deleted`, `cor_image_url`, `cor_status`, `pending_year`, `pending_section`, `pending_status`) VALUES
-(1, 'ADMIN-001', 'Super Admin', 'admin@cvsu.edu.ph', '$2b$10$5e4Yh68d3VQL0ZsTFFs/xe3GcXl.rVwA4WmzN5nODBhKhVkYNGXAm', '1', '1', 'ADMIN', '2026-02-10 15:57:58', NULL, NULL, 'BSIT', 'Regular', 0, NULL, NULL, NULL, NULL, NULL),
-(2, '202218637', 'GARCIA, MIKHAEL V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"1\"},{\"year\":\"3\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"2\"}]', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL),
-(4, '202218859', 'PAGOTA, MARY ANNE A.', 'tc.maryanne.pagota@cvsu.edu.ph', '$2b$10$yAW0LrWBzMRLE5DRay67Fe9Z2.vVCaz8scv7VrZYwuN614eXtsw9C', '4', '1', 'STUDENT', '2026-02-11 08:25:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/PAGOTA_MARY_ANNE_A_202218859.jpeg', 'Approved', NULL, NULL, NULL),
-(9, '202218715', 'Samar, Jhanzy O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$XHrPWfMTifzOcgfRbzHlVexa3mv0fme586V3jAdeTeXYDw4.rZuXu', '4', '1', 'STUDENT', '2026-04-06 18:03:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, NULL, NULL, NULL, NULL, NULL),
-(10, '202218631', 'Gadon, Vincent Eyron H.', 'tc.vincenteyron.gadon@cvsu.edu.ph', '$2b$10$ilc5WMZT8GxqEhRnFwou7urN.vibscV5y4XJF5CDAuGXz31mGoLCa', '4', '1', 'STUDENT', '2026-04-06 18:18:58', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Gadon_Vincent_Eyron_H_202218631_REG.jpeg', 'Approved', NULL, NULL, NULL),
-(11, '202218867', 'Rapis, Reymond G.', 'tc.reymond.rapis@cvsu.edu.ph', '$2b$10$hFh4PaH4TRWwPQeWpTpDe.u2Em2T8GTHu865M8sypRBE7bjGQJRN.', '4', 'To be assi', 'STUDENT', '2026-04-07 02:40:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Rapis_Reymond_G_202218867_REG.jpeg', 'Pending', '4', '1', 'Regular');
+INSERT INTO `users` (`id`, `student_id`, `full_name`, `email`, `password_hash`, `year_level`, `section`, `role`, `created_at`, `department`, `assigned_classes`, `program`, `status`, `is_deleted`, `cor_image_url`, `cor_status`, `pending_year`, `pending_section`, `pending_status`, `session_token`, `login_attempts`, `lockout_until`) VALUES
+(1, 'ADMIN-001', 'Super Admin', 'admin@cvsu.edu.ph', '$2b$10$5e4Yh68d3VQL0ZsTFFs/xe3GcXl.rVwA4WmzN5nODBhKhVkYNGXAm', '1', '1', 'ADMIN', '2026-02-10 15:57:58', NULL, NULL, 'BSIT', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL),
+(2, '202218637', 'GARCIA, MIKHAEL V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"1\"},{\"year\":\"3\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"2\"}]', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL),
+(4, '202218859', 'PAGOTA, MARY ANNE A.', 'tc.maryanne.pagota@cvsu.edu.ph', '$2b$10$yAW0LrWBzMRLE5DRay67Fe9Z2.vVCaz8scv7VrZYwuN614eXtsw9C', '4', '1', 'STUDENT', '2026-02-11 08:25:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/PAGOTA_MARY_ANNE_A_202218859.jpeg', 'Approved', NULL, NULL, NULL, NULL, 0, NULL),
+(9, '202218715', 'Samar, Jhanzy O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$XHrPWfMTifzOcgfRbzHlVexa3mv0fme586V3jAdeTeXYDw4.rZuXu', '4', '1', 'STUDENT', '2026-04-06 18:03:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL),
+(10, '202218631', 'Gadon, Vincent Eyron H.', 'tc.vincenteyron.gadon@cvsu.edu.ph', '$2b$10$ilc5WMZT8GxqEhRnFwou7urN.vibscV5y4XJF5CDAuGXz31mGoLCa', '4', '1', 'STUDENT', '2026-04-06 18:18:58', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Gadon_Vincent_Eyron_H_202218631_REG.jpeg', 'Approved', NULL, NULL, NULL, NULL, 0, NULL),
+(11, '202218867', 'Rapis, Reymond G.', 'tc.reymond.rapis@cvsu.edu.ph', '$2b$10$hFh4PaH4TRWwPQeWpTpDe.u2Em2T8GTHu865M8sypRBE7bjGQJRN.', '4', 'To be assigned', 'STUDENT', '2026-04-07 02:40:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Rapis_Reymond_G_202218867_REG.jpeg', 'Pending', '4', '1', 'Regular', NULL, 0, NULL);
 
 -- --------------------------------------------------------
 
