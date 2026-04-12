@@ -15,10 +15,10 @@ export default function CreateQuiz({ setActiveTab }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuizId, setEditQuizId] = useState(null);
 
-  // ✅ NEW: Retake States
+  // Retake States
   const [isRetake, setIsRetake] = useState(false);
   const [parentQuizId, setParentQuizId] = useState(null);
-  const [penalty, setPenalty] = useState(20);
+  const [penalty, setPenalty] = useState(2); // Default to 2 points
   const [targetStudents, setTargetStudents] = useState([]);
   
   const [allInstructorStudents, setAllInstructorStudents] = useState([]);
@@ -46,14 +46,21 @@ export default function CreateQuiz({ setActiveTab }) {
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
-          let classes = user.assigned_classes || user.assignedClasses;
-          if (typeof classes === 'string') classes = JSON.parse(classes);
-          setMyClasses(Array.isArray(classes) ? classes : []);
 
-          // Fetch students so we can select targets for Retakes
+          // 1. Fetch students for Retake selection
           const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
           const data = await res.json();
           setAllInstructorStudents(data.students || []);
+
+          // 2. ✅ BULLETPROOF FIX: Fetch fresh assigned classes from DB just in case localStorage is missing it
+          const usersRes = await fetch('http://localhost:5000/users?role=INSTRUCTOR');
+          const usersData = await usersRes.json();
+          const currentInstructor = usersData.find(u => u.id === user.id);
+          
+          let classes = currentInstructor?.assigned_classes || user.assigned_classes || "[]";
+          if (typeof classes === 'string') classes = JSON.parse(classes);
+          
+          setMyClasses(Array.isArray(classes) ? classes : []);
 
         } catch (e) { console.error("Error loading dashboard data:", e); }
       }
@@ -78,11 +85,11 @@ export default function CreateQuiz({ setActiveTab }) {
       if (!q) return;
 
       if (location.state.retakeParentQuiz) {
-          // 🚀 SETUP RETAKE MODE
+          // SETUP RETAKE MODE
           setIsRetake(true);
           setParentQuizId(q.id);
           setQuizTitle(`[RETAKE] ${q.title}`);
-          setQuizDesc(`Retake assignment. Note: A penalty deduction will be applied to the final score.`);
+          setQuizDesc(`Retake assignment. Note: A point penalty deduction will be applied to the final score.`);
       } else {
           // NORMAL EDIT MODE
           setIsEditing(true);
@@ -176,6 +183,15 @@ export default function CreateQuiz({ setActiveTab }) {
       setTargetStudents(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
+  const handleSelectAllStudents = (e) => {
+      if (e.target.checked) {
+          setTargetStudents(classStudents.map(s => s.id));
+      } else {
+          setTargetStudents([]);
+      }
+  };
+  const isAllSelected = classStudents.length > 0 && targetStudents.length === classStudents.length;
+
   // --- 3. SAVE TO MYSQL ---
   const publishQuiz = async () => {
     if (!quizTitle.trim()) return alert("Please enter a Quiz Title.");
@@ -204,7 +220,6 @@ export default function CreateQuiz({ setActiveTab }) {
         dueDate: dueDate,
         createdBy: user.id,
         questions: questions,
-        // ✅ NEW: Pass retake settings
         isRetake: isRetake,
         parentQuizId: parentQuizId,
         targetStudents: targetStudents,
@@ -276,30 +291,38 @@ export default function CreateQuiz({ setActiveTab }) {
             </div>
           </div>
 
-          {/* ✅ NEW: RETAKE SETTINGS PANEL */}
+          {/* RETAKE SETTINGS PANEL */}
           {isRetake && (
              <div style={{marginTop: '20px', padding: '20px', background: '#fefce8', border: '1px solid #fde047', borderRadius: '8px'}}>
                  <h4 style={{color: '#854d0e', marginTop: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px'}}><RotateCcw size={18}/> Retake Settings</h4>
                  <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
                      <div style={{flex: 1, minWidth: '150px'}}>
-                         <label style={{fontSize: '12px', fontWeight: 'bold', color: '#854d0e'}}>Score Penalty Deduction (%)</label>
-                         <p style={{fontSize: '11px', color: '#a16207', margin: '2px 0 8px 0'}}>Will be subtracted from final score.</p>
+                         <label style={{fontSize: '12px', fontWeight: 'bold', color: '#854d0e'}}>Score Penalty Deduction (Points)</label>
+                         <p style={{fontSize: '11px', color: '#a16207', margin: '2px 0 8px 0'}}>Exact points to subtract from final score.</p>
                          <input 
                              type="number" 
                              style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #fde047', background: 'white'}}
                              value={penalty} 
                              onChange={e => setPenalty(e.target.value)} 
-                             min="0" max="100"
+                             min="0"
                          />
                      </div>
                      <div style={{flex: 2, minWidth: '250px'}}>
                          <label style={{fontSize: '12px', fontWeight: 'bold', color: '#854d0e'}}>Select Students for Retake</label>
                          <p style={{fontSize: '11px', color: '#a16207', margin: '2px 0 8px 0'}}>Only these students will see the Retake quiz.</p>
-                         <div style={{maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '10px', border: '1px solid #fde047', borderRadius: '4px'}}>
+                         
+                         <div style={{maxHeight: '180px', overflowY: 'auto', background: 'white', padding: '10px', border: '1px solid #fde047', borderRadius: '4px'}}>
+                            {classStudents.length > 0 && (
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', borderBottom: '2px solid #ca8a04', cursor: 'pointer', marginBottom: '5px'}}>
+                                  <input type="checkbox" checked={isAllSelected} onChange={handleSelectAllStudents} style={{transform: 'scale(1.2)'}}/> 
+                                  <span style={{fontWeight: 'bold', color: '#854d0e', fontSize: '14px'}}>Select All Students</span>
+                                </label>
+                            )}
+
                             {classStudents.map(s => (
                                 <label key={s.id} style={{display: 'flex', alignItems: 'center', gap: '8px', padding: '5px', borderBottom: '1px solid #fef08a', cursor: 'pointer'}}>
                                   <input type="checkbox" checked={targetStudents.includes(s.id)} onChange={() => toggleTargetStudent(s.id)} style={{transform: 'scale(1.2)'}}/> 
-                                  <span style={{fontWeight: 'bold', color: '#4b5563', fontSize: '14px'}}>{s.full_name}</span>
+                                  <span style={{fontWeight: '600', color: '#4b5563', fontSize: '14px'}}>{s.full_name}</span>
                                 </label>
                             ))}
                             {classStudents.length === 0 && <span style={{color:'#999', fontSize:'12px'}}>Select a specific target class above to load students.</span>}

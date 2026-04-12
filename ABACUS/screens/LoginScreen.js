@@ -7,8 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Added for Device ID
 
-// ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const API_URL = process.env.EXPO_PUBLIC_API_URL; 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwveL42WWu00Ixti4bQH3cf20w1-jxGrCDQolb1wigD8SJQAYNvnrEDAeim_I3wYhkDvA/exec';
 
 export default function LoginScreen({ navigation }) {

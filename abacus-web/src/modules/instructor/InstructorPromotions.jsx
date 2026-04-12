@@ -85,7 +85,7 @@ export default function InstructorPromotions() {
   }, [search, programFilter, yearFilter, sectionFilter, pendingRequests]);
 
   const handleApprove = async (id, name) => {
-    if (!window.confirm(`Approve promotion for ${name} into your class?`)) return;
+    if (!window.confirm(`Approve promotion for ${name} into your class? This will apply their new classes and require them to log in again.`)) return;
     try {
       await fetch(`http://localhost:5000/admin/promotions/${id}/approve`, { method: 'PUT' });
       fetchData();
@@ -102,7 +102,7 @@ export default function InstructorPromotions() {
 
   const handleMassApprove = async () => {
     if (selectedIds.length === 0) return alert("Select at least one student to approve.");
-    if (!window.confirm(`Are you sure you want to MASS APPROVE ${selectedIds.length} students into Year ${yearFilter} - Section ${sectionFilter}?`)) return;
+    if (!window.confirm(`Are you sure you want to MASS APPROVE ${selectedIds.length} students into Year ${yearFilter} - Section ${sectionFilter}? This will require them to log in again.`)) return;
     
     try {
       await fetch('http://localhost:5000/admin/promotions/mass-approve', {
@@ -252,7 +252,7 @@ export default function InstructorPromotions() {
                     <div style={{fontSize: '11px', color: '#8b5cf6', marginTop: '4px', fontWeight: 'bold'}}>{student.program}</div>
                   </td>
                   
-                  {/* ✅ FIX: Replaces the ugly 4-(to be assigned) text with a clean badge */}
+                  {/* ✅ FIX: Replaces the ugly 4-To be assigned text with a clean badge */}
                   <td style={tdStyle}>
                      {student.section === 'To be assigned' || !student.section ? (
                          <span style={{background: '#f1f5f9', color: '#475569', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold'}}>

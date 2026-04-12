@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Megaphone, Plus, Trash2, Calendar, Target, User, Edit, RotateCcw, Filter, X, AlertTriangle } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Calendar, Target, User, Edit, RotateCcw, Filter, X, AlertTriangle, Clock } from 'lucide-react';
 import './ManageAnnouncements.css';
 
 export default function ManageAnnouncements() {
@@ -379,13 +379,17 @@ export default function ManageAnnouncements() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => !saving && setShowModal(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', padding: 0, overflow: 'hidden'}}>
-                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            {/* ✅ FIX: Modal is now a flex column with a strict max-height to ensure internal scrolling */}
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh'}}>
+                
+                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0}}>
                     <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Megaphone size={22}/> {isEditing ? "Edit Announcement" : "Post Announcement"}</h2>
                     {!saving && <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>}
                 </div>
-                <form onSubmit={handleSave}>
-                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                
+                {/* ✅ FIX: Form takes up remaining space, enabling overflow scroll inside */}
+                <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', flex: 1}}>
                         <div>
                             <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Announcement Title</label>
                             <input required placeholder="e.g., Midterm Schedule Update" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box'}}/>
@@ -458,7 +462,7 @@ export default function ManageAnnouncements() {
                         </div>
 
                     </div>
-                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
+                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end', flexShrink: 0}}>
                         <button type="button" disabled={saving} onClick={() => setShowModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer'}}>Cancel</button>
                         <button type="submit" disabled={saving} style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'}}>{saving ? 'Saving...' : (isEditing ? 'Save Changes' : 'Post Announcement')}</button>
                     </div>

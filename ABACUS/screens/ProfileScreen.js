@@ -7,11 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 
-// ❗ REPLACE WITH YOUR NGROK URL
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function ProfileScreen({ navigation }) {
-  // ✅ FIX: Make sure to extract 'logout' from the AuthContext
   const { user, logout } = useContext(AuthContext);
   
   // Promotion Modal States
@@ -44,7 +42,6 @@ export default function ProfileScreen({ navigation }) {
     fetchAcademicSetup();
   }, []);
 
-  // ✅ FIX: Use the AuthContext logout function. This safely unmounts the app and returns to Login.
   const handleLogout = async () => {
     Alert.alert(
       "Log Out",
@@ -55,7 +52,7 @@ export default function ProfileScreen({ navigation }) {
           text: "Log Out", 
           style: "destructive",
           onPress: async () => {
-            await logout(); // Calls the function defined in AuthContext.js
+            await logout(); 
           }
         }
       ]
@@ -163,14 +160,15 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="id-card-outline" size={20} color="#666" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Student ID</Text>
-              <Text style={styles.infoValue}>{user.studentId || 'Not provided'}</Text>
+              {/* ✅ BULLETPROOF FALLBACK */}
+              <Text style={styles.infoValue}>{user.studentId || user.student_id || 'Not provided'}</Text>
             </View>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="school-outline" size={20} color="#666" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Year & Section</Text>
-              <Text style={styles.infoValue}>Year {user.yearLevel} - Section {user.section}</Text>
+              <Text style={styles.infoValue}>Year {user.yearLevel || user.year_level} - Section {user.section}</Text>
             </View>
           </View>
         </View>
@@ -183,7 +181,6 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
           </TouchableOpacity>
           
-          {/* ✅ FIX: Calls handleLogout which triggers AuthContext.logout() */}
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
             <Text style={styles.logoutText}>Log Out</Text>

@@ -69,8 +69,9 @@ export default function Gradebook() {
       setQuizStatusMap(statusMap);
 
       const mergedData = assignedStudents.map(student => {
-          // ✅ FIX: Ignore the invisible retake records in the gradebook, the parent record holds the final grade
-          const studentGrades = gradesData.filter(g => g.user_id === student.id && !quizData.find(q => q.id === g.quiz_id)?.is_retake);
+          // ✅ FIX: Because server.js now safely inserts retake grades under the PARENT quiz ID,
+          // we just grab all grades belonging to the student. No complex filtering needed!
+          const studentGrades = gradesData.filter(g => g.user_id === student.id);
 
           return {
               id: student.id, 

@@ -341,6 +341,7 @@ export default function InstructorAnnouncements() {
                         <td style={{textAlign: 'right'}}>
                             <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
                                 <button className="btn-icon btn-edit" onClick={() => openEditModal(ann)} title="Edit Announcement"><Edit size={18} /></button>
+                                {/* ✅ Uses the Grouped IDs to delete the whole batch */}
                                 <button className="btn-icon btn-delete" onClick={() => handleSoftDelete(ann.grouped_ids)} title="Move to Trash"><Trash2 size={18} /></button>
                             </div>
                         </td>
@@ -380,11 +381,11 @@ export default function InstructorAnnouncements() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td><div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}><Clock size={14} color="#dc2626" />{getDaysLeft(item.deleted_at)} Days</div></td>
+                                        <td><div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}><Clock size={14} color="#dc2626" />{getDaysLeft(item.deleted_at)}</div></td>
                                         <td style={{textAlign: 'right'}}>
                                             <div style={{display:'flex', justifyContent:'flex-end', gap:'10px'}}>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color: 'white', border: 'none'}} onClick={() => handleRestore(item.grouped_ids)}><RotateCcw size={14} style={{marginRight: 5}}/> Restore</button>
-                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color: 'white', border: 'none'}} onClick={() => handlePermanentDelete(item.grouped_ids)}><Trash2 size={14} style={{marginRight: 5}}/> Delete</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#10b981', color:'white', border:'none'}} onClick={() => handleRestore(item.grouped_ids)}><RotateCcw size={14} style={{marginRight: 5}}/> Restore</button>
+                                                <button className="btn-secondary" style={{padding: '6px 12px', fontSize:'12px', backgroundColor:'#dc2626', color:'white', border:'none'}} onClick={() => handlePermanentDelete(item.grouped_ids)}><Trash2 size={14} style={{marginRight: 5}}/> Delete</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -400,13 +401,17 @@ export default function InstructorAnnouncements() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => !saving && setShowModal(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden'}}>
-                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            {/* ✅ FIX: Modal is now a flex column with a strict max-height to ensure internal scrolling */}
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh'}}>
+                
+                <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0}}>
                     <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Megaphone size={22}/> {isEditing ? "Edit Announcement" : "Post Announcement"}</h2>
                     {!saving && <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>}
                 </div>
-                <form onSubmit={handleSave}>
-                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                
+                {/* ✅ FIX: Form takes up remaining space, enabling overflow scroll inside */}
+                <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', flex: 1}}>
                         <div>
                             <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px'}}>Announcement Title</label>
                             <input required placeholder="e.g., No Class Tomorrow" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box'}}/>
@@ -420,7 +425,7 @@ export default function InstructorAnnouncements() {
                             <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '10px'}}><Target size={14} style={{verticalAlign: 'middle', marginRight: '4px'}}/> Select Target Classes</label>
                             
                             {assignedClasses.length > 0 ? (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', background: 'white', border: '1px solid #d1d5db', padding: '10px', borderRadius: '6px'}}>
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '8px', background: 'white', border: '1px solid #d1d5db', padding: '10px', borderRadius: '6px'}}>
                                     <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#111', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '4px'}}>
                                         <input 
                                             type="checkbox" 
@@ -458,7 +463,8 @@ export default function InstructorAnnouncements() {
                         </div>
 
                     </div>
-                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
+                    
+                    <div style={{padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end', flexShrink: 0}}>
                         <button type="button" disabled={saving} onClick={() => setShowModal(false)} style={{padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', color: '#374151', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer'}}>Cancel</button>
                         <button type="submit" disabled={saving || assignedClasses.length === 0} style={{padding: '10px 20px', borderRadius: '6px', border: 'none', background: '#eab308', color: '#422006', fontWeight: 'bold', cursor: (saving || assignedClasses.length === 0) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px'}}>{saving ? 'Saving...' : 'Post Announcement'}</button>
                     </div>

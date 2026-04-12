@@ -12,11 +12,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 // 1. Initialize Configuration
 dotenv.config();
 const app = express();
@@ -98,19 +93,24 @@ const smartFormatName = (inputName) => {
   try {
     const connection = await db.getConnection();
     console.log("✅ Connected to MySQL Database: " + process.env.DB_NAME);
+    
+    // Feature Column Migrations
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN is_retake BOOLEAN DEFAULT FALSE"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
     
-    // 🚀 NEW: Expand the section column so "To be assigned" doesn't get truncated to "To be assi"
+    // Security & Whitelist Migrations
     try { await connection.query("ALTER TABLE users MODIFY COLUMN section VARCHAR(50)"); } catch(e){}
-    try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
+    try { await connection.query("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL"); } catch(e){}
+    try { await connection.query("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0"); } catch(e){}
+    try { await connection.query("ALTER TABLE users ADD COLUMN lockout_until DATETIME DEFAULT NULL"); } catch(e){}
+    try { await connection.query("ALTER TABLE allowed_students ADD COLUMN first_name VARCHAR(100), ADD COLUMN middle_name VARCHAR(100), ADD COLUMN last_name VARCHAR(100)"); } catch(e){}
 
+    // Cleanup Logic
+    try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
-    
-    // 🚀 UPDATED SWEEP: Hunts down truncated variations too
     try { 
         await connection.query(`
             DELETE sg FROM student_grades sg 
@@ -118,8 +118,7 @@ const smartFormatName = (inputName) => {
             WHERE (LOWER(u.section) LIKE '%assign%' OR LOWER(u.section) LIKE '%assi%' OR u.section IS NULL) 
             AND sg.subject_title LIKE '%(Missed)%'
         `); 
-        console.log("🧹 Cleaned up invalid auto-grades for unassigned students.");
-    } catch(e) { console.error("Cleanup error:", e.message); }
+    } catch(e) {}
     
     connection.release();
   } catch (err) {
@@ -138,7 +137,7 @@ const getActiveTermId = async () => {
 // AUTHENTICATION ROUTES
 // ==========================
 app.post('/login', async (req, res) => {
-    const { email, password, deviceId } = req.body; // mobile should send unique deviceId
+    const { email, password, deviceId } = req.body;
     try {
         const [users] = await db.query("SELECT * FROM users WHERE email = ? AND is_deleted = 0", [email]);
         if (users.length === 0) return res.status(401).json({ success: false, error: "Account not found." });
@@ -154,26 +153,41 @@ app.post('/login', async (req, res) => {
         const match = await bcrypt.compare(password, user.password_hash);
 
         if (!match) {
-            // 2. Increment Login Attempts
             const newAttempts = user.login_attempts + 1;
             if (newAttempts >= 3) {
-                const lockoutTime = new Date(Date.now() + 5 * 60000); // 5 Minutes
+                const lockoutTime = new Date(Date.now() + 5 * 60000); 
                 await db.query("UPDATE users SET login_attempts = ?, lockout_until = ? WHERE id = ?", [newAttempts, lockoutTime, user.id]);
-                return res.status(403).json({ success: false, error: "Too many attempts. Account locked for 5 minutes." });
+                return res.status(403).json({ success: false, error: "Too many failed attempts. Locked for 5 minutes." });
             } else {
                 await db.query("UPDATE users SET login_attempts = ? WHERE id = ?", [newAttempts, user.id]);
                 return res.status(401).json({ success: false, error: `Incorrect password. ${3 - newAttempts} attempts left.` });
             }
         }
 
-        // 3. Reset attempts on success
+        // 2. Success: Session Management
         const sessionToken = jwt.sign({ id: user.id, deviceId }, 'abacus_secret_key_2026');
         await db.query("UPDATE users SET login_attempts = 0, lockout_until = NULL, session_token = ? WHERE id = ?", [sessionToken, user.id]);
+
+        let assignedClasses = [];
+        if (user.assigned_classes) {
+            try {
+                assignedClasses = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
+            } catch(e) { assignedClasses = []; }
+        }
 
         res.json({
             success: true,
             token: sessionToken,
-            user: { id: user.id, fullName: user.full_name, role: user.role, email: user.email }
+            user: { 
+                id: user.id, 
+                fullName: user.full_name, 
+                role: user.role, 
+                email: user.email,
+                studentId: user.student_id, 
+                yearLevel: user.year_level, 
+                section: user.section,
+                assigned_classes: assignedClasses
+            }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -278,7 +292,7 @@ app.patch('/users/:id/student-status', async (req, res) => {
 
 app.get('/users/sync/:id', async (req, res) => {
   try {
-    const [user] = await db.query("SELECT year_level, section, status, cor_status FROM users WHERE id = ?", [req.params.id]);
+    const [user] = await db.query("SELECT year_level, section, status, cor_status, session_token FROM users WHERE id = ?", [req.params.id]);
     if (user.length === 0) return res.status(404).json({ error: "Not found" });
     res.json(user[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -296,7 +310,7 @@ app.post('/admin-reset-password', async (req, res) => {
 });
 
 // ==========================================
-// ACADEMIC SETUP & CLASS MANAGEMENT (ADMIN)
+// ACADEMIC SETUP & CLASS MANAGEMENT
 // ==========================================
 app.get('/academic-setup', async (req, res) => {
   try {
@@ -345,9 +359,6 @@ app.put('/academic-setup/:type/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==========================================
-// TERM ROLLOVER / TRANSITION SYSTEM
-// ==========================================
 app.put('/academic-setup/term/active/:id', async (req, res) => {
   const { id } = req.params;
   const { resetInstructors, resetStudents } = req.body; 
@@ -548,16 +559,18 @@ app.post('/grades', async (req, res) => {
     const activeTermId = await getActiveTermId();
 
     if (quiz && quiz.is_retake) {
-       const deduction = (score * quiz.penalty) / 100;
+       const deduction = quiz.penalty;
        finalScore = Math.max(0, score - deduction); 
        
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
-       finalTitle = subjectTitle + ` (-${quiz.penalty}% Penalty Applied)`;
+       finalTitle = subjectTitle + ` (-${deduction} pts Penalty)`;
 
        await db.query(
          `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
          [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId]
        );
+
+       return res.json({ success: true });
     }
 
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
@@ -747,7 +760,7 @@ app.put('/announcements/:id/soft-delete', async (req, res) => {
 });
 
 // ==========================
-// WHITELIST MANAGEMENT (WITH ALERTS & SMART PARSING)
+// WHITELIST MANAGEMENT
 // ==========================
 app.post('/upload-allowed-students', async (req, res) => {
     const { students } = req.body;
@@ -760,7 +773,6 @@ app.post('/upload-allowed-students', async (req, res) => {
         let duplicates = 0;
 
         for (const s of students) {
-            // Validation: Student ID format (20xx...)
             if (!String(s.studentId).startsWith('20')) { continue; }
             if (!s.email.endsWith('@cvsu.edu.ph')) { continue; }
 
@@ -772,7 +784,6 @@ app.post('/upload-allowed-students', async (req, res) => {
             
             if (existing.length > 0) {
                 if (existing[0].email !== s.email || existing[0].first_name !== nameObj.first.toUpperCase()) {
-                    // Modification
                     await connection.query(
                         "UPDATE allowed_students SET email = ?, first_name = ?, last_name = ?, middle_name = ? WHERE student_id = ?",
                         [s.email, nameObj.first.toUpperCase(), nameObj.last.toUpperCase(), nameObj.middle.toUpperCase(), s.studentId]
@@ -782,7 +793,6 @@ app.post('/upload-allowed-students', async (req, res) => {
                     duplicates++;
                 }
             } else {
-                // New Entry
                 await connection.query(
                     "INSERT INTO allowed_students (student_id, email, first_name, last_name, middle_name) VALUES (?, ?, ?, ?, ?)",
                     [s.studentId, s.email, nameObj.first.toUpperCase(), nameObj.last.toUpperCase(), nameObj.middle.toUpperCase()]
@@ -799,7 +809,6 @@ app.post('/upload-allowed-students', async (req, res) => {
     } finally { connection.release(); }
 });
 
-// ✅ VERIFY WHITELIST (For Mobile Registration)
 app.post('/verify-whitelist', async (req, res) => {
     const { studentId, email } = req.body;
     try {
@@ -813,18 +822,11 @@ app.post('/verify-whitelist', async (req, res) => {
         }
 
         const s = rows[0];
-        // Combine into the requested format: Lastname, Firstname M.
         const formattedFullName = s.middle_name 
             ? `${s.last_name}, ${s.first_name} ${s.middle_name.charAt(0).toUpperCase()}.`
             : `${s.last_name}, ${s.first_name}`;
 
-        res.json({ 
-            success: true, 
-            fullName: formattedFullName,
-            firstName: s.first_name,
-            lastName: s.last_name,
-            middleName: s.middle_name
-        });
+        res.json({ success: true, fullName: formattedFullName });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -931,7 +933,7 @@ app.get('/modules/student/:id', async (req, res) => {
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     const { year_level, section } = students[0];
 
-    // 🚨 BULLETPROOF ENROLLMENT GUARD: Block ALL modules if unassigned (case-insensitive check for 'assi' and 'assign')
+    // 🚨 BULLETPROOF ENROLLMENT GUARD
     if (!section || section.toLowerCase().includes('assign') || section.toLowerCase().includes('assi')) {
         return res.json([]);
     }
@@ -1035,18 +1037,20 @@ app.get('/instructor/:instructorId/promotions/pending', async (req, res) => {
     }
 });
 
+// ✅ FIX APPLIED HERE: Invalidate Session Token on approval to force a secure re-login
 app.put('/admin/promotions/:id/approve', async (req, res) => {
   try {
-    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id = ?", [req.params.id]);
+    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL, session_token = NULL WHERE id = ?", [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ✅ FIX APPLIED HERE: Invalidate Session Token on mass approval
 app.put('/admin/promotions/mass-approve', async (req, res) => {
   const { ids } = req.body;
   if (!ids || ids.length === 0) return res.status(400).json({ error: "No IDs provided" });
   try {
-    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL WHERE id IN (?)", [ids]);
+    await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL, session_token = NULL WHERE id IN (?)", [ids]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1076,7 +1080,9 @@ const autoAssignMissedZeros = async () => {
       );
 
       for (const quiz of expiredQuizzes) {
-          // ✅ ENROLLMENT GUARD: Ignore students who are 'Dropped' OR 'To be assigned' using case-insensitive LIKE
+          const [qCountRes] = await db.query(`SELECT COUNT(*) as qCount FROM quiz_questions WHERE quiz_id = ?`, [quiz.id]);
+          const totalItems = qCountRes[0].qCount || 10; 
+
           let query = `SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND status != 'Dropped' AND LOWER(section) NOT LIKE '%assign%' AND LOWER(section) NOT LIKE '%assi%'`;
           let params = [];
           if (quiz.target_year !== 'ALL') { query += ` AND year_level = ?`; params.push(quiz.target_year); }
@@ -1090,8 +1096,8 @@ const autoAssignMissedZeros = async () => {
               if (existingGrade.length === 0) {
                   const missedTitle = quiz.title + " (Missed)";
                   await db.query(
-                      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, 0, 100, ?, ?)`,
-                      [student.id, quiz.id, missedTitle, activeTermId]
+                      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, 0, ?, ?, ?)`,
+                      [student.id, quiz.id, totalItems, missedTitle, activeTermId]
                   );
               }
           }
@@ -1103,7 +1109,7 @@ setTimeout(autoAssignMissedZeros, 5000);
 setInterval(autoAssignMissedZeros, 5 * 60 * 1000);
 
 // ==========================
-// STUDENT FORGOT PASSWORD (FROM MOBILE APP)
+// STUDENT FORGOT PASSWORD
 // ==========================
 app.post('/student-forgot-password', async (req, res) => {
   const { email, newPassword } = req.body;

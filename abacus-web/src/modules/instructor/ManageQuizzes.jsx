@@ -75,7 +75,6 @@ export default function ManageQuizzes() {
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
-        // Find deleted quizzes directly from our local state first for speed
         const trashed = quizzes.filter(q => q.status === 'deleted');
         setTrashList(trashed);
     } catch (error) { console.error("Error fetching trash:", error); } 
@@ -92,7 +91,6 @@ export default function ManageQuizzes() {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
         });
         if (res.ok) {
-            // Optimistic UI Update
             setQuizzes(prev => prev.map(q => q.id === quizId ? { ...q, status: 'deleted' } : q));
         }
       } catch (error) { alert("Failed to move to trash."); }
@@ -102,25 +100,19 @@ export default function ManageQuizzes() {
   const handleRestore = async (quizId) => {
     if(!window.confirm("Restore this quiz? Students will be able to see it again.")) return;
     
-    // 1. Find the quiz we are restoring
     const quizToRestore = trashList.find(q => q.id === quizId);
-    
-    // 2. Optimistically remove it from the Trash UI instantly
     setTrashList(prev => prev.filter(q => q.id !== quizId));
     
-    // 3. Optimistically add it back to the Main UI instantly
     if (quizToRestore) {
         setQuizzes(prev => prev.map(q => q.id === quizId ? { ...q, status: 'active' } : q));
     }
 
     try {
-      // 4. Send the request to the server in the background
       const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' })
       });
       
       if (!res.ok) {
-         // If it fails, revert the optimistic updates
          alert("Failed to restore quiz on the server.");
          fetchQuizzesAndUser(); 
          fetchTrash();
@@ -135,14 +127,13 @@ export default function ManageQuizzes() {
   const handlePermanentDelete = async (quizId) => {
     if (window.confirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.")) {
       try {
-        // Optimistically remove it from UI instantly
         setTrashList(prev => prev.filter(q => q.id !== quizId));
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
 
         await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
       } catch (error) { 
           alert("Delete failed."); 
-          fetchTrash(); // Revert on failure
+          fetchTrash(); 
       }
     }
   };
@@ -151,8 +142,8 @@ export default function ManageQuizzes() {
   const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
 
   const filteredQuizzes = quizzes.filter(q => {
-      // ✅ FIX: Completely hide Retake clones so they don't look like duplicates
-      if (q.is_retake) return false; 
+      // ✅ FIX: Removed the UI filter that was hiding Retake quizzes. 
+      // You can now see them, edit them, and delete them!
 
       const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
       if (!isTargetMode || q.status === 'deleted') return false;
@@ -229,7 +220,7 @@ export default function ManageQuizzes() {
               <div className="card-content">
                 <h3 className="card-title">{quiz.title}</h3>
                 <div className="card-tags">
-                    {quiz.is_retake ? <span className="tag" style={{background:'#fef08a', color:'#854d0e', fontWeight:'bold'}}>Retake Quiz (-{quiz.penalty}%)</span> : null}
+                    {quiz.is_retake ? <span className="tag" style={{background:'#fef08a', color:'#854d0e', fontWeight:'bold'}}>Retake Quiz (-{quiz.penalty} pts)</span> : null}
                     {quiz.target_year && <span className="tag tag-year"><Target size={12}/> {quiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${quiz.target_year}-${quiz.target_section}`}</span>}
                     {quiz.due_date && (
                         <span style={{fontSize: '11px', background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>

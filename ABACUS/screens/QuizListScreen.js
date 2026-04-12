@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import { useFocusEffect } from '@react-navigation/native'; 
 
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL; 
 
 export default function QuizListScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -72,7 +72,15 @@ export default function QuizListScreen({ navigation }) {
       const completed = [];
 
       activeRelevant.forEach(q => {
-          const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
+          // ✅ BUG FIX: If it's a retake, we must check if a grade exists for the PARENT quiz ID that contains the "Penalty" string
+          // This tells us if the user has completed THIS specific retake session.
+          let gradeEntry;
+          if (q.is_retake) {
+              gradeEntry = userGrades.find(g => g.quiz_id === q.parent_quiz_id && g.subjectTitle && g.subjectTitle.includes('Penalty'));
+          } else {
+              gradeEntry = userGrades.find(g => g.quiz_id === q.id);
+          }
+
           if (gradeEntry) {
               if (gradeEntry.subjectTitle && gradeEntry.subjectTitle.includes('(Missed)')) {
                   uncompleted.push(q); 
@@ -88,14 +96,18 @@ export default function QuizListScreen({ navigation }) {
           }
       });
 
-      const archived = allQuizzes.filter(q => q.is_archived && takenQuizIds.includes(q.id)).map(q => {
+      // Filter out duplicate display in Completed list (Don't show the Retake as a separate completed item)
+      // The original parent quiz will already show up in the Completed list with the updated score.
+      const finalCompleted = completed.filter(q => !q.is_retake);
+
+      const archived = allQuizzes.filter(q => q.is_archived && takenQuizIds.includes(q.id) && !q.is_retake).map(q => {
           const gradeEntry = userGrades.find(g => g.quiz_id === q.id);
           return { ...q, score: gradeEntry ? gradeEntry.grade : 0, total_items: gradeEntry ? gradeEntry.total_items : 100 };
       });
 
       setAvailableQuizzes(available);
       setUncompletedQuizzes(uncompleted);
-      setCompletedQuizzes(completed);
+      setCompletedQuizzes(finalCompleted);
       setArchivedQuizzes(archived); 
 
     } catch (error) {
