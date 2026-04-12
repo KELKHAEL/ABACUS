@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 12, 2026 at 12:48 AM
+-- Generation Time: Apr 12, 2026 at 08:45 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -100,14 +100,8 @@ CREATE TABLE `announcements` (
 --
 
 INSERT INTO `announcements` (`id`, `title`, `content`, `author_role`, `author_name`, `target_year`, `target_section`, `created_at`, `is_deleted`, `author_id`, `deleted_at`, `term_id`) VALUES
-(1, 'Welcome to ABACUS', 'Test announcement hee hee\n\n-michael jackson', 'ADMIN', 'Registrar', 'ALL', 'ALL', '2026-02-11 09:17:26', 1, NULL, '2026-04-07 00:51:36', 1),
-(2, 'sup', 'try lang', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '4', '1', '2026-03-24 20:39:26', 0, 2, NULL, 1),
-(8, 'try try', 'try try 1', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '4', '1', '2026-04-07 00:44:53', 0, 2, NULL, 2),
-(9, 'try try', 'try try 1', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '2', '1', '2026-04-07 00:44:53', 0, 2, NULL, 2),
-(10, 'try try', 'try try 1', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '3', '1', '2026-04-07 00:44:53', 0, 2, NULL, 2),
-(11, 'try try', 'try try 1', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '1', '1', '2026-04-07 00:44:53', 0, 2, NULL, 2),
-(12, 'Welcome to ABACUS!', 'WELCOME!', 'ADMIN', 'Registrar', 'ALL', 'ALL', '2026-04-07 00:51:49', 0, NULL, NULL, 2),
-(13, 'try', 'rty', 'ADMIN', 'Registrar', 'INSTRUCTOR', '2', '2026-04-07 02:09:35', 0, NULL, NULL, 2);
+(2, 'Welcome my Students!', 'This is your Instructor for the class semester! ', 'INSTRUCTOR', 'GARCIA, MIKHAEL V.', '4', '1', '2026-03-24 20:39:26', 0, 2, NULL, 1),
+(14, 'Welcome to ABACUS!', 'ABACUS is an Android-Based Application for Computing, Understanding, and Simulation in Discrete Mathematics!', 'ADMIN', 'Registrar', 'ALL', 'ALL', '2026-04-11 23:56:15', 0, NULL, NULL, 2);
 
 -- --------------------------------------------------------
 
@@ -203,28 +197,22 @@ INSERT INTO `question_options` (`id`, `question_id`, `option_text`, `option_orde
 (34, 9, 'adobo', 1),
 (35, 9, 'kutsara', 2),
 (36, 9, 'kape', 3),
-(37, 10, 'try1', 0),
-(38, 10, 'try2', 1),
-(39, 10, 'try3', 2),
-(40, 11, '1', 0),
-(41, 11, '2', 1),
-(42, 11, '3', 2),
-(43, 12, 'try1', 0),
-(44, 12, 'try2', 1),
-(45, 12, 'try3', 2),
-(46, 13, '1', 0),
-(47, 13, '2', 1),
-(48, 13, '3', 2),
-(49, 14, 'try1', 0),
-(50, 14, 'try2', 1),
-(51, 14, 'try3', 2),
-(52, 15, '1', 0),
-(53, 15, '2', 1),
-(54, 15, '3', 2),
-(55, 16, '1', 0),
-(56, 16, '2', 1),
-(57, 16, '3', 2),
-(58, 16, '4', 3);
+(59, 17, '1', 0),
+(60, 17, '2', 1),
+(61, 17, '3', 2),
+(62, 17, '4', 3),
+(63, 18, '1', 0),
+(64, 18, '2', 1),
+(65, 18, '3', 2),
+(66, 18, '4', 3),
+(67, 19, '1', 0),
+(68, 19, '2', 1),
+(69, 19, '3', 2),
+(70, 19, '4', 3),
+(71, 20, '1', 0),
+(72, 20, '2', 1),
+(73, 20, '3', 2),
+(74, 20, '4', 3);
 
 -- --------------------------------------------------------
 
@@ -260,10 +248,8 @@ INSERT INTO `quizzes` (`id`, `title`, `description`, `target_year`, `target_sect
 (3, 'try again', 'try', '4', '1', '2026-04-03 20:55:00', 'active', 2, '2026-04-02 10:57:30', 1, 0, NULL, NULL, 0, 0),
 (4, 'TRIAL AND ERROR NANAMAN NA S-STRESS NAKOOOO!!', 'try try again', '4', '1', '2026-04-02 20:00:00', 'active', 2, '2026-04-02 11:15:36', 1, 0, NULL, NULL, 0, 0),
 (8, 'try demo', 'ewan', '4', '1', '2026-04-06 15:00:00', 'active', 2, '2026-04-06 06:38:46', 1, 0, NULL, NULL, 0, 0),
-(9, 'try try', 'demoo', '4', '1', '2026-04-07 05:07:00', 'active', 2, '2026-04-06 19:08:03', 2, 0, NULL, '[]', 20, 0),
-(10, '[RETAKE] try try', 'Retake assignment. Note: A penalty deduction will be applied to the final score.', '4', '1', '2026-04-07 05:59:00', 'active', 2, '2026-04-06 19:59:35', 2, 1, 9, '[9]', 20, 0),
-(11, '[RETAKE] try try', 'Retake assignment. Note: A penalty deduction will be applied to the final score.', '4', '1', '2026-04-07 13:13:00', 'active', 2, '2026-04-07 02:14:01', 2, 1, 9, '[9,4,10]', 20, 0),
-(12, 'TRY TRY', 'TRY 2', 'ALL', 'ALL', '2026-04-07 12:23:00', 'active', 2, '2026-04-07 02:23:32', 2, 0, NULL, '[]', 20, 0);
+(13, 'try testing 1', 'try test', 'ALL', 'ALL', '2026-04-30 08:58:00', 'active', 2, '2026-04-11 22:59:28', 2, 0, NULL, '[]', 2, 0),
+(14, '[RETAKE] try testing 1', 'Retake assignment. Note: A point penalty deduction will be applied to the final score.', '4', '1', '2026-04-30 08:00:00', 'active', 2, '2026-04-11 23:16:26', 2, 1, 13, '[4,9]', 1, 0);
 
 -- --------------------------------------------------------
 
@@ -292,13 +278,10 @@ INSERT INTO `quiz_questions` (`id`, `quiz_id`, `question_text`, `question_type`,
 (4, 3, 'Try quiz', 'multiple-choice', '', 0, 1),
 (5, 4, 'try uli', 'multiple-choice', '', 0, 1),
 (9, 8, 'anong ulam ko ngayon', 'multiple-choice', '', 3, NULL),
-(10, 9, 'try', 'multiple-choice', '', 0, NULL),
-(11, 9, 'which is which', 'multiple-choice', '', 0, NULL),
-(12, 10, 'try', 'multiple-choice', '', 0, NULL),
-(13, 10, 'which is which', 'multiple-choice', '', 0, NULL),
-(14, 11, 'try', 'multiple-choice', '', 0, NULL),
-(15, 11, 'which is which', 'multiple-choice', '', 0, NULL),
-(16, 12, 'TRYYYYY', 'multiple-choice', '', 0, NULL);
+(17, 13, 'testing', 'multiple-choice', '', 0, NULL),
+(18, 13, 'test uli', 'multiple-choice', '', 0, NULL),
+(19, 14, 'testing', 'multiple-choice', '', 0, NULL),
+(20, 14, 'test uli', 'multiple-choice', '', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -351,14 +334,8 @@ INSERT INTO `student_grades` (`id`, `user_id`, `quiz_id`, `score`, `subject_titl
 (11, 4, 3, 100.00, 'try again', '1st Sem', '2026-04-02 10:58:31', 100, 1),
 (12, 4, 4, 1.00, 'TRIAL AND ERROR NANAMAN NA S-STRESS NAKOOOO!!', '1st Sem', '2026-04-02 11:15:45', 1, 1),
 (18, 4, 8, 0.00, 'try demo', '1st Sem', '2026-04-06 06:40:24', 1, 1),
-(22, 4, 9, 2.00, 'try try', '1st Sem', '2026-04-06 19:08:20', 2, 2),
-(24, 9, 10, 0.00, '[RETAKE] try try (-20% Penalty Applied)', '1st Sem', '2026-04-06 19:59:52', 2, 2),
-(26, 10, 9, 0.00, 'try try (Missed)', '1st Sem', '2026-04-07 02:12:48', 100, 2),
-(27, 9, 9, 1.60, '[RETAKE] try try (-20% Penalty Applied)', '1st Sem', '2026-04-07 02:15:30', 2, 2),
-(28, 9, 11, 1.60, '[RETAKE] try try (-20% Penalty Applied)', '1st Sem', '2026-04-07 02:15:30', 2, 2),
-(29, 9, 12, 0.00, 'TRY TRY', '1st Sem', '2026-04-07 02:24:46', 1, 2),
-(30, 4, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2),
-(31, 10, 12, 0.00, 'TRY TRY (Missed)', '1st Sem', '2026-04-07 06:42:12', 100, 2);
+(35, 9, 13, 1.00, '[RETAKE] try testing 1 (-1 pts Penalty)', '1st Sem', '2026-04-11 23:16:44', 2, 2),
+(36, 4, 13, 1.00, '[RETAKE] try testing 1 (-1 pts Penalty)', '1st Sem', '2026-04-11 23:19:41', 2, 2);
 
 -- --------------------------------------------------------
 
@@ -396,12 +373,12 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `student_id`, `full_name`, `email`, `password_hash`, `year_level`, `section`, `role`, `created_at`, `department`, `assigned_classes`, `program`, `status`, `is_deleted`, `cor_image_url`, `cor_status`, `pending_year`, `pending_section`, `pending_status`, `session_token`, `login_attempts`, `lockout_until`) VALUES
-(1, 'ADMIN-001', 'Super Admin', 'admin@cvsu.edu.ph', '$2b$10$5e4Yh68d3VQL0ZsTFFs/xe3GcXl.rVwA4WmzN5nODBhKhVkYNGXAm', '1', '1', 'ADMIN', '2026-02-10 15:57:58', NULL, NULL, 'BSIT', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNzc1OTM3NDM4fQ.q4FM9lj_K_xcEE61bCE2G3JTIvj_NEuN9zJRUnJ3qKE', 0, NULL),
-(2, '202218637', 'GARCIA, MIKHAEL V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"1\"},{\"year\":\"3\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"2\"}]', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzc1OTQ3MDgyfQ.b5Ded7Tm1K_l3Br5mKXb45PXh8c55pLoKWADNUJc9sY', 0, NULL),
-(4, '202218859', 'PAGOTA, MARY ANNE A.', 'tc.maryanne.pagota@cvsu.edu.ph', '$2b$10$rFPrYiJqyTSif5E9F56LRuB5lPRUNJBqMqTD7JwHp9nHqHVhxUhLu', '4', '1', 'STUDENT', '2026-02-11 08:25:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/PAGOTA_MARY_ANNE_A_202218859.jpeg', 'Approved', NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZGV2aWNlSWQiOiI0bDB0YXpjcjMxeG1udXdoa2JnIiwiaWF0IjoxNzc1OTQ2ODQ1fQ.TBwRrrH5WBFXWGHarPIuPLKFc9v74qXNUtzAKCVv7os', 0, NULL),
-(9, '202218715', 'Samar, Jhanzy O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$XHrPWfMTifzOcgfRbzHlVexa3mv0fme586V3jAdeTeXYDw4.rZuXu', '4', '1', 'STUDENT', '2026-04-06 18:03:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL),
+(1, 'ADMIN-001', 'Super Admin', 'admin@cvsu.edu.ph', '$2b$10$5e4Yh68d3VQL0ZsTFFs/xe3GcXl.rVwA4WmzN5nODBhKhVkYNGXAm', '1', '1', 'ADMIN', '2026-02-10 15:57:58', NULL, NULL, 'BSIT', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNzc1OTUwODY1fQ.3GPbJ4JEqyR-4kYAMLZaaagD1PViDww8yrwI617ukKU', 0, NULL),
+(2, '202218637', 'GARCIA, MIKHAEL V.', 'tc.mikhael.garcia@cvsu.edu.ph', '$2b$10$.m6BuIJLT3w/AenK28jP.ejAusBniTg0s5tys5GJrldjpomI0ElnK', NULL, NULL, 'INSTRUCTOR', '2026-02-10 17:20:11', 'Department of Information Technology', '[{\"year\":\"4\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"1\"},{\"year\":\"3\",\"section\":\"1\"},{\"year\":\"1\",\"section\":\"1\"},{\"year\":\"2\",\"section\":\"2\"}]', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzc1OTUxODc4fQ.fFiPTUcMv4X7-583py1RAskJVn64N5It_ildyS254Qw', 0, NULL),
+(4, '202218859', 'PAGOTA, MARY ANNE A.', 'tc.maryanne.pagota@cvsu.edu.ph', '$2b$10$rFPrYiJqyTSif5E9F56LRuB5lPRUNJBqMqTD7JwHp9nHqHVhxUhLu', '4', '1', 'STUDENT', '2026-02-11 08:25:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, NULL, 'Rejected', NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZGV2aWNlSWQiOiI0bDB0YXpjcjMxeG1udXdoa2JnIiwiaWF0IjoxNzc2MDE0NzY1fQ.kDgDBFBQ_RCiWr4SVZNM7NrW8KafjQfmlwPui8zrvDg', 0, NULL),
+(9, '202218715', 'Samar, Jhanzy O.', 'tc.jhanzy.samar@cvsu.edu.ph', '$2b$10$XHrPWfMTifzOcgfRbzHlVexa3mv0fme586V3jAdeTeXYDw4.rZuXu', '4', '1', 'STUDENT', '2026-04-06 18:03:17', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, NULL, NULL, NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OSwiZGV2aWNlSWQiOiJmbXlnNnQ4NWlqd21udnV3dzduIiwiaWF0IjoxNzc2MDA0MDU5fQ.jXrc8oPzjQm3gGtMZXL1VkfoQKfrJ-cOr6wsaWkd6Ts', 0, NULL),
 (10, '202218631', 'Gadon, Vincent Eyron H.', 'tc.vincenteyron.gadon@cvsu.edu.ph', '$2b$10$ilc5WMZT8GxqEhRnFwou7urN.vibscV5y4XJF5CDAuGXz31mGoLCa', '4', '1', 'STUDENT', '2026-04-06 18:18:58', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Gadon_Vincent_Eyron_H_202218631_REG.jpeg', 'Approved', NULL, NULL, NULL, NULL, 0, NULL),
-(11, '202218867', 'Rapis, Reymond G.', 'tc.reymond.rapis@cvsu.edu.ph', '$2b$10$hFh4PaH4TRWwPQeWpTpDe.u2Em2T8GTHu865M8sypRBE7bjGQJRN.', '4', 'To be assigned', 'STUDENT', '2026-04-07 02:40:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/Rapis_Reymond_G_202218867_REG.jpeg', 'Pending', '4', '1', 'Regular', NULL, 0, NULL);
+(11, '202218867', 'RAPIS, REYMOND', 'tc.reymond.rapis@cvsu.edu.ph', '$2b$10$hFh4PaH4TRWwPQeWpTpDe.u2Em2T8GTHu865M8sypRBE7bjGQJRN.', '4', '1', 'STUDENT', '2026-04-07 02:40:42', NULL, NULL, 'Bachelor of Science in Information Technology', 'Regular', 0, '/uploads/RAPIS_REYMOND_202218867.jpeg', 'Approved', NULL, NULL, NULL, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTEsImRldmljZUlkIjoiNGwwdGF6Y3IzMXhtbnV3aGtiZyIsImlhdCI6MTc3NTk1MDI2OH0.YTzITHGUqm_d7LqoJg2l4wS91TyDolnMSwIwSjZKqKk', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -528,7 +505,7 @@ ALTER TABLE `allowed_students`
 -- AUTO_INCREMENT for table `announcements`
 --
 ALTER TABLE `announcements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `modules`
@@ -546,19 +523,19 @@ ALTER TABLE `programs`
 -- AUTO_INCREMENT for table `question_options`
 --
 ALTER TABLE `question_options`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=75;
 
 --
 -- AUTO_INCREMENT for table `quizzes`
 --
 ALTER TABLE `quizzes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `quiz_questions`
 --
 ALTER TABLE `quiz_questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `sections`
@@ -570,7 +547,7 @@ ALTER TABLE `sections`
 -- AUTO_INCREMENT for table `student_grades`
 --
 ALTER TABLE `student_grades`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `users`
