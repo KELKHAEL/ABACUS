@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, Alert, StyleSheet, 
   SafeAreaView, ScrollView, TextInput, ActivityIndicator, 
-  AppState, BackHandler 
+  AppState, BackHandler, Platform, StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
@@ -383,7 +383,11 @@ export default function QuizScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FD' },
   
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },

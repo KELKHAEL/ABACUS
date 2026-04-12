@@ -1,7 +1,7 @@
 import React, { useState, useContext, useCallback } from 'react';
 import { 
   View, Text, FlatList, TouchableOpacity, StyleSheet, 
-  ActivityIndicator, StatusBar, Alert 
+  ActivityIndicator, StatusBar, Alert, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { Ionicons } from '@expo/vector-icons';
@@ -176,7 +176,11 @@ export default function ModulesScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   headerRow: { 
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, 
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee',

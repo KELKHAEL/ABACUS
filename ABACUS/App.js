@@ -80,8 +80,8 @@ import Contradiction_2_6 from './screens/lectures/Contradiction_2_6';
 import ProofByCases_2_7 from './screens/lectures/ProofByCases_2_7';
 import InferenceRules_2_8 from './screens/lectures/InferenceRules_2_8';
 
-import GroupTheory_3_1 from './screens/lectures/GroupTheory_3_1';
-import AlgebraicStructures_3_2 from './screens/lectures/AlgebraicStructures_3_2';
+import GroupOperators_3_1 from './screens/lectures/GroupOperators_3_1';
+import GroupTheory_3_2 from './screens/lectures/GroupTheory_3_2';
 import Groups_3_3 from './screens/lectures/Groups_3_3';
 import AbelianGroup_3_4 from './screens/lectures/AbelianGroup_3_4';
 import Semigroup_3_5 from './screens/lectures/Semigroup_3_5';
@@ -262,8 +262,8 @@ const AppNavigator = () => {
               <Stack.Screen name="ProofByCases_2_7" component={ProofByCases_2_7}/>
               <Stack.Screen name="InferenceRules_2_8" component={InferenceRules_2_8}/>
 
-              <Stack.Screen name="GroupTheory_3_1" component={GroupTheory_3_1}/>
-              <Stack.Screen name="AlgebraicStructures_3_2" component={AlgebraicStructures_3_2}/>
+              <Stack.Screen name="GroupOperators_3_1" component={GroupOperators_3_1}/>
+              <Stack.Screen name="GroupTheory_3_2" component={GroupTheory_3_2}/>
               <Stack.Screen name="Groups_3_3" component={Groups_3_3}/>
               <Stack.Screen name="AbelianGroup_3_4" component={AbelianGroup_3_4}/>
               <Stack.Screen name="Semigroup_3_5" component={Semigroup_3_5}/>

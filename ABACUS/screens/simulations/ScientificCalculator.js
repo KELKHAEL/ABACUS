@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, Alert 
+  View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, ScrollView, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -170,7 +170,11 @@ export default function ScientificCalculator({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   header: { 
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, 
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', justifyContent: 'space-between'

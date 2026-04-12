@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Keyboard, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line, Circle, Text as SvgText, G, Path, Polygon } from 'react-native-svg';
 
@@ -398,7 +398,11 @@ export default function RelationsLab({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
   content: { padding: 20, paddingBottom: 50 },

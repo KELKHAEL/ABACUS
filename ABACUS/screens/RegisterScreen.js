@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
-  SafeAreaView, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Modal, FlatList, Image 
+  SafeAreaView, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, StatusBar, Modal, FlatList, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; 
 import * as ImagePicker from 'expo-image-picker';
@@ -397,7 +397,11 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   scrollContent: { padding: 30 },
   header: { marginBottom: 20, marginTop: 10 },
   title: { fontSize: 28, fontWeight: '900', color: '#104a28', marginBottom: 5 },

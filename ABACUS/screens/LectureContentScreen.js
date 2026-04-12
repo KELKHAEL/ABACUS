@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import your content components (You will create these in the lectures folder)
@@ -26,8 +26,8 @@ import Contradiction_2_6 from './lectures/Contradiction_2_6';
 import ProofByCases_2_7 from './lectures/ProofByCases_2_7';
 import InferenceRules_2_8 from './lectures/InferenceRules_2_8';
 
-import GroupTheory_3_1 from './lectures/GroupTheory_3_1';
-import AlgebraicStructures_3_2 from './lectures/AlgebraicStructures_3_2';
+import GroupOperators_3_1 from './lectures/GroupOperators_3_1';
+import GroupTheory_3_2 from './lectures/GroupTheory_3_2';
 import Groups_3_3 from './lectures/Groups_3_3';
 import AbelianGroup_3_4 from './lectures/AbelianGroup_3_4';
 import Semigroup_3_5 from './lectures/Semigroup_3_5';
@@ -123,8 +123,8 @@ export default function LectureContentScreen({ route, navigation }) {
       case "2.7": return <ProofByCases_2_7 />;
       case "2.8": return <InferenceRules_2_8 />;
       // Module 3
-      case "3.1": return <GroupTheory_3_1 />;
-      case "3.2": return <AlgebraicStructures_3_2 />;
+      case "3.1": return <GroupOperators_3_1 />;
+      case "3.2": return <GroupTheory_3_2 />;
       case "3.3": return <Groups_3_3 />;
       case "3.4": return <AbelianGroup_3_4 />;
       case "3.5": return <Semigroup_3_5 />;
@@ -220,7 +220,11 @@ export default function LectureContentScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   headerId: { fontSize: 10, fontWeight: 'bold', color: '#94A3B8', letterSpacing: 2 },
   scrollContainer: { padding: 25 },

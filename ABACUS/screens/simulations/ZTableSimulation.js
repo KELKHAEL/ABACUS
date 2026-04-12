@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, Modal, KeyboardAvoidingView, Platform, StatusBar, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Line, Text as SvgText } from 'react-native-svg';
 
@@ -406,10 +406,14 @@ export default function ZTableSimulation({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   content: { padding: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
+  title: { fontSize: 20, fontWeight: 'bold', color: '#104a28'},
   
   guidelinesCard: { backgroundColor: '#e0f2fe', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#bae6fd' },
   guidelinesTitle: { fontSize: 15, fontWeight: 'bold', color: '#0369a1' },

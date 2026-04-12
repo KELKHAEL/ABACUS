@@ -10,10 +10,8 @@ import { AuthContext } from '../AuthContext';
 import { walkthroughable, CopilotStep, useCopilot } from 'react-native-copilot';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
-// ❗ IMPORTANT: CHECK THIS URL MATCHES YOUR CURRENT NGROK TERMINAL
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-// --- CREATE WALKTHROUGHABLE COMPONENTS ---
 const WalkthroughableTouchableOpacity = walkthroughable(TouchableOpacity);
 
 const ModuleCard = ({ title, category, color, onPress }) => (
@@ -547,7 +545,11 @@ export default function StudentHome({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  container: { 
+  flex: 1, 
+  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   scrollContent: { padding: 24, paddingBottom: 100 },
   
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

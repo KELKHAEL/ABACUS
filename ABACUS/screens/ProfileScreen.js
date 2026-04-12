@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, 
-  ScrollView, Modal, Alert, ActivityIndicator, Image 
+  ScrollView, Modal, Alert, ActivityIndicator, Image, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext';
@@ -132,7 +132,7 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -160,7 +160,6 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="id-card-outline" size={20} color="#666" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Student ID</Text>
-              {/* ✅ BULLETPROOF FALLBACK */}
               <Text style={styles.infoValue}>{user.studentId || user.student_id || 'Not provided'}</Text>
             </View>
           </View>
@@ -248,7 +247,12 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  // ✅ FIX: Added paddingTop to fix Android UI overlap
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F8F9FD',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
+  },
   header: { 
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
     paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff', 

@@ -1045,7 +1045,6 @@ app.put('/admin/promotions/:id/approve', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ✅ FIX APPLIED HERE: Invalidate Session Token on mass approval
 app.put('/admin/promotions/mass-approve', async (req, res) => {
   const { ids } = req.body;
   if (!ids || ids.length === 0) return res.status(400).json({ error: "No IDs provided" });
