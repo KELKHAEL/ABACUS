@@ -152,6 +152,15 @@ app.post('/login', async (req, res) => {
             return res.status(403).json({ success: false, error: `Account locked. Try again in ${minutesLeft} minutes.` });
         }
 
+        // 2. ✅ NEW: Strict Single-Device Session Check
+        // If a session token exists, this account is currently active on another device.
+        if (user.session_token) {
+            return res.status(403).json({ 
+                success: false, 
+                error: "This account is currently logged in on another device. Please log out there first." 
+            });
+        }
+
         const match = await bcrypt.compare(password, user.password_hash);
 
         if (!match) {
@@ -166,7 +175,7 @@ app.post('/login', async (req, res) => {
             }
         }
 
-        // 2. Success: Session Management
+        // 3. Success: Generate and Save New Token
         const sessionToken = jwt.sign({ id: user.id, deviceId }, 'abacus_secret_key_2026');
         await db.query("UPDATE users SET login_attempts = 0, lockout_until = NULL, session_token = ? WHERE id = ?", [sessionToken, user.id]);
 
@@ -192,6 +201,17 @@ app.post('/login', async (req, res) => {
             }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/logout', async (req, res) => {
+    const { userId } = req.body;
+    try {
+        if (!userId) return res.status(400).json({ success: false, error: "Missing User ID" });
+        await db.query("UPDATE users SET session_token = NULL WHERE id = ?", [userId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ==========================
