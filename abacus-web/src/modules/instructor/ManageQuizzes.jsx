@@ -43,7 +43,7 @@ export default function ManageQuizzes() {
           } catch(e) {}
       }
 
-      const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setQuizzes(data.quizzes || []);
@@ -56,7 +56,7 @@ export default function ManageQuizzes() {
   const handleEditQuiz = async (quizId, isRetakeMode = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/quizzes/${quizId}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}`);
       const fullQuiz = await res.json();
       
       if (fullQuiz.error) { alert(fullQuiz.error); setLoading(false); return; }
@@ -87,7 +87,7 @@ export default function ManageQuizzes() {
     if (e) e.stopPropagation();
     if (window.confirm("Move this quiz to the trashbin?")) {
       try {
-        const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
+        const res = await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}/status`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
         });
         if (res.ok) {
@@ -108,7 +108,7 @@ export default function ManageQuizzes() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/quizzes/${quizId}/status`, {
+      const res = await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}/status`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' })
       });
       
@@ -130,7 +130,7 @@ export default function ManageQuizzes() {
         setTrashList(prev => prev.filter(q => q.id !== quizId));
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
 
-        await fetch(`http://localhost:5000/quizzes/${quizId}`, { method: 'DELETE' });
+        await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}`, { method: 'DELETE' });
       } catch (error) { 
           alert("Delete failed."); 
           fetchTrash(); 

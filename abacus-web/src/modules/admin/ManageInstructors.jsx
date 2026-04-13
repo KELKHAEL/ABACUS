@@ -51,8 +51,8 @@ export default function ManageInstructors() {
     setLoading(true);
     try {
       const [instRes, setupRes] = await Promise.all([
-        fetch('http://localhost:5000/users?role=INSTRUCTOR'),
-        fetch('http://localhost:5000/academic-setup')
+        fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR'),
+        fetch('https://abacus-w435.onrender.com/academic-setup')
       ]);
       
       const data = await instRes.json();
@@ -108,7 +108,7 @@ export default function ManageInstructors() {
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
-        const res = await fetch('http://localhost:5000/trash/instructors');
+        const res = await fetch('https://abacus-w435.onrender.com/trash/instructors');
         const data = await res.json();
         setTrashList(data);
     } catch (error) {
@@ -125,7 +125,7 @@ export default function ManageInstructors() {
   const handleRestore = async (id) => {
     if(!window.confirm("Restore this instructor?")) return;
     try {
-        await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
+        await fetch(`https://abacus-w435.onrender.com/users/${id}/restore`, { method: 'PUT' });
         fetchTrash(); 
         fetchInstructorsAndSetup(); 
     } catch (e) {
@@ -136,7 +136,7 @@ export default function ManageInstructors() {
   const handlePermanentDelete = async (id) => {
     if(!window.confirm("WARNING: This will permanently delete the instructor data. This cannot be undone.")) return;
     try {
-        await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
+        await fetch(`https://abacus-w435.onrender.com/users/${id}/permanent`, { method: 'DELETE' });
         fetchTrash();
     } catch (e) {
         alert("Failed to delete permanently");
@@ -193,7 +193,7 @@ export default function ManageInstructors() {
       email: instructor.email,
       employeeId: instructor.employeeId || '',
       department: instructor.department || (academicPrograms.length > 0 ? academicPrograms[0].name : ''),
-      password: '', 
+      password: '', // Empty by default so we don't accidentally overwrite it
       assignedClasses: Array.isArray(instructor.assignedClasses) ? instructor.assignedClasses : []
     });
     setShowModal(true);
@@ -248,11 +248,11 @@ export default function ManageInstructors() {
     };
 
     try {
-      let url = 'http://localhost:5000/users';
+      let url = 'https://abacus-w435.onrender.com/users';
       let method = 'POST';
 
       if (isEditing) {
-        url = `http://localhost:5000/users/${editId}`;
+        url = `https://abacus-w435.onrender.com/users/${editId}`;
         method = 'PUT';
       }
 
@@ -263,7 +263,22 @@ export default function ManageInstructors() {
       });
 
       const data = await res.json();
+      
       if (data.success) {
+        // --- NEW: Reset Password Logic ---
+        // If we are editing and the admin generated a new password, update it now!
+        if (isEditing && formData.password) {
+          try {
+            await fetch('https://abacus-w435.onrender.com/admin-reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uid: editId, new_password: formData.password })
+            });
+          } catch (passErr) {
+            console.error("Failed to update password:", passErr);
+          }
+        }
+
         alert(isEditing ? "Instructor Updated!" : "Instructor Created!");
         setShowModal(false);
         fetchInstructorsAndSetup();
@@ -280,7 +295,7 @@ export default function ManageInstructors() {
   const handleSoftDelete = async (id) => {
     if (window.confirm("Move this instructor to Trash?")) {
       try {
-        await fetch(`http://localhost:5000/users/${id}/soft-delete`, { method: 'PUT' });
+        await fetch(`https://abacus-w435.onrender.com/users/${id}/soft-delete`, { method: 'PUT' });
         fetchInstructorsAndSetup();
       } catch (error) {
         alert("Error deleting user.");
@@ -506,10 +521,15 @@ export default function ManageInstructors() {
                       <div className="form-group" style={{flex: 1, margin: 0}}>
                         <label className="form-label">Password</label>
                         <div style={{display: 'flex', gap: '8px'}}>
-                          <input className="form-input" value={formData.password} readOnly={isEditing} placeholder={isEditing ? "Unchanged" : ""} style={{background: isEditing ? '#f3f4f6' : '#f0fdf4'}} />
-                          {!isEditing && (
-                            <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '8px', cursor: 'pointer', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white'}} title="Generate new password"><RefreshCw size={16} color="#4b5563" /></button>
-                          )}
+                          <input 
+                              className="form-input" 
+                              value={formData.password} 
+                              readOnly 
+                              placeholder={isEditing ? "Leave blank to keep unchanged" : ""} 
+                              style={{background: '#f0fdf4'}} 
+                          />
+                          {/* REMOVED the !isEditing check so it's always accessible */}
+                          <button type="button" onClick={() => setFormData({...formData, password: generatePassword()})} style={{padding: '8px', cursor: 'pointer', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white'}} title="Generate new password"><RefreshCw size={16} color="#4b5563" /></button>
                         </div>
                       </div>
                   </div>

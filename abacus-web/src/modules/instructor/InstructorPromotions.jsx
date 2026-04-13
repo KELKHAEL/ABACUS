@@ -32,7 +32,7 @@ export default function InstructorPromotions() {
     setLoading(true);
     setSelectedIds([]); 
     try {
-      const res = await fetch(`http://localhost:5000/instructor/${instructorId}/promotions/pending`);
+      const res = await fetch(`https://abacus-w435.onrender.com/instructor/${instructorId}/promotions/pending`);
       const data = await res.json();
 
       const uppercaseData = data.map(s => ({
@@ -87,7 +87,7 @@ export default function InstructorPromotions() {
   const handleApprove = async (id, name) => {
     if (!window.confirm(`Approve promotion for ${name} into your class? This will apply their new classes and require them to log in again.`)) return;
     try {
-      await fetch(`http://localhost:5000/admin/promotions/${id}/approve`, { method: 'PUT' });
+      await fetch(`https://abacus-w435.onrender.com/admin/promotions/${id}/approve`, { method: 'PUT' });
       fetchData();
     } catch (err) { alert("Failed to approve request."); }
   };
@@ -95,7 +95,7 @@ export default function InstructorPromotions() {
   const handleReject = async (id, name) => {
     if (!window.confirm(`Reject promotion for ${name}? This flags them as rejected.`)) return;
     try {
-      await fetch(`http://localhost:5000/admin/promotions/${id}/reject`, { method: 'PUT' });
+      await fetch(`https://abacus-w435.onrender.com/admin/promotions/${id}/reject`, { method: 'PUT' });
       fetchData();
     } catch (err) { alert("Failed to reject request."); }
   };
@@ -105,7 +105,7 @@ export default function InstructorPromotions() {
     if (!window.confirm(`Are you sure you want to MASS APPROVE ${selectedIds.length} students into Year ${yearFilter} - Section ${sectionFilter}? This will require them to log in again.`)) return;
     
     try {
-      await fetch('http://localhost:5000/admin/promotions/mass-approve', {
+      await fetch('https://abacus-w435.onrender.com/admin/promotions/mass-approve', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: selectedIds })
@@ -274,7 +274,7 @@ export default function InstructorPromotions() {
                   
                   <td style={{...tdStyle, textAlign: 'center'}}>
                     <button 
-                        onClick={() => openImagePreview(`http://localhost:5000${student.cor_image_url}`)}
+                        onClick={() => openImagePreview(`https://abacus-w435.onrender.com${student.cor_image_url}`)}
                         style={{background: '#f3f4f6', border: '1px solid #d1d5db', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#4b5563'}}
                     >
                         <FileImage size={18} color="#3b82f6"/> View COR

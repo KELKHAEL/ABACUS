@@ -11,7 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system'; 
 import * as Sharing from 'expo-sharing';
 
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function ModulesScreen({ navigation }) {
   const { user } = useContext(AuthContext);

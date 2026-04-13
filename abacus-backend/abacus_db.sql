@@ -243,8 +243,8 @@ CREATE TABLE `quizzes` (
 --
 
 INSERT INTO `quizzes` (`id`, `title`, `description`, `target_year`, `target_section`, `due_date`, `status`, `created_by`, `created_at`, `term_id`, `is_retake`, `parent_quiz_id`, `target_students`, `penalty`, `time_limit`) VALUES
-(1, 'Quiz 1', 'Try Testing.', '4', '1', '0000-00-00 00:00:00', 'active', 2, '2026-02-11 07:48:30', 1, 0, NULL, NULL, 0, 0),
-(2, 'tryy ', 'samplee', '4', '1', '0000-00-00 00:00:00', 'active', 2, '2026-03-26 08:10:13', 1, 0, NULL, NULL, 0, 0),
+(1, 'Quiz 1', 'Try Testing.', '4', '1', '2026-12-31 23:59:59', 'active', 2, '2026-02-11 07:48:30', 1, 0, NULL, NULL, 0, 0),
+(2, 'tryy ', 'samplee', '4', '1', '2026-12-31 23:59:59', 'active', 2, '2026-03-26 08:10:13', 1, 0, NULL, NULL, 0, 0),
 (3, 'try again', 'try', '4', '1', '2026-04-03 20:55:00', 'active', 2, '2026-04-02 10:57:30', 1, 0, NULL, NULL, 0, 0),
 (4, 'TRIAL AND ERROR NANAMAN NA S-STRESS NAKOOOO!!', 'try try again', '4', '1', '2026-04-02 20:00:00', 'active', 2, '2026-04-02 11:15:36', 1, 0, NULL, NULL, 0, 0),
 (8, 'try demo', 'ewan', '4', '1', '2026-04-06 15:00:00', 'active', 2, '2026-04-06 06:38:46', 1, 0, NULL, NULL, 0, 0),

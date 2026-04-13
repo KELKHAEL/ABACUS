@@ -23,7 +23,7 @@ export default function ManageAcademicSetup() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/academic-setup');
+      const res = await fetch('https://abacus-w435.onrender.com/academic-setup');
       const result = await res.json();
       
       if (result.error) {
@@ -42,7 +42,7 @@ export default function ManageAcademicSetup() {
   const handleAdd = async (type, payload) => {
     if (!payload.value.trim()) return;
     try {
-      const response = await fetch(`http://localhost:5000/academic-setup/${type}`, {
+      const response = await fetch(`https://abacus-w435.onrender.com/academic-setup/${type}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const result = await response.json();
@@ -58,7 +58,7 @@ export default function ManageAcademicSetup() {
     if (newValue === null || newValue.trim() === "" || newValue === currentValue) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/academic-setup/${type}/${id}`, {
+      const response = await fetch(`https://abacus-w435.onrender.com/academic-setup/${type}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: newValue })
       });
       const result = await response.json();
@@ -70,7 +70,7 @@ export default function ManageAcademicSetup() {
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to permanently delete this ${type}?`)) return;
     try {
-      await fetch(`http://localhost:5000/academic-setup/${type}/${id}`, { method: 'DELETE' });
+      await fetch(`https://abacus-w435.onrender.com/academic-setup/${type}/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (e) { alert("Error deleting item"); }
   };
@@ -84,7 +84,7 @@ export default function ManageAcademicSetup() {
   // ✅ 2. Execute Rollover with Selected Options
   const confirmTermTransition = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/academic-setup/term/active/${pendingTermId}`, { 
+      const response = await fetch(`https://abacus-w435.onrender.com/academic-setup/term/active/${pendingTermId}`, { 
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(transitionSettings)

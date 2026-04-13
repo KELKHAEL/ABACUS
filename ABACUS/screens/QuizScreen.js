@@ -9,7 +9,7 @@ import { AuthContext } from '../AuthContext';
 import * as ScreenCapture from 'expo-screen-capture'; 
 
 // ❗ REPLACE THIS WITH YOUR PC'S IP ADDRESS OR NGROK URL
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function QuizScreen({ route, navigation }) {
   const { quizId, quizTitle } = route.params; 

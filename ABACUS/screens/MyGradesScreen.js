@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, ActivityIndicator, Touc
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 
-const API_URL = 'https://pretangible-reminiscently-jude.ngrok-free.dev'; 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function MyGradesScreen({ navigation }) {
   const { user } = useContext(AuthContext);

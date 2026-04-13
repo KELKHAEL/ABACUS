@@ -48,12 +48,12 @@ export default function CreateQuiz({ setActiveTab }) {
           const user = JSON.parse(userStr);
 
           // 1. Fetch students for Retake selection
-          const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+          const res = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
           const data = await res.json();
           setAllInstructorStudents(data.students || []);
 
           // 2. ✅ BULLETPROOF FIX: Fetch fresh assigned classes from DB just in case localStorage is missing it
-          const usersRes = await fetch('http://localhost:5000/users?role=INSTRUCTOR');
+          const usersRes = await fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR');
           const usersData = await usersRes.json();
           const currentInstructor = usersData.find(u => u.id === user.id);
           
@@ -226,11 +226,11 @@ export default function CreateQuiz({ setActiveTab }) {
         penalty: parseInt(penalty)
       };
 
-      let url = 'http://localhost:5000/quizzes';
+      let url = 'https://abacus-w435.onrender.com/quizzes';
       let method = 'POST';
 
       if (isEditing) {
-        url = `http://localhost:5000/quizzes/${editQuizId}`;
+        url = `https://abacus-w435.onrender.com/quizzes/${editQuizId}`;
         method = 'PUT';
       }
 

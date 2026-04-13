@@ -26,7 +26,7 @@ export default function MyClassList() {
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
 
-      const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
       const data = await res.json();
 
       if (data.error) throw new Error(data.error);
@@ -52,7 +52,7 @@ export default function MyClassList() {
   const handleStatusChange = async (studentId, newStatus) => {
     if(!window.confirm(`Change this student's status to ${newStatus}?`)) return;
     try {
-        const res = await fetch(`http://localhost:5000/users/${studentId}/student-status`, {
+        const res = await fetch(`https://abacus-w435.onrender.com/users/${studentId}/student-status`, {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })
         });
@@ -204,7 +204,7 @@ export default function MyClassList() {
                                             className="btn-icon-small" 
                                             title="View COR" 
                                             style={{color: s.cor_image_url ? '#0284c7' : '#cbd5e1'}}
-                                            onClick={() => s.cor_image_url ? openImagePreview(`http://localhost:5000${s.cor_image_url}`) : alert("No COR image uploaded by this student.")}
+                                            onClick={() => s.cor_image_url ? openImagePreview(`https://abacus-w435.onrender.com${s.cor_image_url}`) : alert("No COR image uploaded by this student.")}
                                         >
                                             <FileImage size={18}/>
                                         </button>

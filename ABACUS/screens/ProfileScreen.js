@@ -22,6 +22,9 @@ export default function ProfileScreen({ navigation }) {
 
   const [setupData, setSetupData] = useState({ yearLevels: [], sections: [] });
 
+  // Quick check for user role
+  const isStudent = user?.role === 'STUDENT';
+
   useEffect(() => {
     const fetchAcademicSetup = async () => {
       try {
@@ -39,8 +42,10 @@ export default function ProfileScreen({ navigation }) {
         console.error("Could not fetch academic setup:", error);
       }
     };
-    fetchAcademicSetup();
-  }, []);
+    if (isStudent) {
+      fetchAcademicSetup();
+    }
+  }, [isStudent]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -155,30 +160,38 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Academic Information</Text>
+          <Text style={styles.sectionTitle}>Account Information</Text>
           <View style={styles.infoRow}>
             <Ionicons name="id-card-outline" size={20} color="#666" />
             <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Student ID</Text>
+              <Text style={styles.infoLabel}>{isStudent ? 'Student ID' : 'Employee ID'}</Text>
               <Text style={styles.infoValue}>{user.studentId || user.student_id || 'Not provided'}</Text>
             </View>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="school-outline" size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Year & Section</Text>
-              <Text style={styles.infoValue}>Year {user.yearLevel || user.year_level} - Section {user.section}</Text>
+          
+          {/* ✅ ONLY render Year & Section if the user is a STUDENT */}
+          {isStudent && (
+            <View style={styles.infoRow}>
+              <Ionicons name="school-outline" size={20} color="#666" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Year & Section</Text>
+                <Text style={styles.infoValue}>Year {user.yearLevel || user.year_level} - Section {user.section}</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         <View style={styles.actionSection}>
           <Text style={styles.sectionTitle}>Account Actions</Text>
-          <TouchableOpacity style={styles.promoteBtn} onPress={() => setShowModal(true)}>
-            <Ionicons name="trending-up-outline" size={20} color="#104a28" />
-            <Text style={styles.promoteBtnText}>Request Promotion / Update Semester</Text>
-            <Ionicons name="chevron-forward" size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
-          </TouchableOpacity>
+          
+          {/* ✅ ONLY render Request Promotion if the user is a STUDENT */}
+          {isStudent && (
+            <TouchableOpacity style={styles.promoteBtn} onPress={() => setShowModal(true)}>
+              <Ionicons name="trending-up-outline" size={20} color="#104a28" />
+              <Text style={styles.promoteBtnText}>Request Promotion / Update Semester</Text>
+              <Ionicons name="chevron-forward" size={20} color="#104a28" style={{marginLeft: 'auto'}}/>
+            </TouchableOpacity>
+          )}
           
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
@@ -247,7 +260,6 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // ✅ FIX: Added paddingTop to fix Android UI overlap
   container: { 
     flex: 1, 
     backgroundColor: '#F8F9FD',

@@ -16,7 +16,7 @@ export default function ManageStudents() {
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
-        const res = await fetch('http://localhost:5000/trash/students');
+        const res = await fetch('https://abacus-w435.onrender.com/trash/students');
         const data = await res.json();
         setTrashList(data);
     } catch (error) { console.error("Error fetching trash:", error); }
@@ -29,7 +29,7 @@ export default function ManageStudents() {
     if(!window.confirm("Restore this student account?")) return;
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
-        const res = await fetch(`http://localhost:5000/users/${id}/restore`, { method: 'PUT' });
+        const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/restore`, { method: 'PUT' });
         if (res.ok) {
             fetchStudentsAndSetup(); 
         } else {
@@ -46,7 +46,7 @@ export default function ManageStudents() {
     if(!window.confirm("WARNING: This will permanently delete the student and their grades. This cannot be undone.")) return;
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
-        const res = await fetch(`http://localhost:5000/users/${id}/permanent`, { method: 'DELETE' });
+        const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/permanent`, { method: 'DELETE' });
         if (!res.ok) {
             alert("Failed to delete permanently on server.");
             fetchTrash(); 
@@ -85,8 +85,8 @@ export default function ManageStudents() {
     setLoading(true);
     try {
       const [studentsRes, setupRes] = await Promise.all([
-        fetch('http://localhost:5000/users?role=STUDENT'),
-        fetch('http://localhost:5000/academic-setup')
+        fetch('https://abacus-w435.onrender.com/users?role=STUDENT'),
+        fetch('https://abacus-w435.onrender.com/academic-setup')
       ]);
       const studentData = await studentsRes.json();
       const setupData = await setupRes.json();
@@ -171,7 +171,7 @@ export default function ManageStudents() {
     const payload = { ...formData, fullName: fullNameCombined, role: 'STUDENT' };
 
     try {
-      let url = isEditing ? `http://localhost:5000/users/${editId}` : 'http://localhost:5000/users';
+      let url = isEditing ? `https://abacus-w435.onrender.com/users/${editId}` : 'https://abacus-w435.onrender.com/users';
       let method = isEditing ? 'PUT' : 'POST';
 
       const res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -187,7 +187,7 @@ export default function ManageStudents() {
   const handleSoftDelete = async (id) => {
     if (window.confirm("Move this student to the Trash Bin? They can be restored later.")) {
       try {
-        await fetch(`http://localhost:5000/users/${id}/soft-delete`, { method: 'PUT' });
+        await fetch(`https://abacus-w435.onrender.com/users/${id}/soft-delete`, { method: 'PUT' });
         fetchStudentsAndSetup(); 
       } catch (error) { alert("Delete failed."); }
     }
@@ -197,7 +197,7 @@ export default function ManageStudents() {
     const newPassword = window.prompt(`Enter new password for ${student.fullName}:`, "cvsu1234");
     if (!newPassword) return;
     try {
-      const response = await fetch('http://localhost:5000/admin-reset-password', {
+      const response = await fetch('https://abacus-w435.onrender.com/admin-reset-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: student.id, new_password: newPassword })
       });
       const data = await response.json();

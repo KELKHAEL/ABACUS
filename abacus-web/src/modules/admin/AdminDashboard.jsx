@@ -19,10 +19,10 @@ export default function Dashboard() {
       try {
         // ✅ OPTIMIZATION: Fetch all data simultaneously to make the dashboard load instantly
         const [studentRes, teacherRes, announceRes, setupRes] = await Promise.all([
-            fetch('http://localhost:5000/users?role=STUDENT'),
-            fetch('http://localhost:5000/users?role=INSTRUCTOR'),
-            fetch('http://localhost:5000/announcements/all'),
-            fetch('http://localhost:5000/academic-setup')
+            fetch('https://abacus-w435.onrender.com/users?role=STUDENT'),
+            fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR'),
+            fetch('https://abacus-w435.onrender.com/announcements/all'),
+            fetch('https://abacus-w435.onrender.com/academic-setup')
         ]);
 
         const studentData = await studentRes.json();

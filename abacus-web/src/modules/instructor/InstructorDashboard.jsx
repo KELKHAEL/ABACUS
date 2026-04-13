@@ -40,7 +40,7 @@ export default function InstructorDashboard() {
       }
 
       // 1. Fetch Dashboard basic stats
-      const res = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
       const data = await res.json();
       
       if (!data.error) {
@@ -51,21 +51,21 @@ export default function InstructorDashboard() {
 
       // 2. Fetch Announcements
       try {
-          const annRes = await fetch(`http://localhost:5000/announcements/admin-to-instructor/${user.id}`);
+          const annRes = await fetch(`https://abacus-w435.onrender.com/announcements/admin-to-instructor/${user.id}`);
           const annData = await annRes.json();
           setAnnouncements(annData || []);
       } catch (err) { console.error("Could not load announcements:", err); }
 
       // 3. Fetch Grades for Analytics
       try {
-          const gradesRes = await fetch('http://localhost:5000/grades');
+          const gradesRes = await fetch('https://abacus-w435.onrender.com/grades');
           const gradesData = await gradesRes.json();
           setAllGrades(gradesData || []);
       } catch (err) { console.error("Could not process grades:", err); }
 
       // 🚀 4. NEW: Fetch Pending Verification Count
       try {
-          const pendingRes = await fetch(`http://localhost:5000/instructor/${user.id}/promotions/pending`);
+          const pendingRes = await fetch(`https://abacus-w435.onrender.com/instructor/${user.id}/promotions/pending`);
           const pendingData = await pendingRes.json();
           setPendingCount(pendingData.length || 0);
       } catch (err) { console.error("Could not process pending verifications:", err); }

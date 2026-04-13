@@ -53,13 +53,13 @@ export default function Gradebook() {
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
 
-      const dashboardRes = await fetch(`http://localhost:5000/instructor/dashboard/${user.id}`);
+      const dashboardRes = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
       const dashboardData = await dashboardRes.json();
       if (dashboardData.error) throw new Error(dashboardData.error);
       
       const assignedStudents = dashboardData.students || [];
 
-      const gradesRes = await fetch('http://localhost:5000/grades');
+      const gradesRes = await fetch('https://abacus-w435.onrender.com/grades');
       const gradesData = await gradesRes.json();
 
       const quizData = dashboardData.quizzes || [];
@@ -128,7 +128,7 @@ export default function Gradebook() {
         const updated = [...editGrades];
         updated.splice(index, 1); 
         setEditGrades(updated);
-        try { await fetch(`http://localhost:5000/grades/${gradeToDelete.id}`, { method: 'DELETE' }); } 
+        try { await fetch(`https://abacus-w435.onrender.com/grades/${gradeToDelete.id}`, { method: 'DELETE' }); } 
         catch(e) { alert("Failed to delete from server"); }
     }
   };
@@ -139,7 +139,7 @@ export default function Gradebook() {
       for (const grade of editGrades) {
           const cleanTitle = grade.subjectTitle ? grade.subjectTitle.replace(' (Missed)', '') : '';
           
-          await fetch(`http://localhost:5000/grades/${grade.id}`, {
+          await fetch(`https://abacus-w435.onrender.com/grades/${grade.id}`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ score: grade.grade, total_items: grade.total_items || 100, subjectTitle: cleanTitle })
           });

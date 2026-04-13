@@ -38,7 +38,7 @@ export default function UploadModules() {
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
 
-      const usersRes = await fetch(`http://localhost:5000/users?role=INSTRUCTOR`);
+      const usersRes = await fetch(`https://abacus-w435.onrender.com/users?role=INSTRUCTOR`);
       const usersData = await usersRes.json();
       
       const currentInstructor = usersData.find(u => u.email === user.email);
@@ -52,7 +52,7 @@ export default function UploadModules() {
           } catch(e) {}
       }
 
-      const res = await fetch(`http://localhost:5000/modules/instructor/${user.id}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/modules/instructor/${user.id}`);
       const data = await res.json();
       setModules(data || []);
       
@@ -66,7 +66,7 @@ export default function UploadModules() {
     setTrashLoading(true);
     try {
         const user = JSON.parse(localStorage.getItem('user'));
-        const res = await fetch(`http://localhost:5000/trash/modules/instructor/${user.id}`);
+        const res = await fetch(`https://abacus-w435.onrender.com/trash/modules/instructor/${user.id}`);
         const data = await res.json();
         setTrashList(data || []);
     } catch (error) { console.error("Error fetching trash:", error); } 
@@ -78,7 +78,7 @@ export default function UploadModules() {
   const handleSoftDelete = async (id) => {
     if (window.confirm("Move this module to Trash? It will be hidden from students immediately.")) {
       try {
-        const res = await fetch(`http://localhost:5000/modules/${id}/soft-delete`, { method: 'PUT' });
+        const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/soft-delete`, { method: 'PUT' });
         if (res.ok) fetchDashboardData();
       } catch (e) { alert("Failed to trash module."); }
     }
@@ -87,7 +87,7 @@ export default function UploadModules() {
   const handleRestore = async (id) => {
     if(!window.confirm("Restore this module? Students will be able to see it again.")) return;
     try {
-        const res = await fetch(`http://localhost:5000/modules/${id}/restore`, { method: 'PUT' });
+        const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/restore`, { method: 'PUT' });
         if (res.ok) { fetchTrash(); fetchDashboardData(); }
     } catch (e) { alert("Failed to restore"); }
   };
@@ -95,7 +95,7 @@ export default function UploadModules() {
   const handlePermanentDelete = async (id) => {
     if(!window.confirm("WARNING: This will permanently delete the module file and record.")) return;
     try {
-        const res = await fetch(`http://localhost:5000/modules/${id}/permanent`, { method: 'DELETE' });
+        const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/permanent`, { method: 'DELETE' });
         if (res.ok) fetchTrash();
     } catch (e) { alert("Failed to delete permanently"); }
   };
@@ -148,7 +148,7 @@ export default function UploadModules() {
 
     setUploading(true);
     try {
-      const res = await fetch('http://localhost:5000/modules', { method: 'POST', body: payload });
+      const res = await fetch('https://abacus-w435.onrender.com/modules', { method: 'POST', body: payload });
       const data = await res.json();
       if (data.success) {
         alert("Module uploaded successfully!");
@@ -278,7 +278,7 @@ export default function UploadModules() {
                         <FileText size={16} color={viewMode === 'active' ? "#eab308" : "#9ca3af"}/> {mod.title}
                       </div>
                       <div style={{fontSize: '12px', color: '#0ea5e9', marginTop: '4px'}}>
-                        <a href={`http://localhost:5000${mod.file_url}`} target="_blank" rel="noreferrer" style={{color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px'}}><Download size={12}/> View File</a>
+                        <a href={`https://abacus-w435.onrender.com${mod.file_url}`} target="_blank" rel="noreferrer" style={{color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px'}}><Download size={12}/> View File</a>
                       </div>
                     </td>
                     <td>

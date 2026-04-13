@@ -63,7 +63,7 @@ export default function InstructorAnnouncements() {
       if (!userStr) { navigate('/login'); return; }
       const user = JSON.parse(userStr);
 
-      const usersRes = await fetch(`http://localhost:5000/users?role=INSTRUCTOR`);
+      const usersRes = await fetch(`https://abacus-w435.onrender.com/users?role=INSTRUCTOR`);
       const usersData = await usersRes.json();
       
       const currentInstructor = usersData.find(u => u.email === user.email);
@@ -78,13 +78,13 @@ export default function InstructorAnnouncements() {
           } catch(e) {}
       }
 
-      const res = await fetch(`http://localhost:5000/announcements/instructor/${user.id}`);
+      const res = await fetch(`https://abacus-w435.onrender.com/announcements/instructor/${user.id}`);
       const data = await res.json();
       
       // ✅ Apply Grouping so it doesn't flood the UI
       setAnnouncements(groupAnnouncements(data));
 
-      const adminRes = await fetch(`http://localhost:5000/announcements/admin-to-instructor/${user.id}`);
+      const adminRes = await fetch(`https://abacus-w435.onrender.com/announcements/admin-to-instructor/${user.id}`);
       const adminData = await adminRes.json();
       setAdminAnnouncements(adminData || []);
       
@@ -98,7 +98,7 @@ export default function InstructorAnnouncements() {
     setTrashLoading(true);
     try {
         const user = JSON.parse(localStorage.getItem('user'));
-        const res = await fetch(`http://localhost:5000/trash/announcements/instructor/${user.id}`);
+        const res = await fetch(`https://abacus-w435.onrender.com/trash/announcements/instructor/${user.id}`);
         const data = await res.json();
         
         // ✅ Apply Grouping to Trash Bin as well
@@ -113,7 +113,7 @@ export default function InstructorAnnouncements() {
   const handleSoftDelete = async (groupedIds) => {
     if (window.confirm("Move this announcement to Trash? It will be removed from the students' app immediately.")) {
       try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/soft-delete`, { method: 'PUT' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/soft-delete`, { method: 'PUT' })));
         fetchDashboardData();
       } catch (e) { alert("Failed to trash announcement."); }
     }
@@ -122,7 +122,7 @@ export default function InstructorAnnouncements() {
   const handleRestore = async (groupedIds) => {
     if(!window.confirm("Restore this announcement?")) return;
     try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/restore`, { method: 'PUT' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/restore`, { method: 'PUT' })));
         fetchTrash(); fetchDashboardData();
     } catch (e) { alert("Failed to restore"); }
   };
@@ -130,7 +130,7 @@ export default function InstructorAnnouncements() {
   const handlePermanentDelete = async (groupedIds) => {
     if(!window.confirm("WARNING: This will permanently delete the announcement for ALL assigned classes.")) return;
     try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/permanent`, { method: 'DELETE' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/permanent`, { method: 'DELETE' })));
         fetchTrash();
     } catch (e) { alert("Failed to delete permanently"); }
   };
@@ -164,7 +164,7 @@ export default function InstructorAnnouncements() {
       if (isEditing) {
           // ✅ Edit ALL announcements in this batch grouping at once
           await Promise.all(editId.map((id, index) => {
-              return fetch(`http://localhost:5000/announcements/${id}`, {
+              return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -186,7 +186,7 @@ export default function InstructorAnnouncements() {
               authorId: user.id,
               targets: selectedClasses.map(c => ({ targetYear: c.year, targetSection: c.section }))
           };
-          const res = await fetch('http://localhost:5000/announcements', { 
+          const res = await fetch('https://abacus-w435.onrender.com/announcements', { 
               method: 'POST', 
               headers: { 'Content-Type': 'application/json' }, 
               body: JSON.stringify(payload) 

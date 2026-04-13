@@ -15,6 +15,7 @@ import ModuleDetailScreen from './screens/ModuleDetailScreen';
 import MyGradesScreen from './screens/MyGradesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ModulesScreen from './screens/ModulesScreen';
+import StudentGradesScreen from './screens/StudentGradesScreen';
 
 // Simulations
 import SetsSimulation from './screens/simulations/SetsSimulation';
@@ -197,6 +198,7 @@ const AppNavigator = () => {
               <Stack.Screen name="MyGradesScreen" component={MyGradesScreen} />
               <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
               <Stack.Screen name="ModulesScreen" component={ModulesScreen} />
+              <Stack.Screen name="StudentGradesScreen" component={StudentGradesScreen} />
               
               {/* Simulations */}
               <Stack.Screen name="SetsSimulation" component={SetsSimulation} />

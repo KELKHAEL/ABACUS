@@ -15,7 +15,7 @@ export default function ManageWhitelist() {
   const fetchWhitelist = async () => {
     setLoading(true);
     try {
-        const res = await fetch('http://localhost:5000/allowed-students');
+        const res = await fetch('https://abacus-w435.onrender.com/allowed-students');
         const data = await res.json();
         setAllowedList(data);
     } catch (error) { console.error("Error fetching whitelist:", error); }
@@ -61,7 +61,7 @@ export default function ManageWhitelist() {
       }
 
       try {
-        const res = await fetch('http://localhost:5000/upload-allowed-students', {
+        const res = await fetch('https://abacus-w435.onrender.com/upload-allowed-students', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ students: formattedData })
@@ -80,7 +80,7 @@ export default function ManageWhitelist() {
   const deleteFromWhitelist = async (id) => {
       if(!window.confirm("Remove this student from the allowed list?")) return;
       try {
-          await fetch(`http://localhost:5000/allowed-students/${id}`, { method: 'DELETE' });
+          await fetch(`https://abacus-w435.onrender.com/allowed-students/${id}`, { method: 'DELETE' });
           fetchWhitelist(); 
       } catch (e) { alert("Failed to delete"); }
   };
@@ -93,7 +93,7 @@ export default function ManageWhitelist() {
   const saveEdit = async (id) => {
       if (!editData.studentId || !editData.email) return alert("Fields cannot be empty.");
       try {
-          const res = await fetch(`http://localhost:5000/allowed-students/${id}`, {
+          const res = await fetch(`https://abacus-w435.onrender.com/allowed-students/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(editData)

@@ -23,7 +23,7 @@ export default function ManageAnnouncements() {
 
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null); // ✅ Now stores an array of IDs for the batch
+  const [editId, setEditId] = useState(null);
 
   const [audience, setAudience] = useState('STUDENTS'); 
   const [formData, setFormData] = useState({ title: '', content: '' });
@@ -34,7 +34,6 @@ export default function ManageAnnouncements() {
 
   const currentUser = { name: "Registrar", role: "ADMIN" };
 
-  // ✅ NEW: Helper function to group mass-postings into a single UI card
   const groupAnnouncements = (rawList) => {
     const grouped = [];
     const map = {};
@@ -61,7 +60,7 @@ export default function ManageAnnouncements() {
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/announcements/all');
+      const res = await fetch('https://abacus-w435.onrender.com/announcements/all');
       const data = await res.json();
       // ✅ Apply Grouping so it doesn't flood the UI
       setAnnouncements(groupAnnouncements(data));
@@ -72,8 +71,8 @@ export default function ManageAnnouncements() {
   const fetchSetupData = async () => {
     try {
       const [setupRes, instRes] = await Promise.all([
-        fetch('http://localhost:5000/academic-setup'),
-        fetch('http://localhost:5000/users?role=INSTRUCTOR')
+        fetch('https://abacus-w435.onrender.com/academic-setup'),
+        fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR')
       ]);
       const setupData = await setupRes.json();
       const instData = await instRes.json();
@@ -96,7 +95,7 @@ export default function ManageAnnouncements() {
   const fetchTrash = async () => {
     setTrashLoading(true);
     try {
-        const res = await fetch('http://localhost:5000/trash/announcements');
+        const res = await fetch('https://abacus-w435.onrender.com/trash/announcements');
         const data = await res.json();
         // ✅ Apply Grouping to Trash Bin
         setTrashList(groupAnnouncements(data));
@@ -110,7 +109,7 @@ export default function ManageAnnouncements() {
   const handleSoftDelete = async (groupedIds) => {
     if (window.confirm("Move this announcement to Trash?")) {
       try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/soft-delete`, { method: 'PUT' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/soft-delete`, { method: 'PUT' })));
         fetchAnnouncements(); 
       } catch (err) { alert("Delete failed"); }
     }
@@ -119,7 +118,7 @@ export default function ManageAnnouncements() {
   const handleRestore = async (groupedIds) => {
     if(!window.confirm("Restore this announcement?")) return;
     try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/restore`, { method: 'PUT' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/restore`, { method: 'PUT' })));
         fetchTrash(); fetchAnnouncements(); 
     } catch (e) { alert("Failed to restore"); }
   };
@@ -127,7 +126,7 @@ export default function ManageAnnouncements() {
   const handlePermanentDelete = async (groupedIds) => {
     if(!window.confirm("WARNING: This will permanently delete the announcement for all targets.")) return;
     try {
-        await Promise.all(groupedIds.map(id => fetch(`http://localhost:5000/announcements/${id}/permanent`, { method: 'DELETE' })));
+        await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/permanent`, { method: 'DELETE' })));
         fetchTrash();
     } catch (e) { alert("Failed to delete permanently"); }
   };
@@ -169,7 +168,7 @@ export default function ManageAnnouncements() {
           // ✅ Edit ALL announcements in this batch grouping at once
           await Promise.all(editId.map((id, index) => {
               const target = audience === 'STUDENTS' ? studentTargets[index] : { section: instructorTargets[index] };
-              return fetch(`http://localhost:5000/announcements/${id}`, {
+              return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -193,7 +192,7 @@ export default function ManageAnnouncements() {
                 : instructorTargets.map(id => ({ targetYear: 'INSTRUCTORS', targetSection: id }))
           };
           
-          const res = await fetch('http://localhost:5000/announcements', {
+          const res = await fetch('https://abacus-w435.onrender.com/announcements', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
