@@ -74,6 +74,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // 1. Tell the backend to erase the active session token
+      if (user && user.id) {
+          try {
+              await fetch(`${API_URL}/logout`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: user.id })
+              });
+          } catch (serverErr) {
+              console.log("Could not reach server to clear token, proceeding with local logout.");
+          }
+      }
+
+      // 2. Erase the local storage
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
       setUser(null); 
