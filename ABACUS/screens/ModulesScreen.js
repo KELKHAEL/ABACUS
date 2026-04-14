@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import { useFocusEffect } from '@react-navigation/native'; 
 
-import * as FileSystem from 'expo-file-system'; 
+import * as FileSystem from 'expo-file-system/legacy'; 
 import * as Sharing from 'expo-sharing';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -58,7 +58,11 @@ export default function ModulesScreen({ navigation }) {
   const handleDownloadAndOpen = async (fileUrl, fileName, moduleId) => {
     try {
       setDownloadingId(moduleId);
-      const fileUri = FileSystem.documentDirectory + encodeURIComponent(fileName);
+      
+      // ✅ FIX: Sanitize the filename so Android doesn't crash on spaces
+      const safeFileName = fileName.replace(/[^a-zA-Z0-9.]/g, '_');
+      const fileUri = FileSystem.documentDirectory + safeFileName;
+      
       const { uri } = await FileSystem.downloadAsync(`${API_URL}${fileUrl}`, fileUri);
 
       if (await Sharing.isAvailableAsync()) {
@@ -67,6 +71,7 @@ export default function ModulesScreen({ navigation }) {
         Alert.alert("Not Supported", "Opening files is not supported on this device.");
       }
     } catch (error) {
+      console.error(error); // Log the actual error for debugging
       Alert.alert("Download Error", "There was a problem opening this module.");
     } finally {
       setDownloadingId(null);

@@ -1,22 +1,17 @@
 {
   "cli": {
-    "version": ">= 16.32.0",
-    "appVersionSource": "remote"
+    "version": ">= 3.8.2"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
     "preview": {
-      "distribution": "internal",
       "android": {
-        "buildType": "apk" 
+        "buildType": "apk"
+      },
+      "env":{
+        "EXPO_PUBLIC_API_URL": "https://abacus-w435.onrender.com"
       }
     },
-    "production": {
-      "autoIncrement": true
-    }
+    "production": {}
   },
   "submit": {
     "production": {}

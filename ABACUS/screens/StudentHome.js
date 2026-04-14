@@ -1,18 +1,13 @@
-import React, { useState, useContext, useEffect, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { 
   View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, 
-  Alert, RefreshControl, ActivityIndicator, Platform, Modal
+  Alert, RefreshControl, ActivityIndicator, Platform, Modal, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
-
-// --- IMPORT COPILOT ---
-import { walkthroughable, CopilotStep, useCopilot } from 'react-native-copilot';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
-
-const WalkthroughableTouchableOpacity = walkthroughable(TouchableOpacity);
 
 const ModuleCard = ({ title, category, color, onPress }) => (
   <TouchableOpacity style={[styles.card, { borderLeftWidth: 5, borderLeftColor: color }]} onPress={onPress}>
@@ -36,7 +31,6 @@ const SimulationCard = ({ title, desc, color, onPress }) => (
 
 const AnnouncementCard = ({ item }) => {
   const isRegistrar = item.author_role === 'ADMIN';
-  
   return (
     <View style={[styles.announceCard, isRegistrar ? styles.adminBorder : styles.instructorBorder]}>
       <View style={styles.announceHeader}>
@@ -64,26 +58,32 @@ export default function StudentHome({ navigation }) {
   const [loadingAnnounce, setLoadingAnnounce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- FILTER STATES ---
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterSender, setFilterSender] = useState('ALL'); 
   const [filterYear, setFilterYear] = useState('ALL');
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterDay, setFilterDay] = useState('ALL');
 
-  const { start } = useCopilot();
+  // --- EXACT PIXEL MEASUREMENT REFS ---
+  const profileRef = useRef(null);
+  const quizzesRef = useRef(null);
+  const gradesRef = useRef(null);
+  const modulesRef = useRef(null);
+  const labsRef = useRef(null);
+  const newsRef = useRef(null);
+
+  const [tourStep, setTourStep] = useState(0);
+  const [measurements, setMeasurements] = useState({});
 
   const getGreetingName = (fullName) => {
     if (!fullName) return "STUDENT";
     let formattedName = fullName;
-
     if (fullName.includes(',')) {
       const parts = fullName.split(',');
       const lastName = parts[0].trim().split(' ')[0]; 
       let words = parts[1].trim().split(' ').filter(w => w.length > 0);
       if (words.length >= 3) words.pop(); 
       if (words.length > 1 && (words[words.length - 1].endsWith('.') || words[words.length - 1].length === 1)) words.pop(); 
-      
       if (words.length >= 2) formattedName = `${words[0]} ${words[1]}`; 
       else if (words.length === 1) formattedName = `${words[0]} ${lastName}`; 
     } else {
@@ -91,7 +91,6 @@ export default function StudentHome({ navigation }) {
       if (words.length >= 3) formattedName = `${words[0]} ${words[1]}`; 
       else if (words.length === 2) formattedName = `${words[0]} ${words[1]}`; 
     }
-    
     return formattedName.toUpperCase(); 
   };
 
@@ -105,8 +104,8 @@ export default function StudentHome({ navigation }) {
       try {
         const data = JSON.parse(text);
         setAnnouncements(Array.isArray(data) ? data : []);
-      } catch (e) { console.error("Server HTML Error"); }
-    } catch (error) { console.error("Network Error"); }
+      } catch (e) {}
+    } catch (error) {}
   };
 
   useEffect(() => {
@@ -123,23 +122,48 @@ export default function StudentHome({ navigation }) {
 
   const handleProfileClick = () => { navigation.navigate('ProfileScreen'); };
 
-  const handleStartTour = () => {
-      setActiveTab('Home');
-      setTimeout(() => { start(); }, 100);
+  // --- DYNAMIC TOUR MEASUREMENT ENGINE ---
+  const measureElement = (ref) => {
+    return new Promise(resolve => {
+      if (ref && ref.current) {
+        ref.current.measureInWindow((x, y, width, height) => {
+          resolve({ x, y, width, height });
+        });
+      } else {
+        resolve(null);
+      }
+    });
+  };
+
+  const startDynamicTour = async () => {
+    setActiveTab('Home');
+    
+    // Wait for the tab to fully render
+    setTimeout(async () => {
+      const m1 = await measureElement(profileRef);
+      const m2 = await measureElement(quizzesRef);
+      const m3 = await measureElement(gradesRef);
+      const m4 = await measureElement(modulesRef);
+      const m5 = await measureElement(labsRef);
+      const m6 = await measureElement(newsRef);
+      
+      setMeasurements({ 1: m1, 2: m2, 3: m3, 4: m4, 5: m5, 6: m6 });
+      setTourStep(1);
+    }, 300);
   };
 
   useEffect(() => {
-      const checkTutorial = async () => {
-        try {
-          const hasSeenTutorial = await AsyncStorage.getItem('hasSeenTour_v5');
-          if (hasSeenTutorial !== 'true') {
-            handleStartTour();
-            await AsyncStorage.setItem('hasSeenTour_v5', 'true');
-          }
-        } catch (error) {}
-      };
-      setTimeout(() => { checkTutorial(); }, 1500);
-    }, []);
+    const checkTutorial = async () => {
+      try {
+        const hasSeenTutorial = await AsyncStorage.getItem('hasSeenTour_Final');
+        if (hasSeenTutorial !== 'true') {
+          startDynamicTour();
+          await AsyncStorage.setItem('hasSeenTour_Final', 'true');
+        }
+      } catch (error) {}
+    };
+    setTimeout(() => { checkTutorial(); }, 1500);
+  }, []);
 
   // --- FILTER LOGIC ---
   const filteredAnnouncements = announcements.filter(item => {
@@ -297,95 +321,90 @@ export default function StudentHome({ navigation }) {
 
   const renderHome = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <View style={styles.header}>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Hello, {studentName}</Text>
-          <Text style={styles.subText}>Ready to learn Discrete Math?</Text>
+      <View style={styles.innerLayout}>
+        <View style={styles.header}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Hello, {studentName}</Text>
+            <Text style={styles.subText}>Ready to learn Discrete Math?</Text>
+          </View>
+
+          <TouchableOpacity style={styles.tourBtn} onPress={startDynamicTour}>
+             <Ionicons name="help-circle-outline" size={30} color="#104a28" />
+          </TouchableOpacity>
+
+          <TouchableOpacity ref={profileRef} style={styles.profileBtn} onPress={handleProfileClick}>
+            <Ionicons name="person-circle-outline" size={36} color="#104a28" />
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.tourBtn} onPress={handleStartTour}>
-           <Ionicons name="help-circle-outline" size={30} color="#104a28" />
-        </TouchableOpacity>
-
-        <CopilotStep text="Tap here to view your profile details or to log out." order={1} name="profile">
-          <WalkthroughableTouchableOpacity style={styles.profileBtn} onPress={handleProfileClick}>
-            <Ionicons name="person-circle-outline" size={36} color="#104a28" />
-          </WalkthroughableTouchableOpacity>
-        </CopilotStep>
-      </View>
-
-      <View style={styles.actionRow}>
-        <CopilotStep text="Take your assigned quizzes and tests right here." order={2} name="quizzes">
-          <WalkthroughableTouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('QuizListScreen')}>
+        <View style={styles.actionRow}>
+          <TouchableOpacity ref={quizzesRef} style={styles.actionButton} onPress={() => navigation.navigate('QuizListScreen')}>
             <Ionicons name="clipboard-outline" size={20} color="#333" />
             <Text style={styles.actionButtonText}>View Quizzes</Text>
-          </WalkthroughableTouchableOpacity>
-        </CopilotStep>
-        
-        <CopilotStep text="Track your academic progress and quiz scores here." order={3} name="grades">
-          <WalkthroughableTouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('MyGradesScreen')}>
+          </TouchableOpacity>
+          
+          <TouchableOpacity ref={gradesRef} style={styles.actionButton} onPress={() => navigation.navigate('MyGradesScreen')}>
             <Ionicons name="stats-chart-outline" size={20} color="#333" />
             <Text style={styles.actionButtonText}>My Grades</Text>
-          </WalkthroughableTouchableOpacity>
-        </CopilotStep>
-      </View>
+          </TouchableOpacity>
+        </View>
 
-      <Text style={styles.sectionTitle}>Learning Modules</Text>
+        <Text style={styles.sectionTitle}>Learning Modules</Text>
 
-      <View style={styles.listContainer}>
-        {allModules.map((item) => (
-          <ModuleCard 
-            key={item.id} title={item.title} category={item.category} color={item.color} 
-            onPress={() => navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics })} 
-          />
-        ))}
+        <View style={styles.listContainer}>
+          {allModules.map((item) => (
+            <ModuleCard 
+              key={item.id} title={item.title} category={item.category} color={item.color} 
+              onPress={() => navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics || [] })} 
+            />
+          ))}
+        </View>
       </View>
-      <View style={styles.spacer} />
     </ScrollView>
   );
 
   const renderSimulations = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.headerTitle}>Computational Simulations</Text>
-      <Text style={styles.subText}>Interactive logic tools!</Text>
-      
-      <View style={{marginTop: 20, gap: 15}}>
-        <SimulationCard title="Scientific Calculator" desc="A built on scientific calculator on the app!" color="#104a28" onPress={() => navigation.navigate("ScientificCalculator")} />
-        <SimulationCard title="Sets Builder" desc="Venn Diagrams & Operations" color="#2D7FF9" onPress={() => navigation.navigate('SetsSimulation')} />
-        <SimulationCard title="Truth Tables" desc="Logic Generator" color="#7B61FF" onPress={() => navigation.navigate('TruthTableSimulation')} />
-        <SimulationCard title="Bitwise Calculator" desc="AND, OR, XOR operations." color="#824055" onPress={() => navigation.navigate("BitwiseSimulation")} />
-        <SimulationCard title="Logic Circuits" desc="Visualize gates (AND, OR, NOT)." color="#71328e" onPress={() => navigation.navigate("LogicCircuitSimulation")} />
-        <SimulationCard title="Permutations" desc="Calculate nPr and nCr." color="#F25487" onPress={() => navigation.navigate("PermutationSimulation")} />
-        <SimulationCard title="Probability Simulation" desc="Single, Double, and Series event odds." color="#00C853" onPress={() => navigation.navigate("ProbabilitySimulation")} />
-        <SimulationCard title="Bayesian Probability Lab" desc="Calculate Regions (Faces)." color="#69f575" onPress={() => navigation.navigate("BayesianProbabilityLab")} />
-        <SimulationCard title="Frequency Distribution Table" desc="Convert raw data into a statistical table." color="#9C27B0" onPress={() => navigation.navigate("FrequencyDistributionTable")} />
-        <SimulationCard title="Z-Table Simulation" desc="Find area under the normal curve (Left, Right, Between)." color="#E91E63" onPress={() => navigation.navigate("ZTableSimulation")} />
-        <SimulationCard title="Prime Factorization" desc="Break down any integer into product of its prime building blocks." color="#38c974" onPress={() => navigation.navigate("PrimeFactorization")} />
-        <SimulationCard title="Fibonacci Calculator" desc="Construct and experiment on fibonacci sequence." color="#1643d8" onPress={() => navigation.navigate("FibonacciCalculator")} />
-        <SimulationCard title="Pigeonhole Calculator" desc="What is the guaranteed minimum number of items inside?" color="#4c7d96" onPress={() => navigation.navigate("PigeonholeCalculator")} />
-        <SimulationCard title="Modulo Calculator" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModuloCalculator")} />
-        <SimulationCard title="Modular Arithmetic Lab" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModularArithmeticLab")} />
-        <SimulationCard title="Euclidean Lab" desc="Compute Greatest Common Divisor." color="#2700d5" onPress={() => navigation.navigate("EuclideanLab")} />
-        <SimulationCard title="Linear Diophantine Lab" desc="Find the integer solutions using the Extended Euclidean Algrorithm." color="#a31d86" onPress={() => navigation.navigate("LinearDiophantineLab")} />
-        <SimulationCard title="Chinese Remainder Lab" desc="Solve for 'x' in a system of two congruences." color="#ff00d4" onPress={() => navigation.navigate("ChineseRemainderLab")} />
-        <SimulationCard title="Inclusion-Exclusion Lab" desc="This tool takes the cardinality (size) of individual sets and their intersections, and computes the total Union size." color="#a6202e" onPress={() => navigation.navigate("InclusionExclusionLab")} />
-        <SimulationCard title="Euler Planar Graph Lab" desc="Calculate Regions (Faces)." color="#ffebab" onPress={() => navigation.navigate("EulerPlanarGraphLab")} />
-        <SimulationCard title="Path Finder Lab" desc="This laboratory challenges the eulerian path and hamiltonian path that visualizes the nodes on the edges and vertices." color="#104a28" onPress={() => navigation.navigate("PathFinderLab")} />
-        <SimulationCard title="Recurrence Relation Lab" desc="Calculate and define a sequence using the recurrence relation." color="#5c4b12" onPress={() => navigation.navigate("RecurrenceRelationLab")} />
-        <SimulationCard title="Binomial Theorem Lab" desc="Use combinatorics to expand binomial expressions." color="#800000" onPress={() => navigation.navigate("BinomialTheoremLab")} />
-        <SimulationCard title="Complexity Lab" desc="Big-O notation tells us how the work of an algorithm grows as we add more data." color="#d7a70b" onPress={() => navigation.navigate("ComplexityLab")} />
-        <SimulationCard title="Dijkstra's Path Lab" desc="Compute shortest paths in a weighted graph." color="#104a28" onPress={() => navigation.navigate("DijkstraSimulation")} />
-        <SimulationCard title="Matrix Relations Lab" desc="This laboratory computes every indirect path in your matrix." color="#104a28" onPress={() => navigation.navigate("MatrixRelationsLab")} />
-        <SimulationCard title="Relations Lab" desc="Analyze properties (Reflexive, Symmetric, Transitive) with Boolean Matrices." color="#104a28" onPress={() => navigation.navigate("RelationsLab")} />
-        <SimulationCard title="Tree Traversal Lab" desc="Build a traversal sequence binary tree." color="#104a28" onPress={() => navigation.navigate("TreeTraversalLab")} />
-        <SimulationCard title="RSA Cryptography Lab" desc="A RSA cryptography technique that encrypts integer message." color="#104a28" onPress={() => navigation.navigate("RSACryptographyLab")} />
-        <SimulationCard title="Caesar Cipher Lab" desc="A cryptography simulation technique that uses a shifting value that encrypts and decrypts secret message." color="#104a28" onPress={() => navigation.navigate("CaesarCipherLab")} />
-        <SimulationCard title="Atbash Cipher Lab" desc="A cryptography simulation technique that mirrors to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("AtbashCipherLab")} />
-        <SimulationCard title="Vigenere Cipher Lab" desc="A cryptography simulation technique that uses a certain key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("VigenereCipherLab")} />
-        <SimulationCard title="Rail Fence Cipher Lab" desc="A cryptography simulation technique that uses a rail-like fence to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("RailfenceCipherLab")} />
-        <SimulationCard title="Columnar Cipher Lab" desc="A cryptography simulation technique that uses a word as a key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("ColumnarCipherLab")} />
+      <View style={styles.innerLayout}>
+        <Text style={styles.headerTitle}>Computational Simulations</Text>
+        <Text style={styles.subText}>Interactive logic tools!</Text>
+        <View style={{marginTop: 20, gap: 15}}>
+          <SimulationCard title="Scientific Calculator" desc="A built on scientific calculator on the app!" color="#104a28" onPress={() => navigation.navigate("ScientificCalculator")} />
+          <SimulationCard title="Sets Builder" desc="Venn Diagrams & Operations" color="#2D7FF9" onPress={() => navigation.navigate('SetsSimulation')} />
+          <SimulationCard title="Truth Tables" desc="Logic Generator" color="#7B61FF" onPress={() => navigation.navigate('TruthTableSimulation')} />
+          <SimulationCard title="Bitwise Calculator" desc="AND, OR, XOR operations." color="#824055" onPress={() => navigation.navigate("BitwiseSimulation")} />
+          <SimulationCard title="Logic Circuits" desc="Visualize gates (AND, OR, NOT)." color="#71328e" onPress={() => navigation.navigate("LogicCircuitSimulation")} />
+          <SimulationCard title="Permutations" desc="Calculate nPr and nCr." color="#F25487" onPress={() => navigation.navigate("PermutationSimulation")} />
+          <SimulationCard title="Probability Simulation" desc="Single, Double, and Series event odds." color="#00C853" onPress={() => navigation.navigate("ProbabilitySimulation")} />
+          <SimulationCard title="Bayesian Probability Lab" desc="Calculate Regions (Faces)." color="#69f575" onPress={() => navigation.navigate("BayesianProbabilityLab")} />
+          <SimulationCard title="Frequency Distribution Table" desc="Convert raw data into a statistical table." color="#9C27B0" onPress={() => navigation.navigate("FrequencyDistributionTable")} />
+          <SimulationCard title="Z-Table Simulation" desc="Find area under the normal curve (Left, Right, Between)." color="#E91E63" onPress={() => navigation.navigate("ZTableSimulation")} />
+          <SimulationCard title="Prime Factorization" desc="Break down any integer into product of its prime building blocks." color="#38c974" onPress={() => navigation.navigate("PrimeFactorization")} />
+          <SimulationCard title="Fibonacci Calculator" desc="Construct and experiment on fibonacci sequence." color="#1643d8" onPress={() => navigation.navigate("FibonacciCalculator")} />
+          <SimulationCard title="Pigeonhole Calculator" desc="What is the guaranteed minimum number of items inside?" color="#4c7d96" onPress={() => navigation.navigate("PigeonholeCalculator")} />
+          <SimulationCard title="Modulo Calculator" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModuloCalculator")} />
+          <SimulationCard title="Modular Arithmetic Lab" desc="Find the remainder when divided." color="#c1c426" onPress={() => navigation.navigate("ModularArithmeticLab")} />
+          <SimulationCard title="Euclidean Lab" desc="Compute Greatest Common Divisor." color="#2700d5" onPress={() => navigation.navigate("EuclideanLab")} />
+          <SimulationCard title="Linear Diophantine Lab" desc="Find the integer solutions using the Extended Euclidean Algrorithm." color="#a31d86" onPress={() => navigation.navigate("LinearDiophantineLab")} />
+          <SimulationCard title="Chinese Remainder Lab" desc="Solve for 'x' in a system of two congruences." color="#ff00d4" onPress={() => navigation.navigate("ChineseRemainderLab")} />
+          <SimulationCard title="Inclusion-Exclusion Lab" desc="This tool takes the cardinality (size) of individual sets and their intersections, and computes the total Union size." color="#a6202e" onPress={() => navigation.navigate("InclusionExclusionLab")} />
+          <SimulationCard title="Euler Planar Graph Lab" desc="Calculate Regions (Faces)." color="#ffebab" onPress={() => navigation.navigate("EulerPlanarGraphLab")} />
+          <SimulationCard title="Path Finder Lab" desc="This laboratory challenges the eulerian path and hamiltonian path that visualizes the nodes on the edges and vertices." color="#104a28" onPress={() => navigation.navigate("PathFinderLab")} />
+          <SimulationCard title="Recurrence Relation Lab" desc="Calculate and define a sequence using the recurrence relation." color="#5c4b12" onPress={() => navigation.navigate("RecurrenceRelationLab")} />
+          <SimulationCard title="Binomial Theorem Lab" desc="Use combinatorics to expand binomial expressions." color="#800000" onPress={() => navigation.navigate("BinomialTheoremLab")} />
+          <SimulationCard title="Complexity Lab" desc="Big-O notation tells us how the work of an algorithm grows as we add more data." color="#d7a70b" onPress={() => navigation.navigate("ComplexityLab")} />
+          <SimulationCard title="Dijkstra's Path Lab" desc="Compute shortest paths in a weighted graph." color="#104a28" onPress={() => navigation.navigate("DijkstraSimulation")} />
+          <SimulationCard title="Matrix Relations Lab" desc="This laboratory computes every indirect path in your matrix." color="#104a28" onPress={() => navigation.navigate("MatrixRelationsLab")} />
+          <SimulationCard title="Relations Lab" desc="Analyze properties (Reflexive, Symmetric, Transitive) with Boolean Matrices." color="#104a28" onPress={() => navigation.navigate("RelationsLab")} />
+          <SimulationCard title="Tree Traversal Lab" desc="Build a traversal sequence binary tree." color="#104a28" onPress={() => navigation.navigate("TreeTraversalLab")} />
+          <SimulationCard title="RSA Cryptography Lab" desc="A RSA cryptography technique that encrypts integer message." color="#104a28" onPress={() => navigation.navigate("RSACryptographyLab")} />
+          <SimulationCard title="Caesar Cipher Lab" desc="A cryptography simulation technique that uses a shifting value that encrypts and decrypts secret message." color="#104a28" onPress={() => navigation.navigate("CaesarCipherLab")} />
+          <SimulationCard title="Atbash Cipher Lab" desc="A cryptography simulation technique that mirrors to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("AtbashCipherLab")} />
+          <SimulationCard title="Vigenere Cipher Lab" desc="A cryptography simulation technique that uses a certain key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("VigenereCipherLab")} />
+          <SimulationCard title="Rail Fence Cipher Lab" desc="A cryptography simulation technique that uses a rail-like fence to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("RailfenceCipherLab")} />
+          <SimulationCard title="Columnar Cipher Lab" desc="A cryptography simulation technique that uses a word as a key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("ColumnarCipherLab")} />
+        </View>
       </View>
-      <View style={styles.spacer} />
     </ScrollView>
   );
 
@@ -395,114 +414,129 @@ export default function StudentHome({ navigation }) {
     return (
       <View style={{flex: 1}}>
         <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-            <View>
-              <Text style={styles.headerTitle}>Announcements</Text>
-              <Text style={styles.subText}>Updates from your Instructors & Registrar</Text>
+          <View style={styles.innerLayout}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+              <View>
+                <Text style={styles.headerTitle}>Announcements</Text>
+                <Text style={styles.subText}>Updates from your Instructors</Text>
+              </View>
+              <View style={{flexDirection: 'row', gap: 10}}>
+                <TouchableOpacity onPress={onRefresh} style={styles.filterBtn}>
+                    <Ionicons name="refresh" size={20} color="#104a28" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, isFiltered && styles.filterBtnActive]}>
+                    <Ionicons name="filter" size={20} color={isFiltered ? "white" : "#104a28"} />
+                </TouchableOpacity>
+              </View>
             </View>
-            
-            {/* ✅ NEW: Grouped Refresh and Filter Buttons */}
-            <View style={{flexDirection: 'row', gap: 10}}>
-              <TouchableOpacity onPress={onRefresh} style={styles.filterBtn}>
-                  <Ionicons name="refresh" size={20} color="#104a28" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, isFiltered && styles.filterBtnActive]}>
-                  <Ionicons name="filter" size={20} color={isFiltered ? "white" : "#104a28"} />
-              </TouchableOpacity>
-            </View>
-          </View>
 
-          <View style={{marginTop: 20, gap: 15}}>
-            {loadingAnnounce ? (
-                <ActivityIndicator size="large" color="#104a28" style={{marginTop: 20}} />
-            ) : filteredAnnouncements.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="notifications-off-outline" size={50} color="#ccc" />
-                  <Text style={styles.emptyText}>No announcements found.</Text>
-                </View>
-            ) : (
-                filteredAnnouncements.map((item) => (
-                  <AnnouncementCard key={item.id} item={item} />
-                ))
-            )}
+            <View style={{marginTop: 20, gap: 15}}>
+              {loadingAnnounce ? (
+                  <ActivityIndicator size="large" color="#104a28" style={{marginTop: 20}} />
+              ) : filteredAnnouncements.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="notifications-off-outline" size={50} color="#ccc" />
+                    <Text style={styles.emptyText}>No announcements found.</Text>
+                  </View>
+              ) : (
+                  filteredAnnouncements.map((item) => (
+                    <AnnouncementCard key={item.id} item={item} />
+                  ))
+              )}
+            </View>
           </View>
-          <View style={styles.spacer} />
         </ScrollView>
+      </View>
+    );
+  };
 
-        {/* --- FILTER MODAL --- */}
-        <Modal visible={showFilterModal} transparent={true} animationType="fade">
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Filter Announcements</Text>
-                        <TouchableOpacity onPress={() => setShowFilterModal(false)}><Ionicons name="close" size={24} color="#666"/></TouchableOpacity>
-                    </View>
+  // --- EXACT PIXEL TOUR RENDERER ---
+  const renderCustomTour = () => {
+    if (tourStep === 0) return null;
+    
+    const m = measurements[tourStep];
+    // If layout hasn't settled or measurement failed, silently skip to prevent crash
+    if (!m) return null; 
 
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        <Text style={styles.filterLabel}>Sender</Text>
-                        <View style={styles.chipRow}>
-                            {['ALL', 'ADMIN', 'INSTRUCTOR'].map(type => (
-                                <TouchableOpacity key={type} style={[styles.chip, filterSender === type && styles.chipActive]} onPress={() => setFilterSender(type)}>
-                                    <Text style={[styles.chipText, filterSender === type && styles.chipTextActive]}>{type === 'ADMIN' ? 'Registrar' : type === 'INSTRUCTOR' ? 'Instructors' : 'Everyone'}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+    const stepContent = {
+      1: { title: "Profile & Logout", text: "Tap here to view your profile details or to log out." },
+      2: { title: "Quizzes", text: "Take your assigned quizzes and tests right here." },
+      3: { title: "My Grades", text: "Track your academic progress and quiz scores here." },
+      4: { title: "Modules", text: "Download and read PDF lecture materials provided by your instructors." },
+      5: { title: "Labs & Simulations", text: "Experiment with interactive computational tools and Discrete Math labs!" },
+      6: { title: "Announcements", text: "Check here for the latest news and updates from your instructors or the registrar." },
+    }[tourStep];
 
-                        <Text style={styles.filterLabel}>Year</Text>
-                        <View style={styles.chipRow}>
-                            <TouchableOpacity style={[styles.chip, filterYear === 'ALL' && styles.chipActive]} onPress={() => setFilterYear('ALL')}>
-                                <Text style={[styles.chipText, filterYear === 'ALL' && styles.chipTextActive]}>Any</Text>
-                            </TouchableOpacity>
-                            {years.map(y => (
-                                <TouchableOpacity key={y} style={[styles.chip, filterYear === y && styles.chipActive]} onPress={() => setFilterYear(y)}>
-                                    <Text style={[styles.chipText, filterYear === y && styles.chipTextActive]}>{y}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+    const isBottomNav = tourStep >= 4;
+    const screenHeight = Dimensions.get('window').height;
+    const screenWidth = Dimensions.get('window').width;
+    
+    // Calculates EXACTLY where to place the tooltip box relative to the button
+    const tooltipTop = isBottomNav ? undefined : m.y + m.height + 15;
+    const tooltipBottom = isBottomNav ? screenHeight - m.y + 15 : undefined;
+    
+    // Calculates EXACTLY where the center of the button is on the screen
+    const centerX = m.x + (m.width / 2);
+    
+    // Calculates EXACTLY where to place the arrow inside the 20px-padded Tooltip Container
+    let internalArrowLeft = centerX - 20 - 20; 
+    
+    // Safety boundaries to stop the arrow from floating off the corners of the box
+    const tooltipWidth = screenWidth - 40;
+    if (internalArrowLeft < 10) internalArrowLeft = 10;
+    if (internalArrowLeft > tooltipWidth - 50) internalArrowLeft = tooltipWidth - 50;
 
-                        <Text style={styles.filterLabel}>Month</Text>
-                        <View style={styles.chipRow}>
-                            <TouchableOpacity style={[styles.chip, filterMonth === 'ALL' && styles.chipActive]} onPress={() => setFilterMonth('ALL')}>
-                                <Text style={[styles.chipText, filterMonth === 'ALL' && styles.chipTextActive]}>Any</Text>
-                            </TouchableOpacity>
-                            {months.map(m => (
-                                <TouchableOpacity key={m} style={[styles.chip, filterMonth === m && styles.chipActive]} onPress={() => setFilterMonth(m)}>
-                                    <Text style={[styles.chipText, filterMonth === m && styles.chipTextActive]}>{new Date(0, m - 1).toLocaleString('default', { month: 'short' })}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <Text style={styles.filterLabel}>Day</Text>
-                        <View style={styles.chipRow}>
-                            <TouchableOpacity style={[styles.chip, filterDay === 'ALL' && styles.chipActive]} onPress={() => setFilterDay('ALL')}>
-                                <Text style={[styles.chipText, filterDay === 'ALL' && styles.chipTextActive]}>Any</Text>
-                            </TouchableOpacity>
-                            {days.map(d => (
-                                <TouchableOpacity key={d} style={[styles.chip, filterDay === d && styles.chipActive]} onPress={() => setFilterDay(d)}>
-                                    <Text style={[styles.chipText, filterDay === d && styles.chipTextActive]}>{d}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </ScrollView>
-
-                    <View style={styles.modalFooter}>
-                        <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
-                            <Text style={styles.clearBtnText}>Reset All</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilterModal(false)}>
-                            <Text style={styles.applyBtnText}>Apply Filters</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-        </Modal>
+    return (
+      <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={() => {}} />
+        
+        <View style={{
+           position: 'absolute',
+           top: tooltipTop,
+           bottom: tooltipBottom,
+           left: 20,
+           right: 20,
+           backgroundColor: '#1f2937',
+           padding: 20,
+           borderRadius: 12,
+           elevation: 10,
+           shadowColor: '#000', shadowOffset: {width:0, height:4}, shadowOpacity: 0.3, shadowRadius: 5
+        }}>
+          {/* THE ARROW - Driven by pure coordinate math */}
+          <Ionicons 
+              name={isBottomNav ? 'caret-down' : 'caret-up'} 
+              size={40} 
+              color="#1f2937" 
+              style={{ 
+                  position: 'absolute', 
+                  [isBottomNav ? 'bottom' : 'top']: -28, 
+                  left: internalArrowLeft 
+              }} 
+          />
+          
+          <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>{stepContent.title}</Text>
+          <Text style={{ color: '#f9fafb', fontSize: 14, lineHeight: 20, marginBottom: 20 }}>{stepContent.text}</Text>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setTourStep(0)}>
+              <Text style={{ color: '#9ca3af', fontWeight: '600' }}>Skip Tour</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setTourStep(tourStep === 6 ? 0 : tourStep + 1)} 
+              style={{ backgroundColor: '#10b981', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>{tourStep === 6 ? 'Finish' : 'Next'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   };
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFAFA" translucent={true} />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       
       {activeTab === 'Home' && renderHome()}
       {activeTab === 'Simulations' && renderSimulations()}
@@ -518,40 +552,32 @@ export default function StudentHome({ navigation }) {
             {activeTab === 'Home' && <Text style={styles.navTextActive}>Home</Text>}
           </TouchableOpacity>
 
-          <CopilotStep text="Download and read PDF lecture materials provided by your instructors." order={4} name="modules">
-            <WalkthroughableTouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('ModulesScreen')}>
-              <Ionicons name={activeTab === 'ModulesScreen' ? "document-text" : "document-text-outline"} size={22} color={activeTab === 'ModulesScreen' ? "white" : "#666"} />
-              {activeTab === 'ModulesScreen' && <Text style={styles.navTextActive}>Modules</Text>}
-            </WalkthroughableTouchableOpacity>
-          </CopilotStep>
+          <TouchableOpacity ref={modulesRef} style={styles.menuCard} onPress={() => navigation.navigate('ModulesScreen')}>
+            <Ionicons name={activeTab === 'ModulesScreen' ? "document-text" : "document-text-outline"} size={22} color={activeTab === 'ModulesScreen' ? "white" : "#666"} />
+            {activeTab === 'ModulesScreen' && <Text style={styles.navTextActive}>Modules</Text>}
+          </TouchableOpacity>
 
-          <CopilotStep text="Experiment with interactive computational tools and Discrete Math labs!" order={5} name="simulations">
-            <WalkthroughableTouchableOpacity style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]} onPress={() => setActiveTab('Simulations')}>
-              <Ionicons name={activeTab === 'Simulations' ? "cube" : "cube-outline"} size={22} color={activeTab === 'Simulations' ? "white" : "#666"} />
-              {activeTab === 'Simulations' && <Text style={styles.navTextActive}>Labs</Text>}
-            </WalkthroughableTouchableOpacity>
-          </CopilotStep>
+          <TouchableOpacity ref={labsRef} style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]} onPress={() => setActiveTab('Simulations')}>
+            <Ionicons name={activeTab === 'Simulations' ? "cube" : "cube-outline"} size={22} color={activeTab === 'Simulations' ? "white" : "#666"} />
+            {activeTab === 'Simulations' && <Text style={styles.navTextActive}>Labs</Text>}
+          </TouchableOpacity>
 
-          <CopilotStep text="Check here for the latest news and updates from your instructors or the registrar." order={6} name="announcements">
-            <WalkthroughableTouchableOpacity style={[styles.navItem, activeTab === 'Announcements' && styles.navItemActive]} onPress={() => setActiveTab('Announcements')}>
-              <Ionicons name={activeTab === 'Announcements' ? "notifications" : "notifications-outline"} size={22} color={activeTab === 'Announcements' ? "white" : "#666"} />
-              {activeTab === 'Announcements' && <Text style={styles.navTextActive}>News</Text>}
-            </WalkthroughableTouchableOpacity>
-          </CopilotStep>
+          <TouchableOpacity ref={newsRef} style={[styles.navItem, activeTab === 'Announcements' && styles.navItemActive]} onPress={() => setActiveTab('Announcements')}>
+            <Ionicons name={activeTab === 'Announcements' ? "notifications" : "notifications-outline"} size={22} color={activeTab === 'Announcements' ? "white" : "#666"} />
+            {activeTab === 'Announcements' && <Text style={styles.navTextActive}>News</Text>}
+          </TouchableOpacity>
         </View>
       </View>
+
+      {renderCustomTour()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-  flex: 1, 
-  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
-  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
-  },
-  scrollContent: { padding: 24, paddingBottom: 100 },
-  
+  container: { flex: 1, backgroundColor: '#F8F9FD' },
+  scrollContent: { paddingBottom: 100 },
+  innerLayout: { paddingHorizontal: 24, paddingTop: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   headerTextContainer: { flex: 1, paddingRight: 10 },
   headerTitle: { fontSize: 26, fontWeight: '900', color: '#333' },
@@ -559,30 +585,22 @@ const styles = StyleSheet.create({
   subText: { fontSize: 14, color: '#888' },
   profileBtn: { padding: 0 }, 
   tourBtn: { padding: 5, marginRight: 10 }, 
-
   filterBtn: { backgroundColor: '#e5e7eb', padding: 8, borderRadius: 8 },
   filterBtnActive: { backgroundColor: '#104a28' },
-
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
-  actionButton: { 
-    width: '48%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', borderRadius: 12, 
-    paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 1 
-  },
+  actionButton: { width: '48%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 1 },
   actionButtonText: { fontSize: 13, fontWeight: '600', color: '#333' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 15 },
   listContainer: { gap: 15 },
-  
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   cardTitle: { fontSize: 16, fontWeight: '600', color: '#333', flexWrap: 'wrap' },
   cardCategory: { fontSize: 11, color: '#888', marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
   simCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   simTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   simDesc: { fontSize: 13, color: '#666', marginTop: 4 },
-
   announceCard: { backgroundColor: 'white', borderRadius: 12, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, borderLeftWidth: 4 },
   adminBorder: { borderLeftColor: '#d32f2f' }, 
   instructorBorder: { borderLeftColor: '#104a28' }, 
-  
   announceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   authorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, flex: 1, marginRight: 8 },
   authorText: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', flexShrink: 1, flexWrap: 'wrap', lineHeight: 16 },
@@ -590,20 +608,15 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#eee', marginBottom: 8 },
   announceTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 6 },
   announceContent: { fontSize: 14, color: '#555', lineHeight: 22 }, 
-  
   emptyState: { alignItems: 'center', marginTop: 50 },
   emptyText: { color: '#999', marginTop: 10 },
-
   spacer: { height: 80 }, 
-
   bottomNavContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center' },
   bottomNav: { flexDirection: 'row', backgroundColor: '#fff', width: '90%', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 35, justifyContent: 'space-around', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   navItem: { padding: 5, alignItems: 'center' },
   navItemActive: { backgroundColor: '#104a28', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   navTextActive: { color: '#fff', fontWeight: '600', fontSize: 13 },
   menuCard: { padding: 5, alignItems: 'center' },
-
-  // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

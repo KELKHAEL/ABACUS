@@ -35,17 +35,11 @@ const db = mysql.createPool({
     password: process.env.DB_PASS,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
-    // ADD THIS SSL BLOCK RIGHT HERE:
     ssl: {
         rejectUnauthorized: true
     }
 });
 
-/**
- * ✅ SMART NAME PARSER (Helper)
- * Ensures multi-word names (e.g. "Juan Carlos") stay in First Name,
- * and extracts middle initial only if explicitly provided in Last, First M. format.
- */
 const smartFormatName = (inputName) => {
     if (!inputName) return { first: "", middle: "", last: "" };
     let last = "", first = "", middle = "";
@@ -90,27 +84,23 @@ const smartFormatName = (inputName) => {
     };
 };
 
-// ✅ AUTO-MIGRATE COLUMNS & DATABASE CLEANUP
 (async () => {
   try {
     const connection = await db.getConnection();
     console.log("✅ Connected to MySQL Database: " + process.env.DB_NAME);
     
-    // Feature Column Migrations
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN is_retake BOOLEAN DEFAULT FALSE"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
     
-    // Security & Whitelist Migrations
     try { await connection.query("ALTER TABLE users MODIFY COLUMN section VARCHAR(50)"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN lockout_until DATETIME DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE allowed_students ADD COLUMN first_name VARCHAR(100), ADD COLUMN middle_name VARCHAR(100), ADD COLUMN last_name VARCHAR(100)"); } catch(e){}
 
-    // Cleanup Logic
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
     try { 
@@ -146,18 +136,16 @@ app.post('/login', async (req, res) => {
 
         const user = users[0];
 
-        // 1. Check Lockout Status
         if (user.lockout_until && new Date(user.lockout_until) > new Date()) {
             const minutesLeft = Math.ceil((new Date(user.lockout_until) - new Date()) / 60000);
             return res.status(403).json({ success: false, error: `Account locked. Try again in ${minutesLeft} minutes.` });
         }
 
-        // 2. ✅ NEW: Strict Single-Device Session Check
-        // If a session token exists, this account is currently active on another device.
+        // STRICT BLOCK: Refuses login if a token already exists
         if (user.session_token) {
             return res.status(403).json({ 
                 success: false, 
-                error: "This account is currently logged in on another device. Please log out there first." 
+                error: "This account is currently logged in on another device." 
             });
         }
 
@@ -175,31 +163,39 @@ app.post('/login', async (req, res) => {
             }
         }
 
-        // 3. Success: Generate and Save New Token
         const sessionToken = jwt.sign({ id: user.id, deviceId }, 'abacus_secret_key_2026');
         await db.query("UPDATE users SET login_attempts = 0, lockout_until = NULL, session_token = ? WHERE id = ?", [sessionToken, user.id]);
 
         let assignedClasses = [];
         if (user.assigned_classes) {
-            try {
-                assignedClasses = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes;
-            } catch(e) { assignedClasses = []; }
+            try { assignedClasses = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : user.assigned_classes; } 
+            catch(e) { assignedClasses = []; }
         }
 
         res.json({
-            success: true,
-            token: sessionToken,
+            success: true, token: sessionToken,
             user: { 
-                id: user.id, 
-                fullName: user.full_name, 
-                role: user.role, 
-                email: user.email,
-                studentId: user.student_id, 
-                yearLevel: user.year_level, 
-                section: user.section,
+                id: user.id, fullName: user.full_name, role: user.role, email: user.email,
+                studentId: user.student_id, yearLevel: user.year_level, section: user.section,
                 assigned_classes: assignedClasses
             }
         });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ✅ NEW: FORCE LOGOUT ENDPOINT (Rescues locked-out users)
+app.post('/force-logout', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const [users] = await db.query("SELECT * FROM users WHERE email = ? AND is_deleted = 0", [email]);
+        if (users.length === 0) return res.status(401).json({ success: false, error: "Account not found." });
+        const user = users[0];
+        
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) return res.status(401).json({ success: false, error: "Incorrect password." });
+
+        await db.query("UPDATE users SET session_token = NULL WHERE id = ?", [user.id]);
+        res.json({ success: true, message: "Other devices have been logged out." });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -209,9 +205,7 @@ app.post('/logout', async (req, res) => {
         if (!userId) return res.status(400).json({ success: false, error: "Missing User ID" });
         await db.query("UPDATE users SET session_token = NULL WHERE id = ?", [userId]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================
