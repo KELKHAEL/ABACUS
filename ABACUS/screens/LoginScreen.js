@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Added for Device ID
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL; 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwveL42WWu00Ixti4bQH3cf20w1-jxGrCDQolb1wigD8SJQAYNvnrEDAeim_I3wYhkDvA/exec';
@@ -44,6 +44,28 @@ export default function LoginScreen({ navigation }) {
     return () => clearInterval(timer);
   }, [countdown]);
 
+  // --- FORCE LOGOUT HELPER ---
+  const handleForceLogout = async (userEmail, userPassword) => {
+    setLoading(true);
+    try {
+        const res = await fetch(`${API_URL}/force-logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail, password: userPassword })
+        });
+        const data = await res.json();
+        if (data.success) {
+            Alert.alert("Success", "The other device has been logged out. You can now sign in.");
+        } else {
+            Alert.alert("Error", data.error || "Failed to force logout.");
+        }
+    } catch (e) {
+        Alert.alert("Error", "Network connection failed.");
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleLogin = async () => { 
     if (!email || !password) {
       return Alert.alert("Error", "Please fill in both email and password.");
@@ -54,7 +76,6 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // ✅ SINGLE DEVICE ENFORCEMENT: Grab or create a persistent Device ID
       let deviceId = await AsyncStorage.getItem('deviceId');
       if (!deviceId) {
           deviceId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
@@ -72,7 +93,19 @@ export default function LoginScreen({ navigation }) {
       if (data.success) {
         await login(data.token, data.user);
       } else {
-        Alert.alert("Login Failed", data.error || "Invalid credentials");
+        // ✅ NEW: Catch the concurrent login block and ask to force logout!
+        if (data.error && data.error.includes("another device")) {
+            Alert.alert(
+                "Session Active",
+                "This account is currently logged in on another device. Do you want to force the other device to log out so you can sign in?",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Force Logout", onPress: () => handleForceLogout(email, password), style: "destructive" }
+                ]
+            );
+        } else {
+            Alert.alert("Login Failed", data.error || "Invalid credentials");
+        }
       }
     } catch (error) {
       Alert.alert("Connection Error", "Is the server running?");
@@ -230,7 +263,7 @@ export default function LoginScreen({ navigation }) {
         </View>
       </View>
 
-      {/* FORGOT PASSWORD MODAL (NOW CENTERED) */}
+      {/* FORGOT PASSWORD MODAL */}
       <Modal visible={showForgotModal} transparent={true} animationType="fade" onRequestClose={closeForgotModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{width: '100%', alignItems: 'center'}}>
@@ -332,7 +365,7 @@ const styles = StyleSheet.create({
   forgotText: { color: '#888', fontSize: 14 },
   registerText: { fontWeight: 'bold', color: '#104a28' },
 
-  // --- Modal Styles (Now Centered) ---
+  // --- Modal Styles ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '90%', backgroundColor: 'white', borderRadius: 20, padding: 25, maxHeight: '85%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

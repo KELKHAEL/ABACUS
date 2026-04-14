@@ -141,12 +141,19 @@ app.post('/login', async (req, res) => {
             return res.status(403).json({ success: false, error: `Account locked. Try again in ${minutesLeft} minutes.` });
         }
 
-        // STRICT BLOCK: Refuses login if a token already exists
+        // ✅ SMARTER STRICT BLOCK: Refuses login ONLY if it's a DIFFERENT device
         if (user.session_token) {
-            return res.status(403).json({ 
-                success: false, 
-                error: "This account is currently logged in on another device." 
-            });
+            try {
+                const decoded = jwt.verify(user.session_token, 'abacus_secret_key_2026');
+                if (decoded.deviceId !== deviceId) {
+                    return res.status(403).json({ 
+                        success: false, 
+                        error: "This account is currently logged in on another device." 
+                    });
+                }
+            } catch (e) {
+                // If the old token is expired/invalid, we just let them log in
+            }
         }
 
         const match = await bcrypt.compare(password, user.password_hash);
@@ -183,7 +190,7 @@ app.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ✅ NEW: FORCE LOGOUT ENDPOINT (Rescues locked-out users)
+// ✅ FORCE LOGOUT ENDPOINT 
 app.post('/force-logout', async (req, res) => {
     const { email, password } = req.body;
     try {
