@@ -864,9 +864,13 @@ app.delete('/allowed-students/:id', async (req, res) => {
 });
 
 app.put('/allowed-students/:id', async (req, res) => {
-  const { studentId, email } = req.body;
+  const { id } = req.params;
+  const { studentId, email, firstName, middleName, lastName } = req.body;
   try {
-    await db.query("UPDATE allowed_students SET student_id = ?, email = ? WHERE id = ?", [studentId, email, req.params.id]);
+    await db.query(
+      "UPDATE allowed_students SET student_id = ?, email = ?, first_name = ?, middle_name = ?, last_name = ? WHERE id = ?", 
+      [studentId, email, firstName, middleName, lastName, id]
+    );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
