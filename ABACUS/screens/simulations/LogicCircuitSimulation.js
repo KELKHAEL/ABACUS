@@ -288,7 +288,7 @@ export default function LogicCircuitSimulation({ navigation }) {
                 <TextInput 
                   style={styles.input} 
                   placeholder="e.g. (A AND B) OR NOT C" 
-                  placeholderTextColor="#ccc" 
+                  placeholderTextColor="#666"
                   value={formula} 
                   onChangeText={setFormula} 
                   autoCapitalize="characters"

@@ -150,22 +150,22 @@ export default function InclusionExclusionLab({ navigation }) {
             
             <Text style={styles.subHeader}>Individuals (|A|, |B|, |C|)</Text>
             <View style={styles.inputRow}>
-              <View style={styles.inputGroup}><Text style={styles.label}>|A|</Text><TextInput style={styles.input} value={setA} onChangeText={(t) => handleInput(t, setSetA)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
-              <View style={styles.inputGroup}><Text style={styles.label}>|B|</Text><TextInput style={styles.input} value={setB} onChangeText={(t) => handleInput(t, setSetB)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
-              <View style={styles.inputGroup}><Text style={styles.label}>|C|</Text><TextInput style={styles.input} value={setC} onChangeText={(t) => handleInput(t, setSetC)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|A|</Text><TextInput style={styles.input} value={setA} onChangeText={(t) => handleInput(t, setSetA)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|B|</Text><TextInput style={styles.input} value={setB} onChangeText={(t) => handleInput(t, setSetB)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|C|</Text><TextInput style={styles.input} value={setC} onChangeText={(t) => handleInput(t, setSetC)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
             </View>
 
             <Text style={styles.subHeader}>Intersections (Two Sets)</Text>
             <View style={styles.inputRow}>
-              <View style={styles.inputGroup}><Text style={styles.label}>|A ∩ B|</Text><TextInput style={styles.input} value={ab} onChangeText={(t) => handleInput(t, setAb)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
-              <View style={styles.inputGroup}><Text style={styles.label}>|A ∩ C|</Text><TextInput style={styles.input} value={ac} onChangeText={(t) => handleInput(t, setAc)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
-              <View style={styles.inputGroup}><Text style={styles.label}>|B ∩ C|</Text><TextInput style={styles.input} value={bc} onChangeText={(t) => handleInput(t, setBc)} keyboardType="number-pad" placeholder="0" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|A ∩ B|</Text><TextInput style={styles.input} value={ab} onChangeText={(t) => handleInput(t, setAb)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|A ∩ C|</Text><TextInput style={styles.input} value={ac} onChangeText={(t) => handleInput(t, setAc)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
+              <View style={styles.inputGroup}><Text style={styles.label}>|B ∩ C|</Text><TextInput style={styles.input} value={bc} onChangeText={(t) => handleInput(t, setBc)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} /></View>
             </View>
 
             <Text style={styles.subHeader}>Intersection (All Three)</Text>
             <View style={[styles.inputGroup, { width: '31%' }]}>
               <Text style={styles.label}>|A ∩ B ∩ C|</Text>
-              <TextInput style={styles.input} value={abc} onChangeText={(t) => handleInput(t, setAbc)} keyboardType="number-pad" placeholder="0" maxLength={5} />
+              <TextInput style={styles.input} value={abc} onChangeText={(t) => handleInput(t, setAbc)} keyboardType="number-pad" placeholder="0" placeholderTextColor="#666" maxLength={5} />
             </View>
 
             <View style={styles.btnContainer}>
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   inputGroup: { flex: 0.31 },
   label: { fontSize: 12, color: '#64748b', marginBottom: 5, fontWeight: 'bold', textAlign: 'center' },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#111' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#333' },
   
   btnContainer: { flexDirection: 'row', marginTop: 15, gap: 10 },
   secondaryBtn: { flex: 0.35, paddingVertical: 15, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center', backgroundColor: '#f8fafc' },

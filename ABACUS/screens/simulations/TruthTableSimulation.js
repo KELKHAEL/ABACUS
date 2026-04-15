@@ -280,6 +280,7 @@ export default function TruthTableSimulation({ navigation }) {
                 value={expression} 
                 onChangeText={setExpression} 
                 placeholder="p AND q OR r" 
+                placeholderTextColor="#666"
                 autoCapitalize="none"
             />
 
@@ -437,7 +438,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, marginBottom: 20 },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: 'monospace', textAlign: 'center', marginBottom: 15, color: '#111' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: 'monospace', textAlign: 'center', marginBottom: 15, color: '#333' },
   
   quickButtonsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 20 },
   quickButton: { backgroundColor: '#e2e8f0', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },

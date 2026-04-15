@@ -120,6 +120,7 @@ export default function PigeonholeCalculator({ navigation }) {
                 value={items} 
                 onChangeText={(t) => handleInput(t, setItems)} 
                 placeholder="e.g. 10" 
+                placeholderTextColor="#666"
                 maxLength={9}
               />
             </View>
@@ -132,6 +133,7 @@ export default function PigeonholeCalculator({ navigation }) {
                 value={containers} 
                 onChangeText={(t) => handleInput(t, setContainers)} 
                 placeholder="e.g. 3" 
+                placeholderTextColor="#666"
                 maxLength={9}
               />
             </View>
@@ -225,7 +227,7 @@ const styles = StyleSheet.create({
   
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#64748b', marginBottom: 5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#111' },
+  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#333' },
   
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },

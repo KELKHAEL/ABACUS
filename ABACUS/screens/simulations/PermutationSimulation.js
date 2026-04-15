@@ -147,6 +147,7 @@ export default function PermutationSimulation({ navigation }) {
                   value={n} 
                   onChangeText={(t) => handleInput(t, setN)} 
                   placeholder="e.g. 10" 
+                  placeholderTextColor="#666"
                   maxLength={3}
                 />
               </View>
@@ -159,6 +160,7 @@ export default function PermutationSimulation({ navigation }) {
                   value={r} 
                   onChangeText={(t) => handleInput(t, setR)} 
                   placeholder="e.g. 3" 
+                  placeholderTextColor="#666"
                   maxLength={3}
                 />
               </View>
@@ -251,7 +253,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
   inputGroup: { flex: 1 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#6b7280', marginBottom: 5 },
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#111', fontWeight: 'bold' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#333', fontWeight: 'bold' },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 

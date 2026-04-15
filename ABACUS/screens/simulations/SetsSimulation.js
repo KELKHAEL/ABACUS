@@ -177,15 +177,15 @@ export default function SetsSimulation({ navigation }) {
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Set A</Text>
-              <TextInput style={styles.input} value={setA} onChangeText={(t) => handleInput(t, setSetA)} placeholder="e.g., 1, 2, 3" keyboardType="numbers-and-punctuation" />
+              <TextInput style={styles.input} value={setA} onChangeText={(t) => handleInput(t, setSetA)} placeholder="e.g., 1, 2, 3" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Set B</Text>
-              <TextInput style={styles.input} value={setB} onChangeText={(t) => handleInput(t, setSetB)} placeholder="e.g., 3, 4, 5" keyboardType="numbers-and-punctuation" />
+              <TextInput style={styles.input} value={setB} onChangeText={(t) => handleInput(t, setSetB)} placeholder="e.g., 3, 4, 5" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Set C</Text>
-              <TextInput style={styles.input} value={setC} onChangeText={(t) => handleInput(t, setSetC)} placeholder="e.g., 5, 6, 7" keyboardType="numbers-and-punctuation" />
+              <TextInput style={styles.input} value={setC} onChangeText={(t) => handleInput(t, setSetC)} placeholder="e.g., 5, 6, 7" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
             </View>
 
             <TouchableOpacity style={styles.calcButton} onPress={calculateSets}>
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#374151', marginBottom: 5 },
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 16, color: '#111' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 16, color: '#333' },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 

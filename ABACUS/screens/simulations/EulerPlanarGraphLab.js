@@ -159,6 +159,7 @@ export default function EulerPlanarGraphLab({ navigation }) {
                   onChangeText={(t) => handleInput(t, setVertices)} 
                   keyboardType="number-pad" 
                   placeholder="e.g. 5" 
+                  placeholderTextColor="#666"
                   maxLength={5}
                 />
               </View>
@@ -170,6 +171,7 @@ export default function EulerPlanarGraphLab({ navigation }) {
                   onChangeText={(t) => handleInput(t, setEdges)} 
                   keyboardType="number-pad" 
                   placeholder="e.g. 7" 
+                  placeholderTextColor="#666"
                   maxLength={5}
                 />
               </View>
@@ -267,7 +269,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 15, marginBottom: 15 },
   inputGroup: { flex: 1 },
   label: { fontSize: 12, color: '#64748b', marginBottom: 5, fontWeight: 'bold', textTransform: 'uppercase' },
-  input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#111' },
+  input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#333' },
   
   calcBtn: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   calcBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },

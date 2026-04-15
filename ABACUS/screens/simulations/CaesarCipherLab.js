@@ -92,6 +92,7 @@ export default function CaesarCipherLab({ navigation }) {
               value={inputText} 
               onChangeText={handleTextInput} 
               placeholder="Enter letters only..."
+              placeholderTextColor="#666"
             />
 
             <View style={styles.row}>
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
   theoryText: { fontSize: 13, color: '#4b5563', lineHeight: 20 },
   card: { backgroundColor: '#fff', padding: 20, borderRadius: 16, elevation: 3 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#64748B', marginBottom: 8, textTransform: 'uppercase' },
-  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, color: '#111', textAlignVertical: 'top' },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, color: '#000000', textAlignVertical: 'top' },
   row: { flexDirection: 'row', marginTop: 15, gap: 10, alignItems: 'flex-end' },
   modeBtn: { padding: 14, borderRadius: 8, minWidth: 100, alignItems: 'center' },
   modeBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },

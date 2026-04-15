@@ -208,6 +208,7 @@ export default function FrequencyDistributionSimulation({ navigation }) {
                 style={styles.textArea} 
                 multiline 
                 placeholder="e.g. 50, 55, 60..." 
+                placeholderTextColor="#666"
                 value={rawData} 
                 onChangeText={handleInput} 
                 // ✅ FORCES THE PHONE TO USE THE NUMBER/SYMBOL KEYBOARD
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#104a28', marginBottom: 10, textTransform: 'uppercase' },
-  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', minHeight: 100, textAlignVertical: 'top', fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  textArea: { backgroundColor: '#F8F9FD', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', minHeight: 100, textAlignVertical: 'top', fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: "#333" },
   btnContainer: { marginTop: 15, gap: 10 },
   secondaryBtnRow: { flexDirection: 'row', gap: 10 },
   secondaryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' },

@@ -131,6 +131,7 @@ export default function RecurrenceRelationLab({ navigation }) {
                     value={a0} 
                     onChangeText={(t) => handleMathInput(t, setA0)}
                     placeholder="0"
+                    placeholderTextColor="#666"
                 />
               </View>
               <View style={styles.inputGroup}>
@@ -141,6 +142,7 @@ export default function RecurrenceRelationLab({ navigation }) {
                     value={multiplier} 
                     onChangeText={(t) => handleMathInput(t, setMultiplier)}
                     placeholder="1"
+                    placeholderTextColor="#666"
                 />
               </View>
             </View>
@@ -153,6 +155,7 @@ export default function RecurrenceRelationLab({ navigation }) {
                     value={constant} 
                     onChangeText={(t) => handleMathInput(t, setConstant)}
                     placeholder="0"
+                    placeholderTextColor="#666"
                 />
               </View>
               <View style={styles.inputGroup}>
@@ -163,6 +166,7 @@ export default function RecurrenceRelationLab({ navigation }) {
                     value={targetN} 
                     onChangeText={(t) => handleIntegerInput(t, setTargetN)}
                     placeholder="1"
+                    placeholderTextColor="#666"
                     maxLength={2}
                 />
               </View>
@@ -227,7 +231,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 12, marginBottom: 15 },
   inputGroup: { flex: 1 },
   label: { fontSize: 11, fontWeight: 'bold', color: '#94A3B8', marginBottom: 5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, fontWeight: 'bold', color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0' },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, fontWeight: 'bold', color: '#333', borderWidth: 1, borderColor: '#E2E8F0' },
   
   primaryBtn: { backgroundColor: '#104a28', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   primaryBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },

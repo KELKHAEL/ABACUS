@@ -9,15 +9,12 @@ import * as ImagePicker from 'expo-image-picker';
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function RegisterScreen({ navigation }) {
-  // --- DYNAMIC SETUP STATE ---
   const [setupData, setSetupData] = useState({ programs: [], yearLevels: [], sections: [] });
   const [loadingSetup, setLoadingSetup] = useState(true);
 
-  // --- FORM STATE ---
   const [studentId, setStudentId] = useState('');
   const [email, setEmail] = useState('');
   
-  // These will be auto-filled from the server
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -31,12 +28,10 @@ export default function RegisterScreen({ navigation }) {
   const [otpInput, setOtpInput] = useState('');
   const [corImage, setCorImage] = useState(null);
 
-  // --- MODAL STATES ---
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [showYearModal, setShowYearModal] = useState(false);
   const [showSectionModal, setShowSectionModal] = useState(false);
 
-  // --- LOGIC & TIMER STATE ---
   const [generatedOtp, setGeneratedOtp] = useState(null); 
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false); 
@@ -47,7 +42,6 @@ export default function RegisterScreen({ navigation }) {
 
   const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwveL42WWu00Ixti4bQH3cf20w1-jxGrCDQolb1wigD8SJQAYNvnrEDAeim_I3wYhkDvA/exec'; 
 
-  // ✅ FETCH DYNAMIC ACADEMIC SETUP FROM MYSQL
   useEffect(() => {
     const fetchSetup = async () => {
       try {
@@ -97,7 +91,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  // ✅ STEP 1: REQUEST OTP
   const handleRequestOtp = async () => {
     if (!studentId) return Alert.alert("Error", "Please enter your Student ID.");
     if (!email) return Alert.alert("Error", "Please enter your email.");
@@ -140,7 +133,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  // ✅ STEP 2: VERIFY OTP AND FETCH NAME FROM WHITELIST
   const handleVerifyOtpAndFetchName = async () => {
       if (!otpInput) return Alert.alert("Error", "Please enter the OTP.");
       if (otpInput !== generatedOtp) return Alert.alert("Incorrect OTP", "The code you entered is wrong.");
@@ -156,12 +148,29 @@ export default function RegisterScreen({ navigation }) {
           const data = await res.json();
           
           if (data.success) {
-              setFirstName(data.firstName || "");
-              setLastName(data.lastName || "");
-              setMiddleName(data.middleName || "");
+              // ✅ SMART FALLBACK: If the backend is slow to update, this manually splits the fullName so the boxes still fill perfectly!
+              let fetchedFirst = data.firstName;
+              let fetchedLast = data.lastName;
+              let fetchedMiddle = data.middleName;
+
+              if (!fetchedFirst && data.fullName) {
+                  const nameParts = data.fullName.split(',');
+                  fetchedLast = nameParts[0] ? nameParts[0].trim() : '';
+                  if (nameParts[1]) {
+                      let rest = nameParts[1].trim().split(' ');
+                      if (rest.length > 1 && rest[rest.length - 1].endsWith('.')) {
+                          fetchedMiddle = rest.pop();
+                      }
+                      fetchedFirst = rest.join(' ');
+                  }
+              }
+
+              setFirstName(fetchedFirst || "");
+              setLastName(fetchedLast || "");
+              setMiddleName(fetchedMiddle || "");
               setFullServerName(data.fullName);
               setIsOtpVerified(true);
-              Alert.alert("Identity Verified", `Welcome, ${data.firstName || 'Student'}. Please complete your registration.`);
+              Alert.alert("Identity Verified", `Welcome, ${fetchedFirst || 'Student'}. Please complete your registration.`);
           } else {
               Alert.alert("Access Denied", data.error || "Your details are not in the allowed student list. Contact Coordinator.");
           }
@@ -190,7 +199,7 @@ export default function RegisterScreen({ navigation }) {
 
     try {
       const formData = new FormData();
-      formData.append('fullName', fullServerName); // Guaranteed format from server
+      formData.append('fullName', fullServerName); 
       formData.append('studentId', studentId);
       formData.append('email', email);
       formData.append('password', password);
@@ -231,7 +240,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  // ✅ DYNAMIC MODAL GENERATOR
   const renderSelectionModal = (visible, setVisible, title, dataArray, valueKey, stateValue, setStateFunction) => (
     <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={() => setVisible(false)}>
       <View style={styles.modalOverlay}>
@@ -266,7 +274,7 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex:1}}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{flex:1}}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           
           <View style={styles.header}>
@@ -280,13 +288,13 @@ export default function RegisterScreen({ navigation }) {
             {!isOtpVerified ? (
               <>
                 <Text style={styles.label}>Student ID</Text>
-                <TextInput style={styles.input} placeholder="e.g. 202312345" value={studentId} onChangeText={setStudentId} keyboardType="numeric" editable={!isOtpSent} />
+                <TextInput style={styles.input} placeholderTextColor="#aaa" placeholder="e.g. 202312345" value={studentId} onChangeText={setStudentId} keyboardType="numeric" editable={!isOtpSent} />
 
                 <Text style={styles.label}>CvSU Email</Text>
                 <View style={styles.otpRow}>
                   <TextInput 
                     style={[styles.input, {flex: 1, marginBottom: 0}]} 
-                    placeholder="student@cvsu.edu.ph" autoCapitalize="none" keyboardType="email-address"
+                    placeholderTextColor="#aaa" placeholder="student@cvsu.edu.ph" autoCapitalize="none" keyboardType="email-address"
                     value={email} onChangeText={setEmail} editable={!isOtpSent}
                   />
                   <TouchableOpacity 
@@ -303,8 +311,8 @@ export default function RegisterScreen({ navigation }) {
                   <View style={styles.fadeContainer}>
                     <Text style={styles.label}>Enter OTP Code</Text>
                     <TextInput 
-                      style={[styles.input, {borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9'}]} 
-                      placeholder="123456" keyboardType="numeric" maxLength={6}
+                      style={[styles.input, {borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9', fontSize: 20, letterSpacing: 5, textAlign: 'center'}]} 
+                      placeholderTextColor="#999" placeholder="123456" keyboardType="numeric" maxLength={6}
                       value={otpInput} onChangeText={setOtpInput}
                     />
                     <TouchableOpacity style={styles.regBtn} onPress={handleVerifyOtpAndFetchName} disabled={loading}>
@@ -319,38 +327,43 @@ export default function RegisterScreen({ navigation }) {
                 <View style={{flexDirection: 'row', gap: 10}}>
                     <View style={{flex: 1}}>
                         <Text style={styles.label}>First Name</Text>
-                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={firstName} editable={false} />
+                        <View style={[styles.input, {backgroundColor: '#e2e8f0', justifyContent: 'center'}]}>
+                            <Text style={{color: '#000', fontWeight: 'bold', fontSize: 16}}>{firstName}</Text>
+                        </View>
                     </View>
                     <View style={{flex: 1}}>
                         <Text style={styles.label}>Last Name</Text>
-                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={lastName} editable={false} />
+                        <View style={[styles.input, {backgroundColor: '#e2e8f0', justifyContent: 'center'}]}>
+                            <Text style={{color: '#000', fontWeight: 'bold', fontSize: 16}}>{lastName}</Text>
+                        </View>
                     </View>
                 </View>
 
                 {middleName ? (
                     <View>
                         <Text style={styles.label}>Middle Name / Initial</Text>
-                        <TextInput style={[styles.input, {backgroundColor: '#eee', color: '#888'}]} value={middleName} editable={false} />
+                        <View style={[styles.input, {backgroundColor: '#e2e8f0', justifyContent: 'center'}]}>
+                            <Text style={{color: '#000', fontWeight: 'bold', fontSize: 16}}>{middleName}</Text>
+                        </View>
                     </View>
                 ) : null}
 
-                {/* ✅ DYNAMIC PROGRAM DROPDOWN */}
                 <Text style={styles.label}>Program</Text>
                 <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowProgramModal(true)}>
-                  <Text style={{color: program ? '#333' : '#aaa', fontSize: 14}}>{program || "Select your program"}</Text>
+                  <Text style={{color: program ? '#333' : '#aaa', fontSize: 14, fontWeight: program ? 'bold' : 'normal'}}>{program || "Select your program"}</Text>
                 </TouchableOpacity>
 
                 <View style={{flexDirection: 'row', gap: 10}}>
                   <View style={{flex: 1}}>
                     <Text style={styles.label}>Year Level</Text>
                     <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowYearModal(true)}>
-                      <Text style={{color: yearLevel ? '#333' : '#aaa', fontSize: 14}}>{yearLevel ? `Year ${yearLevel}` : "Select"}</Text>
+                      <Text style={{color: yearLevel ? '#333' : '#aaa', fontSize: 14, fontWeight: yearLevel ? 'bold' : 'normal'}}>{yearLevel ? `Year ${yearLevel}` : "Select"}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={{flex: 1}}>
                     <Text style={styles.label}>Section</Text>
                     <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowSectionModal(true)}>
-                      <Text style={{color: section ? '#333' : '#aaa', fontSize: 14}}>{section ? `Section ${section}` : "Select"}</Text>
+                      <Text style={{color: section ? '#333' : '#aaa', fontSize: 14, fontWeight: section ? 'bold' : 'normal'}}>{section ? `Section ${section}` : "Select"}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -368,10 +381,10 @@ export default function RegisterScreen({ navigation }) {
                 </TouchableOpacity>
 
                 <Text style={styles.label}>Password</Text>
-                <TextInput style={styles.input} placeholder="Min. 6 characters" secureTextEntry value={password} onChangeText={setPassword} />
+                <TextInput style={styles.input} placeholderTextColor="#aaa" placeholder="Min. 6 characters" secureTextEntry value={password} onChangeText={setPassword} />
 
                 <Text style={styles.label}>Confirm Password</Text>
-                <TextInput style={styles.input} placeholder="Re-enter password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+                <TextInput style={styles.input} placeholderTextColor="#aaa" placeholder="Re-enter password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
 
                 <TouchableOpacity style={styles.regBtn} onPress={handleRegister} disabled={loading}>
                   {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.regText}>REGISTER NOW</Text>}
@@ -399,7 +412,7 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { 
   flex: 1, 
-  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  backgroundColor: '#F8F9FD', 
   paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
   },
   scrollContent: { padding: 30 },

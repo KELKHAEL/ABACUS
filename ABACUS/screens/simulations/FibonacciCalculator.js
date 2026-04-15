@@ -115,6 +115,7 @@ export default function FibonacciCalculator({ navigation }) {
                 onChangeText={handleInput} 
                 keyboardType="number-pad" 
                 placeholder="e.g. 10" 
+                placeholderTextColor="#666"
                 maxLength={2}
               />
             </View>
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
   
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 12, color: '#64748b', marginBottom: 5, fontWeight: 'bold', textTransform: 'uppercase' },
-  input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold' },
+  input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, backgroundColor: '#f8fafc', textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: "#333" },
   
   calcBtn: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },

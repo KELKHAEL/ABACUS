@@ -288,13 +288,13 @@ export default function ZTableSimulation({ navigation }) {
             <View style={styles.inputRow}>
                 <View style={styles.inputWrapper}>
                     <Text style={styles.inputLabel}>{mode === 'between' ? 'Lower Z1' : 'Z Score'}</Text>
-                    <TextInput style={styles.input} placeholder="e.g. 1.96" keyboardType="numeric" value={z1} onChangeText={(t) => handleInput(t, setZ1)} />
+                    <TextInput style={styles.input} placeholder="e.g. 1.96" placeholderTextColor="#666" keyboardType="numeric" value={z1} onChangeText={(t) => handleInput(t, setZ1)} />
                 </View>
                 
                 {mode === 'between' && (
                     <View style={styles.inputWrapper}>
                         <Text style={styles.inputLabel}>Upper Z2</Text>
-                        <TextInput style={styles.input} placeholder="e.g. 2.58" keyboardType="numeric" value={z2} onChangeText={(t) => handleInput(t, setZ2)} />
+                        <TextInput style={styles.input} placeholder="e.g. 2.58" placeholderTextColor="#666" keyboardType="numeric" value={z2} onChangeText={(t) => handleInput(t, setZ2)} />
                     </View>
                 )}
             </View>
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
   inputWrapper: { flex: 1 },
   inputLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 5, color: '#64748b' },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, fontFamily: 'monospace', textAlign: 'center' },
+  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 15, fontSize: 18, fontFamily: 'monospace', textAlign: 'center', color: "#333" },
 
   calcBtn: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },

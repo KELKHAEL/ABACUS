@@ -188,11 +188,11 @@ export default function ProbabilitySimulation({ navigation }) {
               <Text style={styles.inputHeader}>SINGLE EVENT INPUTS</Text>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Total Possible Outcomes (N)</Text>
-                <TextInput style={styles.input} placeholder="e.g. 52" keyboardType="number-pad" value={singleTotal} onChangeText={(t) => handleIntInput(t, setSingleTotal)} maxLength={5} />
+                <TextInput style={styles.input} placeholder="e.g. 52" placeholderTextColor="#666" keyboardType="number-pad" value={singleTotal} onChangeText={(t) => handleIntInput(t, setSingleTotal)} maxLength={5} />
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Favorable Outcomes (n)</Text>
-                <TextInput style={styles.input} placeholder="e.g. 4" keyboardType="number-pad" value={singleFav} onChangeText={(t) => handleIntInput(t, setSingleFav)} maxLength={5} />
+                <TextInput style={styles.input} placeholder="e.g. 4" placeholderTextColor="#666" keyboardType="number-pad" value={singleFav} onChangeText={(t) => handleIntInput(t, setSingleFav)} maxLength={5} />
               </View>
               <TouchableOpacity style={styles.calcBtn} onPress={calcSingle}><Text style={styles.btnText}>Calculate Probability</Text></TouchableOpacity>
             </View>
@@ -228,11 +228,11 @@ export default function ProbabilitySimulation({ navigation }) {
               <View style={{flexDirection: 'row', gap: 10}}>
                 <View style={{flex: 1}}>
                   <Text style={styles.label}>Prob. Event A</Text>
-                  <TextInput style={styles.input} placeholder="0.5" keyboardType="numeric" value={probA} onChangeText={(t) => handleDecimalInput(t, setProbA)} maxLength={6} />
+                  <TextInput style={styles.input} placeholder="0.5" placeholderTextColor="#666" keyboardType="numeric" value={probA} onChangeText={(t) => handleDecimalInput(t, setProbA)} maxLength={6} />
                 </View>
                 <View style={{flex: 1}}>
                   <Text style={styles.label}>Prob. Event B</Text>
-                  <TextInput style={styles.input} placeholder="0.4" keyboardType="numeric" value={probB} onChangeText={(t) => handleDecimalInput(t, setProbB)} maxLength={6} />
+                  <TextInput style={styles.input} placeholder="0.4" placeholderTextColor="#666" keyboardType="numeric" value={probB} onChangeText={(t) => handleDecimalInput(t, setProbB)} maxLength={6} />
                 </View>
               </View>
               <TouchableOpacity style={styles.calcBtn} onPress={calcTwo}><Text style={styles.btnText}>Calculate Interactions</Text></TouchableOpacity>
@@ -267,11 +267,11 @@ export default function ProbabilitySimulation({ navigation }) {
               <Text style={styles.inputHeader}>SERIES / TRIALS INPUTS</Text>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Probability of Success (0-1)</Text>
-                <TextInput style={styles.input} placeholder="e.g. 0.5" keyboardType="numeric" value={multiProb} onChangeText={(t) => handleDecimalInput(t, setMultiProb)} maxLength={6} />
+                <TextInput style={styles.input} placeholder="e.g. 0.5" placeholderTextColor="#666" keyboardType="numeric" value={multiProb} onChangeText={(t) => handleDecimalInput(t, setMultiProb)} maxLength={6} />
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Number of Trials (n)</Text>
-                <TextInput style={styles.input} placeholder="e.g. 10" keyboardType="number-pad" value={multiN} onChangeText={(t) => handleIntInput(t, setMultiN)} maxLength={4} />
+                <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor="#666" keyboardType="number-pad" value={multiN} onChangeText={(t) => handleIntInput(t, setMultiN)} maxLength={4} />
               </View>
               <TouchableOpacity style={styles.calcBtn} onPress={calcMulti}><Text style={styles.btnText}>Calculate Series</Text></TouchableOpacity>
             </View>
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
 
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#555', marginBottom: 5 },
-  input: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', fontSize: 16, color: '#111', fontWeight: 'bold' },
+  input: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', fontSize: 16, color: '#333', fontWeight: 'bold' },
 
   calcBtn: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   btnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },

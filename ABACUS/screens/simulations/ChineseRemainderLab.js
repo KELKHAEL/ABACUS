@@ -188,23 +188,23 @@ export default function ChineseRemainderLab({ navigation }) {
             
             <View style={styles.inputRow}>
               <Text style={styles.eqText}>x ≡ </Text>
-              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a1} onChangeText={(t) => handleInputA(t, setA1)} placeholder="a₁" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a1} onChangeText={(t) => handleInputA(t, setA1)} placeholder="a₁" placeholderTextColor="#666" maxLength={6} />
               <Text style={styles.eqText}> mod </Text>
-              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m1} onChangeText={(t) => handleInputM(t, setM1)} placeholder="m₁" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m1} onChangeText={(t) => handleInputM(t, setM1)} placeholder="m₁" placeholderTextColor="#666" maxLength={6} />
             </View>
 
             <View style={styles.inputRow}>
               <Text style={styles.eqText}>x ≡ </Text>
-              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a2} onChangeText={(t) => handleInputA(t, setA2)} placeholder="a₂" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a2} onChangeText={(t) => handleInputA(t, setA2)} placeholder="a₂" placeholderTextColor="#666" maxLength={6} />
               <Text style={styles.eqText}> mod </Text>
-              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m2} onChangeText={(t) => handleInputM(t, setM2)} placeholder="m₂" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m2} onChangeText={(t) => handleInputM(t, setM2)} placeholder="m₂" placeholderTextColor="#666" maxLength={6} />
             </View>
 
             <View style={styles.inputRow}>
               <Text style={styles.eqText}>x ≡ </Text>
-              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a3} onChangeText={(t) => handleInputA(t, setA3)} placeholder="a₃" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="numbers-and-punctuation" value={a3} onChangeText={(t) => handleInputA(t, setA3)} placeholder="a₃" placeholderTextColor="#666" maxLength={6} />
               <Text style={styles.eqText}> mod </Text>
-              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m3} onChangeText={(t) => handleInputM(t, setM3)} placeholder="m₃" maxLength={6} />
+              <TextInput style={styles.inputSm} keyboardType="number-pad" value={m3} onChangeText={(t) => handleInputM(t, setM3)} placeholder="m₃" placeholderTextColor="#666" maxLength={6} />
             </View>
 
             <TouchableOpacity style={styles.calcButton} onPress={calculateCRT}>
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   instructionText: { fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginBottom: 15, textAlign: 'center' },
   
   inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  inputSm: { flex: 1, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 16, textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#111' },
+  inputSm: { flex: 1, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 16, textAlign: 'center', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', color: '#333' },
   eqText: { fontSize: 16, fontWeight: 'bold', color: '#475569', width: 50, textAlign: 'center' },
   
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },

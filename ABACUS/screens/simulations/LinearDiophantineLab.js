@@ -171,11 +171,11 @@ export default function LinearDiophantineLab({ navigation }) {
             <Text style={styles.cardTitle}>Solve Equation</Text>
             
             <View style={styles.equationDisplay}>
-                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valA} onChangeText={(t) => handleInput(t, setValA)} placeholder="A" maxLength={7} />
+                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valA} onChangeText={(t) => handleInput(t, setValA)} placeholder="A" placeholderTextColor="#666" maxLength={7} />
                 <Text style={styles.eqText}> x  + </Text>
-                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valB} onChangeText={(t) => handleInput(t, setValB)} placeholder="B" maxLength={7} />
+                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valB} onChangeText={(t) => handleInput(t, setValB)} placeholder="B" placeholderTextColor="#666" maxLength={7} />
                 <Text style={styles.eqText}> y  = </Text>
-                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valC} onChangeText={(t) => handleInput(t, setValC)} placeholder="C" maxLength={7} />
+                <TextInput style={[styles.inputSm, {flex: 1}]} keyboardType="numbers-and-punctuation" value={valC} onChangeText={(t) => handleInput(t, setValC)} placeholder="C" placeholderTextColor="#666" maxLength={7} />
             </View>
 
             <TouchableOpacity style={styles.calcButton} onPress={calculateLDE}>
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 20 },
   
   equationDisplay: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  inputSm: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#111' },
+  inputSm: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#333' },
   eqText: { fontSize: 18, fontWeight: 'bold', color: '#475569' },
   
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },

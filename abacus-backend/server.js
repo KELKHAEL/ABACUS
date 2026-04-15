@@ -849,7 +849,13 @@ app.post('/verify-whitelist', async (req, res) => {
             ? `${s.last_name}, ${s.first_name} ${s.middle_name.charAt(0).toUpperCase()}.`
             : `${s.last_name}, ${s.first_name}`;
 
-        res.json({ success: true, fullName: formattedFullName });
+        res.json({ 
+            success: true, 
+            fullName: formattedFullName,
+            firstName: s.first_name,
+            lastName: s.last_name,
+            middleName: s.middle_name
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

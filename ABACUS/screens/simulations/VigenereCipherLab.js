@@ -94,6 +94,7 @@ export default function VigenereCipherLab({ navigation }) {
               value={inputText} 
               onChangeText={(t) => handleAlphaInput(t, setInputText)} 
               placeholder="e.g. ABACUS"
+              placeholderTextColor="#666"
               autoCapitalize="characters"
             />
 
@@ -103,6 +104,7 @@ export default function VigenereCipherLab({ navigation }) {
               value={keyword} 
               onChangeText={(t) => handleAlphaInput(t, setKeyword)} 
               placeholder="e.g. MATH"
+              placeholderTextColor="#666"
               autoCapitalize="characters"
             />
 
@@ -168,7 +170,7 @@ const styles = StyleSheet.create({
   theoryText: { fontSize: 13, color: '#4b5563', lineHeight: 20 },
   card: { backgroundColor: '#fff', padding: 20, borderRadius: 16, elevation: 3 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#64748B', marginBottom: 8, textTransform: 'uppercase' },
-  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, color: '#111', fontWeight: 'bold' },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, color: '#111', fontWeight: 'bold', color: "#333" },
   modeRow: { flexDirection: 'row', marginTop: 20, gap: 10 },
   modeBtn: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   activeMode: { backgroundColor: '#104a28', borderColor: '#104a28' },

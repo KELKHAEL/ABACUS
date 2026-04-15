@@ -211,6 +211,7 @@ export default function TreeTraversalLab({ navigation }) {
                   value={treeInput} 
                   onChangeText={setTreeInput} 
                   placeholder="e.g. A(B,C) B(D,E)" 
+                  placeholderTextColor="#666"
                   autoCapitalize="characters"
                   multiline
               />
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, elevation: 2, marginBottom: 20 },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   
-  inputMultiline: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 16, marginBottom: 15, minHeight: 80, textAlignVertical: 'top', color: '#111', fontWeight: 'bold' },
+  inputMultiline: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 16, marginBottom: 15, minHeight: 80, textAlignVertical: 'top', color: '#333', fontWeight: 'bold' },
   
   btnRow: { flexDirection: 'row', gap: 10, justifyContent: 'space-between', marginBottom: 15 },
   typeBtn: { flex: 1, paddingVertical: 12, backgroundColor: '#f1f5f9', borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#cbd5e1' },

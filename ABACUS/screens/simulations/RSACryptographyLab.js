@@ -178,18 +178,18 @@ export default function RSACryptographyLab({ navigation }) {
             <View style={styles.inputRow}>
               <View style={styles.inputGroup}>
                   <Text style={styles.label}>Prime p</Text>
-                  <TextInput style={styles.input} keyboardType="number-pad" value={p} onChangeText={(t) => handleInput(t, setP)} placeholder="11" maxLength={4} />
+                  <TextInput style={styles.input} keyboardType="number-pad" value={p} onChangeText={(t) => handleInput(t, setP)} placeholder="11" placeholderTextColor="#666" maxLength={4} />
               </View>
               <View style={styles.inputGroup}>
                   <Text style={styles.label}>Prime q</Text>
-                  <TextInput style={styles.input} keyboardType="number-pad" value={q} onChangeText={(t) => handleInput(t, setQ)} placeholder="13" maxLength={4} />
+                  <TextInput style={styles.input} keyboardType="number-pad" value={q} onChangeText={(t) => handleInput(t, setQ)} placeholder="13" placeholderTextColor="#666" maxLength={4} />
               </View>
             </View>
 
             <Text style={styles.cardTitle}>Step 2: Intercept</Text>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Numeric Message (M)</Text>
-              <TextInput style={styles.input} keyboardType="number-pad" value={msg} onChangeText={(t) => handleInput(t, setMsg)} placeholder="e.g. 85" maxLength={6} />
+              <TextInput style={styles.input} keyboardType="number-pad" value={msg} onChangeText={(t) => handleInput(t, setMsg)} placeholder="e.g. 85" placeholderTextColor="#666" maxLength={6} />
             </View>
 
             <TouchableOpacity style={styles.calcButton} onPress={calculateRSA}>
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
   inputGroup: { flex: 1 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#64748b', marginBottom: 5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', textAlign: 'center', color: '#111' },
+  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: 'bold', textAlign: 'center', color: '#333' },
   
   calcButton: { backgroundColor: '#104a28', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },

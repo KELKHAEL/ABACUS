@@ -158,6 +158,7 @@ export default function BinomialTheoremLab({ navigation }) {
                   onChangeText={handleInput} 
                   maxLength={1}
                   placeholder="3"
+                  placeholderTextColor="#666"
                 />
             </View>
             
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'center' },
   label: { fontSize: 15, fontWeight: 'bold', color: '#64748b' },
-  input: { width: 70, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 18, textAlign: 'center', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#111' },
+  input: { width: 70, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#d1d5db', padding: 12, borderRadius: 8, fontSize: 18, textAlign: 'center', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#333' },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 15 },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 

@@ -16,7 +16,6 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // --- FORGOT PASSWORD STATES ---
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
@@ -33,7 +32,6 @@ export default function LoginScreen({ navigation }) {
   const [countdown, setCountdown] = useState(0);
   const [otpTimestamp, setOtpTimestamp] = useState(null);
 
-  // Timer for OTP Cooldown
   useEffect(() => {
     let timer;
     if (countdown > 0) {
@@ -44,7 +42,6 @@ export default function LoginScreen({ navigation }) {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // --- FORCE LOGOUT HELPER ---
   const handleForceLogout = async (userEmail, userPassword) => {
     setLoading(true);
     try {
@@ -93,7 +90,6 @@ export default function LoginScreen({ navigation }) {
       if (data.success) {
         await login(data.token, data.user);
       } else {
-        // ✅ NEW: Catch the concurrent login block and ask to force logout!
         if (data.error && data.error.includes("another device")) {
             Alert.alert(
                 "Session Active",
@@ -114,7 +110,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // --- OTP GENERATION & RESET LOGIC ---
   const handleRequestResetOtp = async () => {
     if (!forgotEmail) return Alert.alert("Error", "Please enter your email first.");
     if (!forgotEmail.endsWith("@cvsu.edu.ph")) return Alert.alert("Restricted", "Only @cvsu.edu.ph emails are allowed.");
@@ -203,75 +198,81 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        
-        {/* LOGO AREA */}
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../assets/abacus_logo.png')} 
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.appName}>ABACUS</Text>
-          <Text style={styles.appTag}>Discrete Mathematics Mastery</Text>
-        </View>
+      {/* ✅ FIX: Wrapped the entire main login screen in a scrolling view so the keyboard won't block the inputs */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            
+            {/* LOGO AREA */}
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('../assets/abacus_logo.png')} 
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.appName}>ABACUS</Text>
+              <Text style={styles.appTag}>Discrete Mathematics Mastery</Text>
+            </View>
 
-        {/* FORM AREA */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Cavite State University Email</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="email@cvsu.edu.ph" 
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+            {/* FORM AREA */}
+            <View style={styles.form}>
+              <Text style={styles.label}>Cavite State University Email</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="email@cvsu.edu.ph" 
+                placeholderTextColor="#aaa"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
 
-          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
-            <Text style={[styles.label, {marginBottom: 0}]}>Password</Text>
-            <TouchableOpacity onPress={() => setShowForgotModal(true)}>
-                <Text style={{fontSize: 12, fontWeight: 'bold', color: '#104a28'}}>Forgot Password?</Text>
-            </TouchableOpacity>
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+                <Text style={[styles.label, {marginBottom: 0}]}>Password</Text>
+                <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                    <Text style={{fontSize: 12, fontWeight: 'bold', color: '#104a28'}}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput 
+                style={styles.input} 
+                placeholder="••••••••" 
+                placeholderTextColor="#aaa"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+
+              <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.loginText}>SIGN IN</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('RegisterScreen')} 
+                style={styles.registerLink}
+              >
+                <Text style={styles.forgotText}>
+                  No account yet? <Text style={styles.registerText}>Register</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <TextInput 
-            style={styles.input} 
-            placeholder="••••••••" 
-            placeholderTextColor="#aaa"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginText}>SIGN IN</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('RegisterScreen')} 
-            style={styles.registerLink}
-          >
-            <Text style={styles.forgotText}>
-              No account yet? <Text style={styles.registerText}>Register</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* FORGOT PASSWORD MODAL */}
       <Modal visible={showForgotModal} transparent={true} animationType="fade" onRequestClose={closeForgotModal}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{width: '100%', alignItems: 'center'}}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{width: '100%', alignItems: 'center'}}>
+            {/* ✅ FIX: Made modalContent significantly larger (95% width, 90% max height, larger padding) */}
             <View style={styles.modalContent}>
                 
                 <View style={styles.modalHeader}>
                     <Text style={styles.modalTitle}>Reset Password</Text>
-                    <TouchableOpacity onPress={closeForgotModal}><Ionicons name="close" size={24} color="#333"/></TouchableOpacity>
+                    <TouchableOpacity onPress={closeForgotModal}><Ionicons name="close" size={28} color="#333"/></TouchableOpacity>
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 20}}>
@@ -281,6 +282,7 @@ export default function LoginScreen({ navigation }) {
                     <View style={styles.otpRow}>
                         <TextInput 
                             style={[styles.input, {flex: 1, marginBottom: 0}]} 
+                            placeholderTextColor="#999"
                             placeholder="student@cvsu.edu.ph" 
                             autoCapitalize="none" 
                             keyboardType="email-address"
@@ -299,11 +301,12 @@ export default function LoginScreen({ navigation }) {
 
                     {/* STEP 2: VERIFY OTP */}
                     {isOtpSent && !isOtpVerified && (
-                        <View style={{marginTop: 15}}>
+                        <View style={{marginTop: 20}}>
                             <Text style={styles.label}>Enter 6-Digit Code</Text>
                             <View style={styles.otpRow}>
                                 <TextInput 
-                                    style={[styles.input, {flex: 1, marginBottom: 0, borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9'}]} 
+                                    style={[styles.input, {flex: 1, marginBottom: 0, borderColor: '#104a28', borderWidth: 2, backgroundColor: '#e8f5e9', fontSize: 20, letterSpacing: 5, textAlign: 'center'}]} 
+                                    placeholderTextColor="#999"
                                     placeholder="123456" keyboardType="numeric" maxLength={6}
                                     value={forgotOtp} onChangeText={setForgotOtp}
                                 />
@@ -319,15 +322,19 @@ export default function LoginScreen({ navigation }) {
 
                     {/* STEP 3: NEW PASSWORD */}
                     {isOtpVerified && (
-                        <View style={{marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderColor: '#eee'}}>
+                        <View style={{marginTop: 25, paddingTop: 25, borderTopWidth: 1, borderColor: '#eee'}}>
                             <Text style={styles.label}>New Password</Text>
                             <TextInput 
-                                style={styles.input} placeholder="Min. 6 characters" 
+                                style={styles.input} 
+                                placeholderTextColor="#999"
+                                placeholder="Min. 6 characters" 
                                 secureTextEntry value={newPassword} onChangeText={setNewPassword} 
                             />
                             <Text style={styles.label}>Confirm New Password</Text>
                             <TextInput 
-                                style={styles.input} placeholder="Re-enter password" 
+                                style={styles.input} 
+                                placeholderTextColor="#999"
+                                placeholder="Re-enter password" 
                                 secureTextEntry value={confirmNewPassword} onChangeText={setConfirmNewPassword} 
                             />
 
@@ -348,7 +355,7 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: '#fff' },
   content: { padding: 30 },
   
   logoContainer: { alignItems: 'center', marginBottom: 40 },
@@ -365,14 +372,14 @@ const styles = StyleSheet.create({
   forgotText: { color: '#888', fontSize: 14 },
   registerText: { fontWeight: 'bold', color: '#104a28' },
 
-  // --- Modal Styles ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '90%', backgroundColor: 'white', borderRadius: 20, padding: 25, maxHeight: '85%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+  // ✅ FIX: Modal is now significantly larger and wider
+  modalContent: { width: '95%', backgroundColor: 'white', borderRadius: 24, padding: 30, maxHeight: '90%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#333' },
   
   otpRow: { flexDirection: 'row', gap: 10, marginBottom: 5 },
   otpBtn: { backgroundColor: '#104a28', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, borderRadius: 12, height: 55 },
-  otpText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+  otpText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   disabledBtn: { backgroundColor: '#ccc' },
 });

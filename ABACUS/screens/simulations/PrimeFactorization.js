@@ -149,6 +149,7 @@ export default function PrimeFactorization({ navigation }) {
                 value={inputNum} 
                 onChangeText={handleInput} 
                 placeholder="e.g. 360" 
+                placeholderTextColor="#666"
                 maxLength={9}
               />
             </View>
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#6b7280', marginBottom: 5 },
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#111', fontWeight: 'bold' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#333', fontWeight: 'bold' },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 

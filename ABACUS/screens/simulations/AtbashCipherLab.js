@@ -90,7 +90,7 @@ export default function AtbashCipherLab({ navigation }) {
               value={inputText} 
               onChangeText={handleTextInput} 
               placeholder="Type letters only..."
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor="#666"
             />
 
             <View style={styles.modeRow}>
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   theoryText: { fontSize: 13, color: '#065F46', lineHeight: 20 },
   card: { backgroundColor: '#fff', padding: 20, borderRadius: 16, elevation: 3 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#64748B', marginBottom: 10, textTransform: 'uppercase' },
-  input: { backgroundColor: '#F1F5F9', padding: 15, borderRadius: 10, fontSize: 16, color: '#1E293B', textAlignVertical: 'top' },
+  input: { backgroundColor: '#F1F5F9', padding: 15, borderRadius: 10, fontSize: 16, color: '#333', textAlignVertical: 'top' },
   modeRow: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 10, padding: 4, marginTop: 15 },
   modeTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
   activeTab: { backgroundColor: '#fff', elevation: 2 },

@@ -192,7 +192,7 @@ export default function RelationsLab({ navigation }) {
           <View style={styles.card}>
             <Text style={styles.cardLabel}>1. UNIVERSE SET (Nodes)</Text>
             <View style={styles.inputRow}>
-              <TextInput style={styles.input} placeholder="e.g. A" value={newElement} onChangeText={(t) => handleNodeInput(t, setNewElement)} />
+              <TextInput style={styles.input} placeholder="e.g. A" placeholderTextColor="#666" value={newElement} onChangeText={(t) => handleNodeInput(t, setNewElement)} />
               <TouchableOpacity style={styles.addBtn} onPress={addElement}><Ionicons name="add" size={20} color="#fff" /></TouchableOpacity>
             </View>
             <View style={styles.badgeContainer}>
@@ -204,8 +204,8 @@ export default function RelationsLab({ navigation }) {
 
             <Text style={styles.cardLabel}>2. RELATION PAIRS (Edges / Arrows)</Text>
             <View style={styles.inputRow}>
-              <TextInput style={[styles.input, {flex:1}]} placeholder="From" value={pairA} onChangeText={(t) => handleNodeInput(t, setPairA)} />
-              <TextInput style={[styles.input, {flex:1}]} placeholder="To" value={pairB} onChangeText={(t) => handleNodeInput(t, setPairB)} />
+              <TextInput style={[styles.input, {flex:1}]} placeholder="From" placeholderTextColor="#666" value={pairA} onChangeText={(t) => handleNodeInput(t, setPairA)} />
+              <TextInput style={[styles.input, {flex:1}]} placeholder="To" placeholderTextColor="#666" value={pairB} onChangeText={(t) => handleNodeInput(t, setPairB)} />
               <TouchableOpacity style={[styles.addBtn, {backgroundColor: '#0369a1'}]} onPress={addPair}><Ionicons name="link" size={18} color="#fff" /></TouchableOpacity>
             </View>
             <View style={styles.badgeContainer}>
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 16, elevation: 2 },
   cardLabel: { fontSize: 12, fontWeight: 'bold', color: '#64748b', marginBottom: 10 },
   inputRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  input: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flex: 2, fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'center', fontWeight: 'bold' },
+  input: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', flex: 2, fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'center', fontWeight: 'bold', color: "#333" },
   addBtn: { backgroundColor: '#104a28', width: 50, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   
   badgeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

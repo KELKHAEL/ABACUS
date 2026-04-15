@@ -180,6 +180,7 @@ export default function ComplexityLab({ navigation }) {
                 value={nValue}
                 onChangeText={handleInput}
                 placeholder="e.g. 50"
+                placeholderTextColor="#666"
                 maxLength={3}
             />
             <Text style={styles.algoDesc}>{examples.find(a => a.id === selectedAlgo).desc}</Text>
@@ -256,7 +257,7 @@ const styles = StyleSheet.create({
   algoO: { fontSize: 11, color: '#64748B', marginTop: 2, fontWeight: 'bold' },
   card: { backgroundColor: '#fff', padding: 20, borderRadius: 16, elevation: 3 },
   label: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 8 },
-  input: { backgroundColor: '#F1F5F9', padding: 15, borderRadius: 10, fontSize: 20, fontWeight: 'bold', textAlign: 'center', color: '#111' },
+  input: { backgroundColor: '#F1F5F9', padding: 15, borderRadius: 10, fontSize: 20, fontWeight: 'bold', textAlign: 'center', color: '#333' },
   algoDesc: { fontSize: 12, color: '#64748B', fontStyle: 'italic', marginVertical: 12, textAlign: 'center' },
   primaryBtn: { backgroundColor: '#104a28', padding: 16, borderRadius: 12, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },

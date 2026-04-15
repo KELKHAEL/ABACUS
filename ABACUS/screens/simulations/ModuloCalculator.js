@@ -151,6 +151,7 @@ export default function ModuloCalculator({ navigation }) {
                   value={a}
                   onChangeText={handleInputA}
                   placeholder="e.g. 14"
+                  placeholderTextColor="#666"
                   maxLength={10}
                 />
               </View>
@@ -163,6 +164,7 @@ export default function ModuloCalculator({ navigation }) {
                   value={n}
                   onChangeText={handleInputN}
                   placeholder="e.g. 12"
+                  placeholderTextColor="#666"
                   maxLength={10}
                 />
               </View>
@@ -255,7 +257,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   inputGroup: { flex: 1 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#6b7280', marginBottom: 5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#111', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', color: '#333', fontWeight: 'bold', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   modText: { fontSize: 16, fontWeight: 'bold', color: '#9ca3af', paddingHorizontal: 15, marginTop: 15 },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },

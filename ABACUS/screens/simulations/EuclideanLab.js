@@ -158,6 +158,7 @@ export default function EuclideanLab({ navigation }) {
                   value={a} 
                   onChangeText={(t) => handleInput(t, setA)} 
                   placeholder="e.g. 252" 
+                  placeholderTextColor="#666"
                   maxLength={11}
                 />
               </View>
@@ -169,6 +170,7 @@ export default function EuclideanLab({ navigation }) {
                   value={b} 
                   onChangeText={(t) => handleInput(t, setB)} 
                   placeholder="e.g. 105" 
+                  placeholderTextColor="#666"
                   maxLength={11}
                 />
               </View>
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
   inputGroup: { flex: 1 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#6b7280', marginBottom: 5, textTransform: 'uppercase' },
-  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'center', fontWeight: 'bold', color: '#111' },
+  input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', textAlign: 'center', fontWeight: 'bold', color: '#333' },
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 

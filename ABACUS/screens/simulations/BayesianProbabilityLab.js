@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', marginTop: 10 },
   inputGroup: { marginBottom: 15 },
   label: { fontSize: 12, fontWeight: 'bold', color: '#64748B', marginBottom: 8 },
-  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, fontWeight: 'bold', color: '#111' },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, fontSize: 16, fontWeight: 'bold', color: '#333' },
   primaryBtn: { backgroundColor: '#104a28', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   primaryBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   resultCard: { backgroundColor: '#fff', padding: 20, borderRadius: 16, marginTop: 20, elevation: 4 },
