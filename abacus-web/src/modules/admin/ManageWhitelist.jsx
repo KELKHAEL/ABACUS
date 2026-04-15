@@ -37,26 +37,85 @@ export default function ManageWhitelist() {
       const bstr = evt.target.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws);
+      const data = XLSX.utils.sheet_to_json(ws, { defval: "" }); 
 
-      const formattedData = data.map(row => {
-        const rawName = row['Full Name'] || row['Name'] || row['Student Name'] || "";
-        const fName = row['First Name'] || row['first_name'] || "";
-        const mName = row['Middle Name'] || row['middle_name'] || "";
-        const lName = row['Last Name'] || row['last_name'] || "";
+      const formattedData = data.map((row) => {
+        const lowerRow = {};
+        Object.keys(row).forEach(k => {
+            const cleanKey = k.toLowerCase().replace(/[\n\r_.-]+/g, ' ').trim();
+            lowerRow[cleanKey] = String(row[k]).trim();
+        });
+
+        const studentId = lowerRow['student id'] || lowerRow['id'] || lowerRow['student no'] || lowerRow['student number'] || '';
+        const email = lowerRow['email'] || lowerRow['email address'] || lowerRow['cvsu email'] || lowerRow['account'] || '';
+
+        let fName = "";
+        let mName = "";
+        let lName = "";
+        let rawName = "";
+
+        const hasSeparateColumns = lowerRow['first name'] || lowerRow['firstname'] || lowerRow['last name'] || lowerRow['lastname'];
+
+        if (hasSeparateColumns) {
+            fName = lowerRow['first name'] || lowerRow['firstname'] || "";
+            mName = lowerRow['middle name'] || lowerRow['middlename'] || lowerRow['mi'] || lowerRow['m i'] || "";
+            lName = lowerRow['last name'] || lowerRow['lastname'] || "";
+            rawName = `${lName}, ${fName} ${mName}`.trim();
+        } 
+        else {
+            rawName = lowerRow['full name'] || lowerRow['name'] || lowerRow['student name'] || "";
+            
+            if (rawName.includes(',')) {
+                const parts = rawName.split(',').map(p => p.trim()).filter(p => p !== '');
+                lName = parts[0]; 
+                
+                if (parts.length >= 3) {
+                    fName = parts[1];
+                    mName = parts.slice(2).join(' '); 
+                } else if (parts.length === 2) {
+                    let rest = parts[1].split(' ').filter(p => p !== '');
+                    if (rest.length > 1) {
+                        mName = rest.pop(); 
+                    }
+                    fName = rest.join(' ');
+                }
+            } else {
+                const parts = rawName.split(' ').filter(p => p !== '');
+                if (parts.length >= 3) {
+                    lName = parts.pop();
+                    mName = parts.pop();
+                    fName = parts.join(' ');
+                } else if (parts.length === 2) {
+                    fName = parts[0];
+                    lName = parts[1];
+                } else {
+                    fName = parts[0] || "";
+                }
+            }
+        }
+
+        if (mName.endsWith('.')) mName = mName.replace('.', '');
 
         return {
-          studentId: String(row['Student ID'] || row['student_id'] || '').trim(),
-          email: String(row['Email'] || row['email'] || '').trim(),
+          studentId: studentId.replace(/\s+/g, ''), 
+          email: email.replace(/\s+/g, '').toLowerCase(), 
           rawName: rawName,
           firstName: fName,
           middleName: mName,
           lastName: lName
         };
-      }).filter(s => String(s.studentId).startsWith('20') && s.email.endsWith('@cvsu.edu.ph'));
+      });
 
-      if (formattedData.length === 0) {
-        alert("Import Error: IDs must start with '20' and use @cvsu.edu.ph emails.");
+      // ✅ FIX: Removed the .startsWith('20') restriction! It now accepts ANY valid ID length.
+      const validData = formattedData.filter(s => s.studentId.length >= 5 && s.email.endsWith('@cvsu.edu.ph'));
+
+      if (validData.length === 0) {
+        if (formattedData.length > 0) {
+            const sample = formattedData[0];
+            alert(`Import Error: Rows were rejected by the system.\n\nHere is what it found on Row 1:\nID: "${sample.studentId}"\nEmail: "${sample.email}"\nName: "${sample.rawName}"\n\nFix: Ensure IDs are valid and Emails MUST end with '@cvsu.edu.ph'.`);
+        } else {
+            alert("Import Error: The Excel sheet appears to be empty or the columns couldn't be found.");
+        }
         return;
       }
 
@@ -64,7 +123,7 @@ export default function ManageWhitelist() {
         const res = await fetch('https://abacus-w435.onrender.com/upload-allowed-students', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ students: formattedData })
+            body: JSON.stringify({ students: validData })
         });
         const result = await res.json();
         if (result.success) {
@@ -106,15 +165,18 @@ export default function ManageWhitelist() {
       } catch (e) { alert("Server Error."); }
   };
 
+  // ✅ FIX: Extract the first 4 characters for the dropdown menu, regardless of what they start with
   const batchYears = [...new Set(
       allowedList
         .map(item => item.student_id ? String(item.student_id).substring(0, 4) : null)
-        .filter(year => year && year.startsWith('20')) 
+        .filter(year => year) 
   )].sort((a, b) => b.localeCompare(a)); 
 
+  // ✅ FIX: Match the filter logic to the updated batchYears logic
   const filteredList = allowedList.filter(item => {
       if (filterYear === 'ALL') return true;
-      return item.student_id && String(item.student_id).startsWith(filterYear);
+      const itemYear = item.student_id ? String(item.student_id).substring(0, 4) : null;
+      return itemYear === filterYear;
   });
 
   return (
@@ -164,9 +226,17 @@ export default function ManageWhitelist() {
                 <tbody>
                     {filteredList.map((item) => {
                         const isItemEditing = editingId === item.id;
-                        const fullName = item.middle_name 
-                            ? `${item.last_name}, ${item.first_name} ${item.middle_name.charAt(0)}.`
-                            : `${item.last_name}, ${item.first_name}`;
+                        
+                        const lNameStr = item.last_name ? item.last_name.trim() : "";
+                        const fNameStr = item.first_name ? item.first_name.trim() : "";
+                        const mNameStr = item.middle_name ? item.middle_name.trim().charAt(0) + "." : "";
+                        
+                        let fullName = "";
+                        if (lNameStr && fNameStr) {
+                            fullName = `${lNameStr}, ${fNameStr} ${mNameStr}`.trim();
+                        } else {
+                            fullName = lNameStr || fNameStr || "N/A";
+                        }
                             
                         return (
                             <tr key={item.id} style={{background: isItemEditing ? '#f0fdf4' : 'transparent'}}>
@@ -189,7 +259,7 @@ export default function ManageWhitelist() {
                                 ) : (
                                     <>
                                         <td style={{fontWeight:'600', fontFamily: 'monospace', color: '#111'}}>{item.student_id}</td>
-                                        <td style={{fontWeight: 'bold', color: '#104a28'}}>{fullName !== ', ' ? fullName : 'N/A'}</td>
+                                        <td style={{fontWeight: 'bold', color: '#104a28'}}>{fullName}</td>
                                         <td style={{color: '#4b5563'}}>{item.email}</td>
                                         <td style={{textAlign: 'right'}}>
                                             <div style={{display: 'flex', justifyContent: 'flex-end', gap: '8px'}}>

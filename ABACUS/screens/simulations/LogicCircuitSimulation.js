@@ -124,7 +124,6 @@ export default function LogicCircuitSimulation({ navigation }) {
   const [explanation, setExplanation] = useState([]);
   const [showTheory, setShowTheory] = useState(false);
 
-  // ✅ PRESET EXAMPLES (Massively Expanded)
   const loadExample = (expr) => {
       setFormula(expr);
       setCircuitTree(null); 
@@ -146,16 +145,19 @@ export default function LogicCircuitSimulation({ navigation }) {
       const findVars = (n) => { if (n.type === 'VAR') vars[n.value] = 0; n.children?.forEach(findVars); };
       findVars(tree);
       
-      // Limit to max 5 variables to prevent SVG rendering crashes on mobile
       if (Object.keys(vars).length > 5) {
           throw new Error("Too many variables! Please limit your circuit to 5 inputs (e.g. A, B, C, D, E).");
       }
 
       setInputs(vars);
-      setCircuitTree(calculateLayout(tree, { val: 0 })); 
+      
+      // ✅ FIX: Track the absolute lowest point of the tree to prevent clipping
+      let heightTracker = { val: 0 };
+      const layoutTree = calculateLayout(tree, heightTracker); 
+      
+      setCircuitTree({ ...layoutTree, maxTreeY: heightTracker.val }); 
       setExplanation([]);
     } catch (e) { 
-        // ✅ DYNAMIC ERROR RECOVERY
         Alert.alert(
             "Syntax Error", 
             `${e.message}\n\nHint: A valid circuit needs variables connected by operators.\n\nExamples:\n• A AND B\n• NOT (A OR B)\n• (A AND B) OR C`,
@@ -231,7 +233,6 @@ export default function LogicCircuitSimulation({ navigation }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             
-            {/* ✅ GUIDELINES CARD */}
             <View style={styles.guidelinesCard}>
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
                     <Ionicons name="information-circle" size={22} color="#0284c7" />
@@ -242,7 +243,6 @@ export default function LogicCircuitSimulation({ navigation }) {
                 <Text style={styles.guidelinesText}>• <Text style={{fontWeight: 'bold'}}>Grouping:</Text> Use parentheses ( ) to ensure gates connect in the correct order.</Text>
             </View>
 
-            {/* 📚 THEORY CARD */}
             <TouchableOpacity style={styles.theoryToggle} onPress={() => setShowTheory(!showTheory)}>
               <Ionicons name="book" size={20} color="#104a28" />
               <Text style={styles.theoryToggleText}>Learn Digital Logic Gates</Text>
@@ -259,67 +259,29 @@ export default function LogicCircuitSimulation({ navigation }) {
               </View>
             )}
 
-            {/* ✅ MASSIVELY EXPANDED PRESET EXAMPLES */}
             <Text style={styles.sectionHeader}>Try a Preset Circuit Library</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exampleScroll}>
                 {/* Level 1: Basic Gates */}
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('A AND B')}>
-                    <Ionicons name="flash-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>Basic AND</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('A OR B')}>
-                    <Ionicons name="git-merge-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>Basic OR</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT (A AND B)')}>
-                    <Ionicons name="close-circle-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>NAND Gate</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT (A OR B)')}>
-                    <Ionicons name="ban-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>NOR Gate</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('A AND B')}><Ionicons name="flash-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>Basic AND</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('A OR B')}><Ionicons name="git-merge-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>Basic OR</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT (A AND B)')}><Ionicons name="close-circle-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>NAND Gate</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT (A OR B)')}><Ionicons name="ban-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>NOR Gate</Text></TouchableOpacity>
                 
                 {/* Level 2: Equivalent Constructions */}
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND NOT B) OR (NOT A AND B)')}>
-                    <Ionicons name="swap-horizontal-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>XOR Equivalent</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT A OR NOT B')}>
-                    <Ionicons name="copy-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>De Morgan's OR</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND NOT B) OR (NOT A AND B)')}><Ionicons name="swap-horizontal-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>XOR Equivalent</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('NOT A OR NOT B')}><Ionicons name="copy-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>De Morgan's OR</Text></TouchableOpacity>
 
                 {/* Level 3: Computer Engineering Fundamentals */}
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND NOT S) OR (B AND S)')}>
-                    <Ionicons name="git-network-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>2-to-1 Multiplexer</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) OR (B AND C) OR (A AND C)')}>
-                    <Ionicons name="people-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>Majority Gate</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND NOT S) OR (B AND S)')}><Ionicons name="git-network-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>2-to-1 Multiplexer</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) OR (B AND C) OR (A AND C)')}><Ionicons name="people-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>Majority Gate</Text></TouchableOpacity>
 
                 {/* Level 4: Broad & Complex Expansions */}
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) AND C')}>
-                    <Ionicons name="git-commit-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>3-Input AND</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) OR (C AND D)')}>
-                    <Ionicons name="grid-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>4-Var SOP</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A OR B) AND (C OR D)')}>
-                    <Ionicons name="layers-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>4-Var POS</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(((A OR B) AND C) OR D) AND E')}>
-                    <Ionicons name="analytics-outline" size={16} color="#b45309" />
-                    <Text style={styles.exampleBtnText}>5-Var Cascade</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) AND C')}><Ionicons name="git-commit-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>3-Input AND</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A AND B) OR (C AND D)')}><Ionicons name="grid-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>4-Var SOP</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(A OR B) AND (C OR D)')}><Ionicons name="layers-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>4-Var POS</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.exampleBtn} onPress={() => loadExample('(((A OR B) AND C) OR D) AND E')}><Ionicons name="analytics-outline" size={16} color="#b45309" /><Text style={styles.exampleBtnText}>5-Var Cascade</Text></TouchableOpacity>
             </ScrollView>
 
-            {/* ⚙️ CALCULATOR CARD */}
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Build Circuit Expression</Text>
                 
@@ -345,7 +307,6 @@ export default function LogicCircuitSimulation({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            {/* 💡 INTERACTIVE CANVAS */}
             {circuitTree && Object.keys(inputs).length > 0 && (
               <View style={styles.controlsBox}>
                 <Text style={styles.controlLabel}>TAP TO TOGGLE INPUTS (0 / 1):</Text>
@@ -363,7 +324,8 @@ export default function LogicCircuitSimulation({ navigation }) {
               <View>
                 <ScrollView horizontal contentContainerStyle={{flexGrow: 1}} bounces={false}>
                   <View style={styles.canvas}>
-                    <Svg height={Math.max(350, circuitTree.y + 100)} width={Math.max(SCREEN_WIDTH - 40, circuitTree.outputX + 80)}>
+                    {/* ✅ FIX: SVG Canvas uses the maxTreeY property to dynamically stretch downwards perfectly! */}
+                    <Svg height={Math.max(350, circuitTree.maxTreeY + 100)} width={Math.max(SCREEN_WIDTH - 40, circuitTree.outputX + 80)}>
                       {renderWires(circuitTree)}
                       {renderGate(circuitTree)}
                       {(function drawLabels(node) {
@@ -411,43 +373,31 @@ export default function LogicCircuitSimulation({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-  flex: 1, 
-  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
-  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FD', paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
   backButton: { marginRight: 15 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#104a28' },
   content: { padding: 20, paddingBottom: 50 },
-  
   guidelinesCard: { backgroundColor: '#e0f2fe', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#bae6fd' },
   guidelinesTitle: { fontSize: 15, fontWeight: 'bold', color: '#0369a1' },
   guidelinesText: { fontSize: 13, color: '#0f172a', marginBottom: 4, lineHeight: 18 },
-
   sectionHeader: { fontSize: 14, fontWeight: 'bold', color: '#4b5563', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
   exampleScroll: { marginBottom: 20, flexGrow: 0 },
   exampleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#fde68a', gap: 6 },
   exampleBtnText: { color: '#92400e', fontWeight: 'bold', fontSize: 13 },
-
   theoryToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f5e9', padding: 15, borderRadius: 10, marginBottom: 15 },
   theoryToggleText: { color: '#104a28', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
   theoryCard: { backgroundColor: 'white', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#c8e6c9' },
   theoryText: { fontSize: 14, color: '#4b5563', lineHeight: 22, marginBottom: 5 },
   divider: { height: 1, backgroundColor: '#e5e7eb', marginVertical: 10 },
-
   card: { backgroundColor: 'white', padding: 20, borderRadius: 12, elevation: 2, marginBottom: 20 },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
-  
   input: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#d1d5db', padding: 15, borderRadius: 8, fontSize: 18, fontFamily: 'monospace', textAlign: 'center', marginBottom: 15 },
-  
   quickButtonsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 15 },
   quickButton: { backgroundColor: '#e2e8f0', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
   quickButtonText: { fontWeight: 'bold', color: '#475569', fontSize: 12 },
-
   calcButton: { backgroundColor: '#104a28', padding: 15, borderRadius: 8, alignItems: 'center' },
   calcButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-
   controlsBox: { backgroundColor: '#fffbeb', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#fde047', marginBottom: 20 },
   controlLabel: { fontSize: 12, fontWeight: 'bold', color: '#854d0e', marginBottom: 10, textAlign: 'center' },
   toggles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
@@ -455,9 +405,7 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: '#2D7FF9', borderColor: '#2D7FF9' },
   toggleOff: { backgroundColor: '#fff', borderColor: '#cbd5e1' },
   toggleText: { fontWeight: 'bold' },
-
   canvas: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 10, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', minWidth: '100%' },
-  
   explanationCard: { marginTop: 20, backgroundColor: 'white', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', borderLeftWidth: 5, borderLeftColor: '#3b82f6', elevation: 2 },
   expTitle: { fontSize: 14, fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: 15 },
   stepRow: { flexDirection: 'row', marginBottom: 8 },

@@ -796,7 +796,7 @@ app.post('/upload-allowed-students', async (req, res) => {
         let duplicates = 0;
 
         for (const s of students) {
-            if (!String(s.studentId).startsWith('20')) { continue; }
+            if (!s.studentId) { continue; }
             if (!s.email.endsWith('@cvsu.edu.ph')) { continue; }
 
             let nameObj = (s.firstName && s.lastName) 
