@@ -8,6 +8,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import http from 'http';
+import { Server } from 'socket.io';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +17,30 @@ const __dirname = path.dirname(__filename);
 // 1. Initialize Configuration
 dotenv.config();
 const app = express();
+
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
+
+const activeSockets = new Map();
+
+io.on('connection', (socket) => {
+    // When a student opens the app, they register their device here
+    socket.on('register_device', (userId) => {
+        activeSockets.set(userId, socket.id);
+    });
+
+    // When they close the app, remove them from the active list
+    socket.on('disconnect', () => {
+        for (const [userId, socketId] of activeSockets.entries()) {
+            if (socketId === socket.id) {
+                activeSockets.delete(userId);
+                break;
+            }
+        }
+    });
+});
 
 app.use(express.json());
 app.use(cors());
@@ -190,7 +216,6 @@ app.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ✅ FORCE LOGOUT ENDPOINT 
 app.post('/force-logout', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -202,6 +227,14 @@ app.post('/force-logout', async (req, res) => {
         if (!match) return res.status(401).json({ success: false, error: "Incorrect password." });
 
         await db.query("UPDATE users SET session_token = NULL WHERE id = ?", [user.id]);
+
+        // REAL-TIME KICK MAGIC
+        const oldSocketId = activeSockets.get(user.id);
+        if (oldSocketId) {
+            io.to(oldSocketId).emit('force_logout_event'); // Sends the kick command!
+            activeSockets.delete(user.id); // Removes them from active list
+        }
+
         res.json({ success: true, message: "Other devices have been logged out." });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1166,4 +1199,4 @@ app.post('/student-forgot-password', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => { console.log(`🚀 Server running on http://localhost:${PORT}`); });
+server.listen(PORT, () => { console.log(`🚀 Server running on http://localhost:${PORT}`); });

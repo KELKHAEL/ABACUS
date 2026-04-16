@@ -569,6 +569,82 @@ export default function StudentHome({ navigation }) {
         </View>
       </View>
 
+      {/* ✅ FIX: RE-ADDED THE MISSING FILTER MODAL UI HERE */}
+      <Modal visible={showFilterModal} animationType="slide" transparent={true} onRequestClose={() => setShowFilterModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Announcements</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.filterLabel}>From</Text>
+              <View style={styles.chipRow}>
+                {['ALL', 'ADMIN', 'INSTRUCTOR'].map(sender => (
+                  <TouchableOpacity
+                    key={sender}
+                    style={[styles.chip, filterSender === sender && styles.chipActive]}
+                    onPress={() => setFilterSender(sender)}
+                  >
+                    <Text style={[styles.chipText, filterSender === sender && styles.chipTextActive]}>
+                      {sender === 'ALL' ? 'Everyone' : sender === 'ADMIN' ? 'Registrar' : 'Instructors'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.filterLabel}>Year</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <TouchableOpacity style={[styles.chip, filterYear === 'ALL' && styles.chipActive]} onPress={() => setFilterYear('ALL')}>
+                  <Text style={[styles.chipText, filterYear === 'ALL' && styles.chipTextActive]}>All Years</Text>
+                </TouchableOpacity>
+                {years.map(y => (
+                  <TouchableOpacity key={y} style={[styles.chip, filterYear === y && styles.chipActive]} onPress={() => setFilterYear(y)}>
+                    <Text style={[styles.chipText, filterYear === y && styles.chipTextActive]}>{y}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.filterLabel}>Month</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <TouchableOpacity style={[styles.chip, filterMonth === 'ALL' && styles.chipActive]} onPress={() => setFilterMonth('ALL')}>
+                  <Text style={[styles.chipText, filterMonth === 'ALL' && styles.chipTextActive]}>All Months</Text>
+                </TouchableOpacity>
+                {months.map(m => (
+                  <TouchableOpacity key={m} style={[styles.chip, filterMonth === m && styles.chipActive]} onPress={() => setFilterMonth(m)}>
+                    <Text style={[styles.chipText, filterMonth === m && styles.chipTextActive]}>{new Date(2000, m - 1).toLocaleString('default', { month: 'short' })}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.filterLabel}>Day</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <TouchableOpacity style={[styles.chip, filterDay === 'ALL' && styles.chipActive]} onPress={() => setFilterDay('ALL')}>
+                  <Text style={[styles.chipText, filterDay === 'ALL' && styles.chipTextActive]}>All Days</Text>
+                </TouchableOpacity>
+                {days.map(d => (
+                  <TouchableOpacity key={d} style={[styles.chip, filterDay === d && styles.chipActive]} onPress={() => setFilterDay(d)}>
+                    <Text style={[styles.chipText, filterDay === d && styles.chipTextActive]}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
+                <Text style={styles.clearBtnText}>Clear Filters</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilterModal(false)}>
+                <Text style={styles.applyBtnText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {renderCustomTour()}
     </View>
   );
