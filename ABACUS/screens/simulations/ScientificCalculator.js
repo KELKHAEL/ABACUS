@@ -115,7 +115,7 @@ export default function ScientificCalculator({ navigation }) {
       </View>
 
       <View style={styles.keypadContainer}>
-        {/* Scientific Panel (Scrollable horizontally if needed) */}
+        {/* Scientific Panel */}
         <View style={styles.sciPanel}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {sciButtons.map((row, rIdx) => (
@@ -135,6 +135,7 @@ export default function ScientificCalculator({ navigation }) {
         </View>
 
         {/* Standard Panel */}
+        {/* ✅ FIX: Added flex: 1 to the standard panel container so it takes up the rest of the screen properly */}
         <View style={styles.standardPanel}>
             {standardButtons.map((row, rowIndex) => (
               <View key={rowIndex} style={styles.row}>
@@ -172,7 +173,7 @@ export default function ScientificCalculator({ navigation }) {
 const styles = StyleSheet.create({
   container: { 
   flex: 1, 
-  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  backgroundColor: '#F8F9FD', 
   paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
   },
   header: { 
@@ -183,10 +184,11 @@ const styles = StyleSheet.create({
   modeBadge: { backgroundColor: '#e0f2fe', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   modeText: { fontSize: 12, fontWeight: '900', color: '#0369a1' },
   
+  // ✅ FIX: Replaced fixed height (160) with flex: 0.25 to make it scale dynamically
   displayContainer: { 
       backgroundColor: '#fff', 
-      padding: 25, 
-      height: 160, 
+      flex: 0.25, 
+      padding: 20, 
       justifyContent: 'flex-end',
       alignItems: 'flex-end',
       borderBottomWidth: 1,
@@ -194,11 +196,10 @@ const styles = StyleSheet.create({
   },
   inputScroll: { alignItems: 'flex-end', justifyContent: 'flex-end', flexGrow: 1 },
   inputText: { fontSize: 36, color: '#334155', fontWeight: '300' },
-  resultText: { fontSize: 28, color: '#10b981', fontWeight: 'bold', marginTop: 10 },
+  resultText: { fontSize: 28, color: '#10b981', fontWeight: 'bold', marginTop: 5 },
   
   keypadContainer: { flex: 1, padding: 10, backgroundColor: '#fff' },
   
-  // Scientific Section
   sciPanel: { marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingBottom: 10 },
   sciRow: { flexDirection: 'column', marginRight: 10 },
   sciButton: { 
@@ -212,11 +213,15 @@ const styles = StyleSheet.create({
   },
   sciButtonText: { color: '#475569', fontWeight: 'bold', fontSize: 13 },
 
-  // Standard Section
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  // ✅ FIX: standardPanel added to take up remaining flex space
+  standardPanel: { flex: 1 },
+  
+  // ✅ FIX: Added flex: 1 to rows so they dynamically size themselves to fit any screen
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, flex: 1 },
+  
+  // ✅ FIX: Removed fixed height (60) so buttons squish or stretch based on the screen size
   button: { 
       flex: 1, 
-      height: 60, 
       marginHorizontal: 5, 
       borderRadius: 16, 
       justifyContent: 'center', 

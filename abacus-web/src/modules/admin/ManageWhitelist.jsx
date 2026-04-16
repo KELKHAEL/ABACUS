@@ -34,7 +34,7 @@ export default function ManageWhitelist() {
 
   const triggerFileInput = () => { fileInputRef.current.click(); };
 
-  // --- 📝 EXCEL UPLOAD PARSER ---
+  // --- 📝 BULLETPROOF EXCEL UPLOAD PARSER ---
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -53,24 +53,37 @@ export default function ManageWhitelist() {
             lowerRow[cleanKey] = String(row[k]).trim();
         });
 
-        const studentId = lowerRow['student id'] || lowerRow['id'] || lowerRow['student no'] || lowerRow['student number'] || '';
-        const email = lowerRow['email'] || lowerRow['email address'] || lowerRow['cvsu email'] || lowerRow['account'] || '';
+        // ✅ FIX 1: Smart ID & Email Detection (Finds any column containing these keywords)
+        const studentIdKey = Object.keys(lowerRow).find(k => k.includes('student id') || k === 'id' || k.includes('student no') || k.includes('student number'));
+        const emailKey = Object.keys(lowerRow).find(k => k.includes('email') || k.includes('account'));
+
+        const studentId = studentIdKey ? lowerRow[studentIdKey] : '';
+        const email = emailKey ? lowerRow[emailKey] : '';
+
+        // ✅ FIX 2: Smart Name Detection (Catches "Student First Name", "First Name", "Firstname", etc.)
+        const fNameKey = Object.keys(lowerRow).find(k => k.includes('first name') || k.includes('firstname'));
+        const lNameKey = Object.keys(lowerRow).find(k => k.includes('last name') || k.includes('lastname'));
+        const mNameKey = Object.keys(lowerRow).find(k => k.includes('middle name') || k.includes('middlename') || k === 'mi' || k === 'm i' || k.includes('middle initial'));
+        const fullNameKey = Object.keys(lowerRow).find(k => k.includes('name') && !k.includes('first') && !k.includes('last') && !k.includes('middle'));
 
         let fName = "";
         let mName = "";
         let lName = "";
         let rawName = "";
 
-        const hasSeparateColumns = lowerRow['first name'] || lowerRow['firstname'] || lowerRow['last name'] || lowerRow['lastname'];
-
-        if (hasSeparateColumns) {
-            fName = lowerRow['first name'] || lowerRow['firstname'] || "";
-            mName = lowerRow['middle name'] || lowerRow['middlename'] || lowerRow['mi'] || lowerRow['m i'] || "";
-            lName = lowerRow['last name'] || lowerRow['lastname'] || "";
+        // SCENARIO A: Separate Columns exist (Like your 2nd screenshot)
+        if (fNameKey || lNameKey) {
+            fName = fNameKey ? lowerRow[fNameKey] : "";
+            mName = mNameKey ? lowerRow[mNameKey] : "";
+            lName = lNameKey ? lowerRow[lNameKey] : "";
             rawName = `${lName}, ${fName} ${mName}`.trim();
-        } else {
-            rawName = lowerRow['full name'] || lowerRow['name'] || lowerRow['student name'] || "";
+        } 
+        // SCENARIO B: Single Full Name column exists (Like your 1st and 3rd screenshots)
+        else if (fullNameKey) {
+            rawName = lowerRow[fullNameKey] || "";
+            
             if (rawName.includes(',')) {
+                // Catches "Purugganan, Marion Adam S."
                 const parts = rawName.split(',').map(p => p.trim()).filter(p => p !== '');
                 lName = parts[0]; 
                 if (parts.length >= 3) {
@@ -82,6 +95,7 @@ export default function ManageWhitelist() {
                     fName = rest.join(' ');
                 }
             } else {
+                // Catches "Marion Adam S. Purugganan"
                 const parts = rawName.split(' ').filter(p => p !== '');
                 if (parts.length >= 3) {
                     lName = parts.pop();
@@ -96,6 +110,7 @@ export default function ManageWhitelist() {
             }
         }
 
+        // Clean up Middle Initial periods (removes the dot from "S.")
         if (mName.endsWith('.')) mName = mName.replace('.', '');
 
         return {
@@ -135,7 +150,6 @@ export default function ManageWhitelist() {
           return alert("Email must end with @cvsu.edu.ph");
       }
 
-      // Format exactly like the Excel parser does
       const payload = [{
           studentId: newData.studentId.trim(),
           email: newData.email.trim().toLowerCase(),
@@ -234,7 +248,6 @@ export default function ManageWhitelist() {
               Back
             </button>
             
-            {/* ✅ NEW: Manual Add Button */}
             <button 
                 onClick={() => setShowAddModal(true)} 
                 style={{backgroundColor: '#0ea5e9', color: 'white', padding: '8px 16px', borderRadius: '6px', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', cursor: 'pointer'}}
@@ -296,7 +309,6 @@ export default function ManageWhitelist() {
                                             <input autoFocus style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #10b981', fontFamily: 'monospace'}} value={editData.studentId} onChange={(e) => setEditData({...editData, studentId: e.target.value})} />
                                         </td>
                                         
-                                        {/* ✅ NEW: Full Name Edit Fields */}
                                         <td style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
                                             <input placeholder="Last Name" style={{padding: '6px', borderRadius: '4px', border: '1px solid #10b981'}} value={editData.lastName} onChange={(e) => setEditData({...editData, lastName: e.target.value.toUpperCase()})} />
                                             <div style={{display: 'flex', gap: '5px'}}>
@@ -336,7 +348,6 @@ export default function ManageWhitelist() {
         )}
       </div>
 
-      {/* ✅ NEW: MANUAL ADD MODAL */}
       {showAddModal && (
         <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000}}>
             <div style={{backgroundColor: 'white', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)'}}>
