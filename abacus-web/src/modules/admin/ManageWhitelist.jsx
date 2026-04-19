@@ -34,7 +34,7 @@ export default function ManageWhitelist() {
 
   const triggerFileInput = () => { fileInputRef.current.click(); };
 
-  // --- 📝 BULLETPROOF EXCEL UPLOAD PARSER ---
+  // --- 📝 ULTRA-FORGIVING EXCEL UPLOAD PARSER ---
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -53,32 +53,36 @@ export default function ManageWhitelist() {
             lowerRow[cleanKey] = String(row[k]).trim();
         });
 
-        // ✅ FIX 1: Smart ID & Email Detection (Finds any column containing these keywords)
-        const studentIdKey = Object.keys(lowerRow).find(k => k.includes('student id') || k === 'id' || k.includes('student no') || k.includes('student number'));
-        const emailKey = Object.keys(lowerRow).find(k => k.includes('email') || k.includes('account'));
+        // ✅ FIX 1: Ultra-Forgiving ID & Email Detection (Catches "sudent account", "num", etc.)
+        const studentIdKey = Object.keys(lowerRow).find(k => k.includes('id') || k.includes('num') || k.includes('no'));
+        const emailKey = Object.keys(lowerRow).find(k => k.includes('email') || k.includes('account') || k.includes('mail'));
 
         const studentId = studentIdKey ? lowerRow[studentIdKey] : '';
         const email = emailKey ? lowerRow[emailKey] : '';
 
-        // ✅ FIX 2: Smart Name Detection (Catches "Student First Name", "First Name", "Firstname", etc.)
-        const fNameKey = Object.keys(lowerRow).find(k => k.includes('first name') || k.includes('firstname'));
-        const lNameKey = Object.keys(lowerRow).find(k => k.includes('last name') || k.includes('lastname'));
-        const mNameKey = Object.keys(lowerRow).find(k => k.includes('middle name') || k.includes('middlename') || k === 'mi' || k === 'm i' || k.includes('middle initial'));
-        const fullNameKey = Object.keys(lowerRow).find(k => k.includes('name') && !k.includes('first') && !k.includes('last') && !k.includes('middle'));
+        // ✅ FIX 2: Ultra-Forgiving Name Detection (Catches fname, lname, mname, firstname, etc.)
+        const fNameKey = Object.keys(lowerRow).find(k => k.includes('first') || k.includes('fname'));
+        const lNameKey = Object.keys(lowerRow).find(k => k.includes('last') || k.includes('lname'));
+        const mNameKey = Object.keys(lowerRow).find(k => k.includes('middle') || k.includes('mname') || k === 'mi' || k === 'm i');
+        const fullNameKey = Object.keys(lowerRow).find(k => 
+            k.includes('name') && 
+            !k.includes('first') && !k.includes('last') && !k.includes('middle') && 
+            !k.includes('fname') && !k.includes('lname') && !k.includes('mname')
+        );
 
         let fName = "";
         let mName = "";
         let lName = "";
         let rawName = "";
 
-        // SCENARIO A: Separate Columns exist (Like your 2nd screenshot)
+        // SCENARIO A: Separate Columns exist
         if (fNameKey || lNameKey) {
             fName = fNameKey ? lowerRow[fNameKey] : "";
             mName = mNameKey ? lowerRow[mNameKey] : "";
             lName = lNameKey ? lowerRow[lNameKey] : "";
             rawName = `${lName}, ${fName} ${mName}`.trim();
         } 
-        // SCENARIO B: Single Full Name column exists (Like your 1st and 3rd screenshots)
+        // SCENARIO B: Single Full Name column exists
         else if (fullNameKey) {
             rawName = lowerRow[fullNameKey] || "";
             
@@ -110,7 +114,7 @@ export default function ManageWhitelist() {
             }
         }
 
-        // Clean up Middle Initial periods (removes the dot from "S.")
+        // Clean up Middle Initial periods
         if (mName.endsWith('.')) mName = mName.replace('.', '');
 
         return {
@@ -174,7 +178,7 @@ export default function ManageWhitelist() {
         if (result.success) {
             alert(`Success!\n\n Newly Added: ${result.newlyAdded}\n Modified: ${result.modified}\n Ignored (Duplicates): ${result.duplicates}`);
             setShowAddModal(false);
-            setNewData({ studentId: '', email: '', firstName: '', middleName: '', lastName: '' }); // Reset form
+            setNewData({ studentId: '', email: '', firstName: '', middleName: '', lastName: '' }); 
             fetchWhitelist();
         }
       } catch (err) { alert("Server connection failed."); }
