@@ -497,14 +497,36 @@ app.get('/quizzes/:id', async (req, res) => {
     if (quiz.length === 0) return res.status(404).json({ error: "Quiz not found" });
 
     const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [req.params.id]);
+    
     for (const q of questions) {
       const [options] = await db.query("SELECT option_text FROM question_options WHERE question_id = ? ORDER BY option_order ASC", [q.id]);
-      q.options = options.map(o => o.option_text);
-      q.correctIndex = q.correct_index;
+      
+      let opts = options.map(o => o.option_text);
+      let correctIdx = q.correct_index;
+
+      if (opts.length > 0) {
+          const actualCorrectAnswerText = opts[correctIdx]; 
+
+          for (let i = opts.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [opts[i], opts[j]] = [opts[j], opts[i]];
+          }
+
+          correctIdx = opts.indexOf(actualCorrectAnswerText);
+      }
+
+      q.options = opts;
+      q.correctIndex = correctIdx;
       q.correctAnswerText = q.correct_answer_text;
       q.questionText = q.question_text;
       q.type = q.question_type;
     }
+
+    for (let i = questions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+
     res.json({ ...quiz[0], questions });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
