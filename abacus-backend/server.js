@@ -351,9 +351,9 @@ app.get('/academic-setup', async (req, res) => {
 
 app.post('/academic-setup/:type', async (req, res) => {
   const { type } = req.params;
-  const { value, semester, maxYears } = req.body; // <-- Add maxYears here
+  const { value, semester, maxYears } = req.body; 
   try {
-    if (type === 'program') await db.query("INSERT INTO programs (name, max_years) VALUES (?, ?)", [value, maxYears || 4]); // <-- Insert maxYears
+    if (type === 'program') await db.query("INSERT INTO programs (name, max_years) VALUES (?, ?)", [value, maxYears || 4]); 
     else if (type === 'section') await db.query("INSERT INTO sections (section_name) VALUES (?)", [value]);
     else if (type === 'year') await db.query("INSERT INTO year_levels (year_name) VALUES (?)", [value]);
     else if (type === 'term') await db.query("INSERT INTO academic_terms (school_year, semester, is_active) VALUES (?, ?, 0)", [value, semester]);
@@ -365,11 +365,23 @@ app.post('/academic-setup/:type', async (req, res) => {
 app.delete('/academic-setup/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   try {
-    if (type === 'program') await db.query("DELETE FROM programs WHERE id = ?", [id]);
+    if (type === 'program') {
+        // --- CASCADE DELETE LOGIC ---
+        // 1. Find the exact name of the program we are deleting
+        const [prog] = await db.query("SELECT name FROM programs WHERE id = ?", [id]);
+        if (prog.length > 0) {
+            const programName = prog[0].name;
+            // 2. Delete all class sections that begin with that program name
+            await db.query("DELETE FROM sections WHERE section_name LIKE ?", [`${programName} %`]);
+        }
+        // 3. Delete the program itself
+        await db.query("DELETE FROM programs WHERE id = ?", [id]);
+    }
     else if (type === 'section') await db.query("DELETE FROM sections WHERE id = ?", [id]);
     else if (type === 'year') await db.query("DELETE FROM year_levels WHERE id = ?", [id]);
     else if (type === 'term') await db.query("DELETE FROM academic_terms WHERE id = ?", [id]);
     else return res.status(400).json({error: "Invalid type"});
+    
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

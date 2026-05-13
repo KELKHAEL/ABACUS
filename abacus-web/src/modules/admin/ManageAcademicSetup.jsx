@@ -193,7 +193,7 @@ export default function ManageAcademicSetup() {
                                 <Plus size={16}/> Save Program
                             </button>
                         </div>
-                    </div> {/* <-- THIS DIV WAS MISSING BEFORE AND CAUSED THE PARSING ERROR */}
+                    </div>
 
                     {/* Add Class Section */}
                     <div style={{ background: '#f0fdf4', padding: '20px', borderRadius: '8px', border: '1px dashed #86efac', marginTop: '20px' }}>
