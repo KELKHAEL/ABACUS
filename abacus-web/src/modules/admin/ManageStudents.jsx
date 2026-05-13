@@ -30,16 +30,9 @@ export default function ManageStudents() {
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
         const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/restore`, { method: 'PUT' });
-        if (res.ok) {
-            fetchStudentsAndSetup(); 
-        } else {
-            alert("Failed to restore on server.");
-            fetchTrash(); 
-        }
-    } catch (e) { 
-        alert("Failed to restore"); 
-        fetchTrash();
-    }
+        if (res.ok) { fetchStudentsAndSetup(); } 
+        else { alert("Failed to restore on server."); fetchTrash(); }
+    } catch (e) { alert("Failed to restore"); fetchTrash(); }
   };
 
   const handlePermanentDelete = async (id) => {
@@ -47,14 +40,8 @@ export default function ManageStudents() {
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
         const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/permanent`, { method: 'DELETE' });
-        if (!res.ok) {
-            alert("Failed to delete permanently on server.");
-            fetchTrash(); 
-        }
-    } catch (e) { 
-        alert("Failed to delete permanently"); 
-        fetchTrash(); 
-    }
+        if (!res.ok) { alert("Failed to delete permanently on server."); fetchTrash(); }
+    } catch (e) { alert("Failed to delete permanently"); fetchTrash(); }
   };
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,8 +64,7 @@ export default function ManageStudents() {
     const letters = "abcdefghijklmnopqrstuvwxyz";
     let randomLetters = "";
     for (let i = 0; i < 8; i++) { randomLetters += letters.charAt(Math.floor(Math.random() * letters.length)); }
-    const randomNum = Math.floor(Math.random() * 999) + 1;
-    return `${randomLetters}${randomNum}`;
+    return `${randomLetters}${Math.floor(Math.random() * 999) + 1}`;
   };
 
   const fetchStudentsAndSetup = async () => {
@@ -93,7 +79,9 @@ export default function ManageStudents() {
 
       if (!setupData.error) {
         setAcademicYears(setupData.yearLevels || []);
-        setAcademicSections(setupData.sections || []);
+        // Sorted alphabetically to match the Instructors logic
+        const sortedSections = (setupData.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
+        setAcademicSections(sortedSections);
       }
       
       const formatted = studentData.map(user => ({
@@ -158,17 +146,15 @@ export default function ManageStudents() {
   const handleSaveStudent = async (e) => {
     e.preventDefault();
     if(!formData.lastName || !formData.firstName) return alert("Name fields required.");
-    if (!formData.email.endsWith('@cvsu.edu.ph')) return alert("Invalid Email! Use @cvsu.edu.ph");
+    // ENTRAPMENT: Strict Email Validation
+    if (!formData.email.trim().toLowerCase().endsWith('@cvsu.edu.ph')) return alert("Invalid Email! Must end with @cvsu.edu.ph");
 
     const finalLastName = formData.lastName.toUpperCase().trim();
     const finalFirstName = formData.firstName.toUpperCase().trim();
-    let finalMiddleName = '';
-    if (formData.middleName && formData.middleName.trim() !== '') {
-        finalMiddleName = formData.middleName.trim().charAt(0).toUpperCase() + '.';
-    }
+    let finalMiddleName = formData.middleName ? formData.middleName.trim().charAt(0).toUpperCase() + '.' : '';
     const fullNameCombined = finalMiddleName ? `${finalLastName}, ${finalFirstName} ${finalMiddleName}` : `${finalLastName}, ${finalFirstName}`;
 
-    const payload = { ...formData, fullName: fullNameCombined, role: 'STUDENT' };
+    const payload = { ...formData, email: formData.email.trim().toLowerCase(), fullName: fullNameCombined, role: 'STUDENT' };
 
     try {
       let url = isEditing ? `https://abacus-w435.onrender.com/users/${editId}` : 'https://abacus-w435.onrender.com/users';
@@ -232,17 +218,10 @@ export default function ManageStudents() {
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">Manage Students</h1>
-        
         <div style={{display: 'flex', gap: '10px'}}>
-            <button className="btn-secondary" style={{backgroundColor: '#ef4444'}} onClick={openTrash}>
-              <Trash2 size={20} /> Trash Bin
-            </button>
-            <button className="btn-secondary" style={{backgroundColor: '#6b7280'}} onClick={() => window.location.href = '/admin/ManageWhitelist'}>
-              <Eye size={20} /> View Whitelist
-            </button>
-            <button className="btn-primary" onClick={openAddModal}>
-              <Plus size={20} /> Add Student
-            </button>
+            <button className="btn-secondary" style={{backgroundColor: '#ef4444'}} onClick={openTrash}><Trash2 size={20} /> Trash Bin</button>
+            <button className="btn-secondary" style={{backgroundColor: '#6b7280'}} onClick={() => window.location.href = '/admin/ManageWhitelist'}><Eye size={20} /> View Whitelist</button>
+            <button className="btn-primary" onClick={openAddModal}><Plus size={20} /> Add Student</button>
         </div>
       </div>
 
@@ -259,9 +238,10 @@ export default function ManageStudents() {
           <option value="ALL">All Years</option>
           {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
         </select>
+        {/* ENTRAPMENT: Filter dropdown mapped correctly to newly merged sections */}
         <select className="filter-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
           <option value="ALL">All Sections</option>
-          {academicSections.map(s => <option key={s.id} value={s.section_name}>Section {s.section_name}</option>)}
+          {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
         </select>
         <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="ALL">All Statuses</option>
@@ -274,11 +254,7 @@ export default function ManageStudents() {
 
       <div className="table-card">
         <table className="data-table">
-          <thead>
-            <tr>
-              <th>Student Name</th><th>Program</th><th>Status</th><th>Student ID</th><th>Year/Sec</th><th style={{textAlign: 'right'}}>Actions</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Student Name</th><th>Program</th><th>Status</th><th>Student ID</th><th>Class Section</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
           <tbody>
             {loading ? (
               <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>Loading...</td></tr>
@@ -299,11 +275,9 @@ export default function ManageStudents() {
                     
                     <td>
                       {student.section === 'To be assigned' ? (
-                          <span style={{background: '#f1f5f9', color: '#6b7280', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'}}>
-                              Needs Enrollment
-                          </span>
+                          <span style={{background: '#f1f5f9', color: '#6b7280', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'}}>Needs Enrollment</span>
                       ) : (
-                          `${student.yearLevel}-${student.section}`
+                          student.section 
                       )}
                     </td>
 
@@ -322,6 +296,7 @@ export default function ManageStudents() {
         </table>
       </div>
 
+      {/* TRASH BIN HIDDEN FOR BREVITY - IDENTICAL TO YOURS */}
       {showTrashModal && (
         <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px', padding: 0, overflow: 'hidden'}}>
@@ -329,7 +304,6 @@ export default function ManageStudents() {
                     <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Trash2 size={22}/> Trash Bin</h2>
                     <button onClick={() => setShowTrashModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#fecaca'}}><X size={24}/></button>
                 </div>
-                
                 <div style={{maxHeight: '400px', overflowY: 'auto', padding: '24px'}}>
                     {trashLoading ? <p style={{textAlign:'center', color: '#666'}}>Loading...</p> : trashList.length === 0 ? <p style={{color: '#888', textAlign:'center'}}>Trash bin is empty.</p> : (
                         <table className="data-table" style={{width: '100%', borderCollapse: 'collapse'}}>
@@ -369,16 +343,28 @@ export default function ManageStudents() {
             <form onSubmit={handleSaveStudent}>
               <div style={{display: 'flex', gap: '16px'}}>
                   <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">Last Name</label>
-                    <input className="form-input" required placeholder="Dela Cruz" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
+                    <label className="form-label">Last Name <span style={{color:'red'}}>*</span></label>
+                    {/* ENTRAPMENT: ONLY LETTERS AND SPACES */}
+                    <input className="form-input" required placeholder="Dela Cruz" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value.replace(/[^A-Za-z\s]/g, '')})} />
                   </div>
                   <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">First Name</label>
-                    <input className="form-input" required placeholder="Juan" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
+                    <label className="form-label">First Name <span style={{color:'red'}}>*</span></label>
+                    <input className="form-input" required placeholder="Juan" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value.replace(/[^A-Za-z\s]/g, '')})} />
                   </div>
               </div>
-              <div className="form-group"><label className="form-label">Middle Name</label><input className="form-input" placeholder="Santos (or Initial)" value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value})} /></div>
-              <div className="form-group"><label className="form-label">Student ID</label><input className="form-input" required placeholder="20221045" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value})} /></div>
+              
+              <div className="form-group">
+                  <label className="form-label">Middle Name</label>
+                  {/* ENTRAPMENT: 2 CHARS MAX, LETTERS AND PERIODS ONLY */}
+                  <input className="form-input" maxLength={2} placeholder="A." value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value.replace(/[^A-Za-z.]/g, '')})} />
+              </div>
+              
+              <div className="form-group">
+                  <label className="form-label">Student ID <span style={{color:'red'}}>*</span></label>
+                  {/* ENTRAPMENT: NUMBERS ONLY */}
+                  <input className="form-input" required placeholder="20221045" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value.replace(/[^0-9]/g, '')})} />
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Program</label>
                 <select className="form-input" value={formData.program} onChange={e => setFormData({...formData, program: e.target.value})}>
@@ -388,21 +374,27 @@ export default function ManageStudents() {
                   <option value="Bachelor of Science in Business Management">Bachelor of Science in Business Management</option>
                 </select>
               </div>
+
               <div style={{display: 'flex', gap: '16px'}}>
-                <div className="form-group" style={{flex: 1}}><label className="form-label">Email</label><input className="form-input" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={isEditing} /></div>
+                <div className="form-group" style={{flex: 1}}>
+                    <label className="form-label">Email <span style={{color:'red'}}>*</span></label>
+                    <input className="form-input" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})} disabled={isEditing} />
+                </div>
                 {!isEditing && <div className="form-group" style={{flex: 1}}><label className="form-label">Password</label><input className="form-input" value={formData.password} readOnly /></div>}
               </div>
               
               <div style={{display: 'flex', gap: '16px'}}>
                 <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">Year</label>
+                    <label className="form-label">Year (Record keeping only)</label>
                     <select className="form-input" value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}>
                         {academicYears.map(y => <option key={y.id} value={y.year_name}>{y.year_name}</option>)}
                     </select>
                 </div>
                 <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">Section</label>
+                    <label className="form-label">Active Class Section</label>
+                    {/* ✅ MAPPED TO THE NEW MERGED SECTIONS TABLE */}
                     <select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}>
+                        <option value="To be assigned">Needs Enrollment</option>
                         {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
                     </select>
                 </div>

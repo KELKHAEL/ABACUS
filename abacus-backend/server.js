@@ -19,19 +19,12 @@ dotenv.config();
 const app = express();
 
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const activeSockets = new Map();
 
 io.on('connection', (socket) => {
-    // When a student opens the app, they register their device here
-    socket.on('register_device', (userId) => {
-        activeSockets.set(userId, socket.id);
-    });
-
-    // When they close the app, remove them from the active list
+    socket.on('register_device', (userId) => { activeSockets.set(userId, socket.id); });
     socket.on('disconnect', () => {
         for (const [userId, socketId] of activeSockets.entries()) {
             if (socketId === socket.id) {
@@ -61,9 +54,7 @@ const db = mysql.createPool({
     password: process.env.DB_PASS,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
-    ssl: {
-        rejectUnauthorized: true
-    }
+    ssl: { rejectUnauthorized: true }
 });
 
 const smartFormatName = (inputName) => {
@@ -103,11 +94,7 @@ const smartFormatName = (inputName) => {
             first = parts[0];
         }
     }
-    return {
-        first: first.toUpperCase(),
-        middle: middle ? middle.charAt(0).toUpperCase() + "." : "",
-        last: last.toUpperCase()
-    };
+    return { first: first.toUpperCase(), middle: middle ? middle.charAt(0).toUpperCase() + "." : "", last: last.toUpperCase() };
 };
 
 (async () => {
@@ -120,7 +107,6 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
-    
     try { await connection.query("ALTER TABLE users MODIFY COLUMN section VARCHAR(50)"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0"); } catch(e){}
@@ -129,19 +115,10 @@ const smartFormatName = (inputName) => {
 
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
-    try { 
-        await connection.query(`
-            DELETE sg FROM student_grades sg 
-            JOIN users u ON sg.user_id = u.id 
-            WHERE (LOWER(u.section) LIKE '%assign%' OR LOWER(u.section) LIKE '%assi%' OR u.section IS NULL) 
-            AND sg.subject_title LIKE '%(Missed)%'
-        `); 
-    } catch(e) {}
+    try { await connection.query(`DELETE sg FROM student_grades sg JOIN users u ON sg.user_id = u.id WHERE (LOWER(u.section) LIKE '%assign%' OR LOWER(u.section) LIKE '%assi%' OR u.section IS NULL) AND sg.subject_title LIKE '%(Missed)%'`); } catch(e) {}
     
     connection.release();
-  } catch (err) {
-    console.error("❌ Database Connection Failed:", err.message);
-  }
+  } catch (err) { console.error("❌ Database Connection Failed:", err.message); }
 })();
 
 const getActiveTermId = async () => {
@@ -167,19 +144,13 @@ app.post('/login', async (req, res) => {
             return res.status(403).json({ success: false, error: `Account locked. Try again in ${minutesLeft} minutes.` });
         }
 
-        // ✅ SMARTER STRICT BLOCK: Refuses login ONLY if it's a DIFFERENT device
         if (user.session_token) {
             try {
                 const decoded = jwt.verify(user.session_token, 'abacus_secret_key_2026');
                 if (decoded.deviceId !== deviceId) {
-                    return res.status(403).json({ 
-                        success: false, 
-                        error: "This account is currently logged in on another device." 
-                    });
+                    return res.status(403).json({ success: false, error: "This account is currently logged in on another device." });
                 }
-            } catch (e) {
-                // If the old token is expired/invalid, we just let them log in
-            }
+            } catch (e) {}
         }
 
         const match = await bcrypt.compare(password, user.password_hash);
@@ -228,11 +199,10 @@ app.post('/force-logout', async (req, res) => {
 
         await db.query("UPDATE users SET session_token = NULL WHERE id = ?", [user.id]);
 
-        // REAL-TIME KICK MAGIC
         const oldSocketId = activeSockets.get(user.id);
         if (oldSocketId) {
-            io.to(oldSocketId).emit('force_logout_event'); // Sends the kick command!
-            activeSockets.delete(user.id); // Removes them from active list
+            io.to(oldSocketId).emit('force_logout_event');
+            activeSockets.delete(user.id);
         }
 
         res.json({ success: true, message: "Other devices have been logged out." });
@@ -763,15 +733,17 @@ app.get('/announcements/student/:id', async (req, res) => {
     const [students] = await db.query("SELECT year_level, section FROM users WHERE id = ?", [req.params.id]);
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     
+    // ✅ NEW BULLETPROOF QUERY: Understands exact matches or wildcard "ALL" flags
     const [announcements] = await db.query(`
       SELECT * FROM announcements 
       WHERE is_deleted = 0 
       AND (
           (author_role = 'ADMIN' AND target_year != 'INSTRUCTORS') 
-          OR target_year = 'ALL' 
-          OR (target_year = ? AND target_section = ?)
+          OR target_section = 'ALL' 
+          OR target_section = ?
       ) ORDER BY created_at DESC
-    `, [students[0].year_level, students[0].section]);
+    `, [students[0].section]);
+    
     res.json(announcements);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1125,7 +1097,6 @@ app.get('/instructor/:instructorId/promotions/pending', async (req, res) => {
     }
 });
 
-// ✅ FIX APPLIED HERE: Invalidate Session Token on approval to force a secure re-login
 app.put('/admin/promotions/:id/approve', async (req, res) => {
   try {
     await db.query("UPDATE users SET year_level = pending_year, section = pending_section, status = pending_status, cor_status = 'Approved', pending_year = NULL, pending_section = NULL, pending_status = NULL, session_token = NULL WHERE id = ?", [req.params.id]);

@@ -8,6 +8,7 @@ export default function ManageAnnouncements() {
   const [saving, setSaving] = useState(false);
   
   // --- DYNAMIC ACADEMIC SETUP STATES ---
+  const [academicPrograms, setAcademicPrograms] = useState([]);
   const [academicYears, setAcademicYears] = useState([]);
   const [academicSections, setAcademicSections] = useState([]);
   const [instructorList, setInstructorList] = useState([]);
@@ -28,8 +29,7 @@ export default function ManageAnnouncements() {
   const [audience, setAudience] = useState('STUDENTS'); 
   const [formData, setFormData] = useState({ title: '', content: '' });
   
-  // Arrays for multi-target blasting
-  const [studentTargets, setStudentTargets] = useState([{ year: 'ALL', section: 'ALL' }]);
+  const [studentTargets, setStudentTargets] = useState([{ program: 'ALL', year: 'ALL', section: 'ALL' }]);
   const [instructorTargets, setInstructorTargets] = useState(['ALL']);
 
   const currentUser = { name: "Registrar", role: "ADMIN" };
@@ -38,7 +38,6 @@ export default function ManageAnnouncements() {
     const grouped = [];
     const map = {};
     (rawList || []).forEach(ann => {
-      // Group by exact Title, Content, and the minute it was posted
       const timeKey = new Date(ann.created_at).toISOString().slice(0, 16); 
       const key = `${ann.title}-${ann.content}-${timeKey}`;
       
@@ -62,7 +61,6 @@ export default function ManageAnnouncements() {
     try {
       const res = await fetch('https://abacus-w435.onrender.com/announcements/all');
       const data = await res.json();
-      // ✅ Apply Grouping so it doesn't flood the UI
       setAnnouncements(groupAnnouncements(data));
     } catch (error) { console.error("Fetch error:", error); }
     setLoading(false);
@@ -78,8 +76,10 @@ export default function ManageAnnouncements() {
       const instData = await instRes.json();
       
       if (!setupData.error) {
+        setAcademicPrograms(setupData.programs || []);
         setAcademicYears(setupData.yearLevels || []);
-        setAcademicSections(setupData.sections || []);
+        const sortedSections = (setupData.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
+        setAcademicSections(sortedSections);
       }
       if (!instData.error) {
         setInstructorList(instData || []);
@@ -97,7 +97,6 @@ export default function ManageAnnouncements() {
     try {
         const res = await fetch('https://abacus-w435.onrender.com/trash/announcements');
         const data = await res.json();
-        // ✅ Apply Grouping to Trash Bin
         setTrashList(groupAnnouncements(data));
     } catch (error) { console.error("Error fetching trash:", error); }
     setTrashLoading(false);
@@ -105,7 +104,6 @@ export default function ManageAnnouncements() {
 
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
-  // ✅ Batch Deletions and Restorations
   const handleSoftDelete = async (groupedIds) => {
     if (window.confirm("Move this announcement to Trash?")) {
       try {
@@ -136,14 +134,14 @@ export default function ManageAnnouncements() {
     setEditId(null);
     setAudience('STUDENTS');
     setFormData({ title: '', content: '' });
-    setStudentTargets([{ year: 'ALL', section: 'ALL' }]);
+    setStudentTargets([{ program: 'ALL', year: 'ALL', section: 'ALL' }]);
     setInstructorTargets(['ALL']);
     setShowModal(true);
   };
 
   const openEditModal = (item) => {
     setIsEditing(true);
-    setEditId(item.grouped_ids); // Pass array of batch IDs
+    setEditId(item.grouped_ids); 
     setFormData({ title: item.title, content: item.content });
     
     if (item.target_year === 'INSTRUCTORS') {
@@ -151,7 +149,18 @@ export default function ManageAnnouncements() {
       setInstructorTargets(item.target_classes.map(c => c.section));
     } else {
       setAudience('STUDENTS');
-      setStudentTargets(item.target_classes);
+      
+      const parsedTargets = item.target_classes.map(c => {
+          if(c.section === 'ALL') return { program: 'ALL', year: 'ALL', section: 'ALL' };
+          const parts = c.section.split(' ');
+          if(parts.length < 2) return { program: 'ALL', year: 'ALL', section: c.section };
+          
+          const prog = parts[0];
+          const ys = parts[1].split('-');
+          return { program: prog, year: ys[0] || 'ALL', section: c.section };
+      });
+      
+      setStudentTargets(parsedTargets);
     }
     setShowModal(true);
   };
@@ -165,31 +174,49 @@ export default function ManageAnnouncements() {
     setSaving(true);
     try {
       if (isEditing) {
-          // ✅ Edit ALL announcements in this batch grouping at once
           await Promise.all(editId.map((id, index) => {
-              const target = audience === 'STUDENTS' ? studentTargets[index] : { section: instructorTargets[index] };
+              const targetObj = audience === 'STUDENTS' ? studentTargets[index] : null;
+              const instructorTarget = audience === 'INSTRUCTORS' ? instructorTargets[index] : null;
+              
+              let finalSection = 'ALL';
+              if(audience === 'STUDENTS' && targetObj) {
+                  finalSection = targetObj.section === 'ALL' ? 'ALL' : targetObj.section;
+              } else if (audience === 'INSTRUCTORS') {
+                  finalSection = instructorTarget;
+              }
+
               return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                       title: formData.title,
                       content: formData.content,
-                      targetYear: audience === 'STUDENTS' ? target.year : 'INSTRUCTORS',
-                      targetSection: target.section
+                      targetYear: audience === 'STUDENTS' ? 'CLASS' : 'INSTRUCTORS',
+                      targetSection: finalSection
                   })
               });
           }));
           alert("Announcement Updated!");
       } else {
-          // ✅ Post new announcement (Backend handles array)
+          let finalTargets = [];
+          if(audience === 'STUDENTS') {
+              studentTargets.forEach(t => {
+                  if(t.program === 'ALL' || t.year === 'ALL' || t.section === 'ALL') {
+                      finalTargets.push({ targetYear: 'CLASS', targetSection: 'ALL' });
+                  } else {
+                      finalTargets.push({ targetYear: 'CLASS', targetSection: t.section });
+                  }
+              });
+          } else {
+              finalTargets = instructorTargets.map(id => ({ targetYear: 'INSTRUCTORS', targetSection: id }));
+          }
+
           const payload = {
             title: formData.title,
             content: formData.content,
             authorRole: currentUser.role,
             authorName: currentUser.name,
-            targets: audience === 'STUDENTS' 
-                ? studentTargets.map(t => ({ targetYear: t.year, targetSection: t.section }))
-                : instructorTargets.map(id => ({ targetYear: 'INSTRUCTORS', targetSection: id }))
+            targets: finalTargets
           };
           
           const res = await fetch('https://abacus-w435.onrender.com/announcements', {
@@ -207,15 +234,23 @@ export default function ManageAnnouncements() {
     finally { setSaving(false); }
   };
 
-  // Target Builders
   const updateStudentTarget = (index, field, value) => {
       const newTargets = [...studentTargets];
-      newTargets[index][field] = value;
+      
+      if(field === 'program') {
+          newTargets[index] = { program: value, year: 'ALL', section: 'ALL' }; 
+      } else if (field === 'year') {
+          newTargets[index] = { ...newTargets[index], year: value, section: 'ALL' }; 
+      } else {
+          newTargets[index] = { ...newTargets[index], section: value };
+      }
+      
       setStudentTargets(newTargets);
   };
   const removeStudentTarget = (index) => setStudentTargets(studentTargets.filter((_, i) => i !== index));
 
   const updateInstructorTarget = (index, value) => {
+      if(value !== 'ALL' && instructorTargets.includes(value)) return alert("Instructor already selected!");
       const newTargets = [...instructorTargets];
       newTargets[index] = value;
       setInstructorTargets(newTargets);
@@ -240,11 +275,12 @@ export default function ManageAnnouncements() {
       return specificInstructor ? `Instructor: ${specificInstructor.full_name}` : 'Specific Instructor';
     }
     
-    // Check if multiple classes were selected
     if (item.target_classes && item.target_classes.length > 1) {
         return `${item.target_classes.length} Classes Selected`;
     }
-    return `Year ${item.target_year} - Sec ${item.target_section}`;
+    
+    if(item.target_section === 'ALL') return "All Students";
+    return item.target_section;
   };
 
   const getDaysLeft = (deletedDateString) => {
@@ -313,7 +349,6 @@ export default function ManageAnnouncements() {
                 </span>
                 <div style={{display: 'flex', gap: '5px'}}>
                     <button className="btn-icon-edit" onClick={() => openEditModal(item)} title="Edit"><Edit size={18} /></button>
-                    {/* ✅ Uses the Grouped IDs to delete the whole batch */}
                     <button className="btn-icon-delete" onClick={() => handleSoftDelete(item.grouped_ids)} title="Delete"><Trash2 size={18} /></button>
                 </div>
               </div>
@@ -325,7 +360,6 @@ export default function ManageAnnouncements() {
                 <div className="footer-item"><User size={14} /> {item.author_name}</div>
                 <div className="footer-item">
                   <Target size={14} /> 
-                  {/* ✅ Calls the dynamic Grouped Target display */}
                   {getTargetDisplay(item)}
                 </div>
                 <div className="footer-item"><Calendar size={14} /> {new Date(item.created_at).toLocaleDateString()}</div>
@@ -353,9 +387,8 @@ export default function ManageAnnouncements() {
                                         <td style={{fontWeight:'bold', color: '#666'}}>{item.title}</td>
                                         <td>{item.author_name}</td>
                                         <td>
-                                            {/* ✅ Grouped Target rendering in Trash Bin */}
                                             <span style={{fontSize:'11px', background:'#f3f4f6', color: '#6b7280', padding:'4px 8px', borderRadius:'4px'}}>
-                                                {item.target_classes && item.target_classes.length > 1 ? `${item.target_classes.length} Classes` : `Yr ${item.target_year} - Sec ${item.target_section}`}
+                                                {getTargetDisplay(item)}
                                             </span>
                                         </td>
                                         <td><div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}><Clock size={14} color="#dc2626" />{getDaysLeft(item.deleted_at)}</div></td>
@@ -378,15 +411,13 @@ export default function ManageAnnouncements() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => !saving && setShowModal(false)}>
-            {/* ✅ FIX: Modal is now a flex column with a strict max-height to ensure internal scrolling */}
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '650px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh'}}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '750px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh'}}>
                 
                 <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0}}>
                     <h2 style={{margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}><Megaphone size={22}/> {isEditing ? "Edit Announcement" : "Post Announcement"}</h2>
                     {!saving && <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>}
                 </div>
                 
-                {/* ✅ FIX: Form takes up remaining space, enabling overflow scroll inside */}
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', flex: 1}}>
                         <div>
@@ -405,29 +436,73 @@ export default function ManageAnnouncements() {
                                 <option value="INSTRUCTORS">Instructors</option>
                             </select>
 
-                            {/* DYNAMIC STUDENTS MULTI-TARGET CONFIG */}
+                            {/* ✅ HIERARCHICAL STUDENTS MULTI-TARGET CONFIG */}
                             {audience === 'STUDENTS' && (
                                 <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px'}}>
-                                    {studentTargets.map((t, idx) => (
-                                        <div key={idx} style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                            <select disabled={isEditing} style={{flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', background: isEditing ? '#f3f4f6' : 'white', opacity: isEditing ? 0.7 : 1}} value={t.year} onChange={e => updateStudentTarget(idx, 'year', e.target.value)}>
-                                                <option value="ALL">All Years</option>
-                                                {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
-                                            </select>
-                                            <select disabled={isEditing} style={{flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', background: isEditing ? '#f3f4f6' : 'white', opacity: isEditing ? 0.7 : 1}} value={t.section} onChange={e => updateStudentTarget(idx, 'section', e.target.value)}>
-                                                <option value="ALL">All Sections</option>
-                                                {academicSections.map(s => <option key={s.id} value={s.section_name}>Section {s.section_name}</option>)}
-                                            </select>
-                                            {studentTargets.length > 1 && !isEditing && (
-                                                <button type="button" onClick={() => removeStudentTarget(idx)} style={{background: '#fee2e2', color: '#dc2626', border: 'none', padding: '10px', borderRadius: '6px', cursor: 'pointer'}}>
-                                                    <Trash2 size={16}/>
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
+                                    {studentTargets.map((t, idx) => {
+                                        
+                                        const validYearsForProgram = academicSections
+                                            .filter(s => t.program === 'ALL' || s.section_name.startsWith(t.program))
+                                            .map(s => {
+                                                const parts = s.section_name.split(' ');
+                                                if (parts.length > 1) {
+                                                    const ys = parts[1].split('-');
+                                                    return ys[0];
+                                                }
+                                                return '';
+                                            }).filter(Boolean);
+                                        
+                                        const uniqueYears = [...new Set(validYearsForProgram)];
+
+                                        const validSections = academicSections.filter(s => {
+                                            if(t.program === 'ALL') return true;
+                                            if(!s.section_name.startsWith(t.program)) return false;
+                                            if(t.year === 'ALL') return true;
+                                            return s.section_name.includes(`${t.program} ${t.year}-`);
+                                        });
+
+                                        return (
+                                            <div key={idx} style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', background: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
+                                                
+                                                {/* 1. Pick Program */}
+                                                <div style={{flex: 1, minWidth: '150px'}}>
+                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Program</label>
+                                                    <select disabled={isEditing} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: isEditing ? '#f3f4f6' : 'white'}} value={t.program} onChange={e => updateStudentTarget(idx, 'program', e.target.value)}>
+                                                        <option value="ALL">All Programs</option>
+                                                        {academicPrograms.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                {/* 2. Pick Year Level */}
+                                                <div style={{flex: 1, minWidth: '100px'}}>
+                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Year Level</label>
+                                                    <select disabled={isEditing || t.program === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.program === 'ALL') ? '#f3f4f6' : 'white'}} value={t.year} onChange={e => updateStudentTarget(idx, 'year', e.target.value)}>
+                                                        <option value="ALL">All Years</option>
+                                                        {uniqueYears.map(y => <option key={y} value={y}>Year {y}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                {/* 3. Pick Section */}
+                                                <div style={{flex: 1, minWidth: '150px'}}>
+                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Class Section</label>
+                                                    <select disabled={isEditing || t.year === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.year === 'ALL') ? '#f3f4f6' : 'white'}} value={t.section} onChange={e => updateStudentTarget(idx, 'section', e.target.value)}>
+                                                        <option value="ALL">All Sections</option>
+                                                        {validSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                {studentTargets.length > 1 && !isEditing && (
+                                                    <button type="button" onClick={() => removeStudentTarget(idx)} style={{background: '#fee2e2', color: '#dc2626', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', alignSelf: 'flex-end', height: '35px'}}>
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                    
                                     {!isEditing && (
-                                        <button type="button" onClick={() => setStudentTargets([...studentTargets, {year: 'ALL', section: 'ALL'}])} style={{alignSelf: 'flex-start', background: 'none', border: 'none', color: '#104a28', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', marginTop: '5px'}}>
-                                            <Plus size={16}/> Add Another Class Target
+                                        <button type="button" onClick={() => setStudentTargets([...studentTargets, {program: 'ALL', year: 'ALL', section: 'ALL'}])} style={{alignSelf: 'flex-start', background: 'none', border: 'none', color: '#104a28', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', marginTop: '5px'}}>
+                                            <Plus size={16}/> Add Another Target
                                         </button>
                                     )}
                                 </div>

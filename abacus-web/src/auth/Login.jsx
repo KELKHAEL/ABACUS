@@ -47,7 +47,7 @@ const Login = () => {
       }
     } catch (err) {
       console.error(err);
-      setError("Cannot connect to server. Is 'node server.js' running?");
+      setError("Cannot connect to server.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ const Login = () => {
                    type="email" 
                    value={email} 
                    onChange={e => setEmail(e.target.value)} 
-                   placeholder="admin@cvsu.edu.ph"
+                   placeholder="Enter authorized account."
                    required 
                  />
               </div>
