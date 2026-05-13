@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Trash2, CheckCircle, Settings, Layers, Calendar, Hash, X, ChevronRight, ArrowLeft, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from "react";
+import { Plus, Trash2, CheckCircle, Settings, Layers, Calendar, X, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function ManageAcademicSetup() {
   const [data, setData] = useState({ programs: [], sections: [], yearLevels: [], terms: [] });
@@ -10,11 +10,12 @@ export default function ManageAcademicSetup() {
   const schoolYearOptions = Array.from({length: 6}, (_, i) => `${currentYear + i - 1}-${currentYear + i}`);
 
   const [newProgram, setNewProgram] = useState("");
+  const [newProgramYears, setNewProgramYears] = useState(4);
   const [newSchoolYear, setNewSchoolYear] = useState(schoolYearOptions[1]); 
   const [newSemester, setNewSemester] = useState("First Semester");
 
   // --- 🔗 PROGRAM DASHBOARD STATES ---
-  const [selectedProgram, setSelectedProgram] = useState(null); 
+  const [secProgram, setSecProgram] = useState(""); 
   const [secYear, setSecYear] = useState(""); 
   const [secBlock, setSecBlock] = useState("");
 
@@ -22,17 +23,30 @@ export default function ManageAcademicSetup() {
   const [pendingTermId, setPendingTermId] = useState(null);
   const [transitionSettings, setTransitionSettings] = useState({ resetInstructors: true, resetStudents: false });
 
-  const fetchData = async () => {
+  // Add state to track which programs are expanded
+  const [expandedPrograms, setExpandedPrograms] = useState({});
+
+  const toggleProgram = (programName) => {
+      setExpandedPrograms(prev => ({ ...prev, [programName]: !prev[programName] }));
+  };
+
+  // Wrapped in useCallback to prevent ESLint useEffect dependency warnings
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('https://abacus-w435.onrender.com/academic-setup');
       const result = await res.json();
       if (!result.error) setData(result);
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
-  };
+    } catch (err) { 
+        console.error(err); 
+    } finally { 
+        setLoading(false); 
+    }
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+      fetchData(); 
+  }, [fetchData]);
 
   const handleAdd = async (type, payload) => {
     if (!payload.value || !payload.value.toString().trim()) return;
@@ -46,10 +60,10 @@ export default function ManageAcademicSetup() {
   };
 
   const handleAddSection = async () => {
-      if (!secYear || !secBlock.trim()) {
-          return alert("Please select a Year Level and enter a Block (e.g., A).");
+      if (!secProgram || !secYear || !secBlock.trim()) {
+          return alert("Please select a Program, Year Level and enter a Block (e.g., A).");
       }
-      const mergedSectionName = `${selectedProgram.name} ${secYear}-${secBlock.trim().toUpperCase()}`;
+      const mergedSectionName = `${secProgram} ${secYear}-${secBlock.trim().toUpperCase()}`;
       
       if (data.sections.some(s => s.section_name === mergedSectionName)) {
           return alert("This specific section already exists!");
@@ -60,28 +74,18 @@ export default function ManageAcademicSetup() {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: mergedSectionName })
         });
         setSecBlock(""); 
+        
+        // Auto-expand the program we just added a section to
+        setExpandedPrograms(prev => ({ ...prev, [secProgram]: true }));
         fetchData();
       } catch (e) { alert("Error adding section."); }
-  };
-
-  const handleAddNewYearLevel = async () => {
-      const newYr = window.prompt("Enter new Year Level (e.g., 5 or 6):");
-      if (!newYr || !newYr.trim()) return;
-      if (isNaN(newYr)) return alert("Year Level must be a number!");
-
-      try {
-        await fetch(`https://abacus-w435.onrender.com/academic-setup/year`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: newYr.trim() })
-        });
-        fetchData();
-      } catch (e) { alert("Error adding year level."); }
   };
 
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to permanently delete this ${type}?`)) return;
     try {
       await fetch(`https://abacus-w435.onrender.com/academic-setup/${type}/${id}`, { method: 'DELETE' });
-      if (type === 'program' && selectedProgram && selectedProgram.id === id) setSelectedProgram(null);
+      if (type === 'program' && secProgram === data.programs.find(p => p.id === id)?.name) setSecProgram("");
       fetchData();
     } catch (e) { alert("Error deleting item"); }
   };
@@ -109,170 +113,236 @@ export default function ManageAcademicSetup() {
 
   return (
     <div style={{ padding: '30px', background: '#F8F9FD', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
-        <div style={{ marginBottom: '30px' }}>
-            <h2 style={{ fontSize: '28px', color: '#104a28', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 8px 0' }}>
-                <Settings size={28}/> Class & Academic Setup
-            </h2>
-            <p style={{ color: '#6b7280', margin: 0 }}>Manage university programs, class sections, and handle Semester Rollovers.</p>
+        <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+                <h2 style={{ fontSize: '28px', color: '#104a28', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 8px 0' }}>
+                    <Settings size={28}/> Class & Academic Setup
+                </h2>
+                <p style={{ color: '#6b7280', margin: 0 }}>Manage university programs, class sections, and handle Semester Rollovers.</p>
+            </div>
         </div>
 
-        {/* 🎨 NEW SPLIT-SCREEN LAYOUT */}
-        <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: '24px', alignItems: 'start' }}>
+        {/* 🎨 NEW FULL-WIDTH LAYOUT */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
-            {/* LEFT COLUMN: ACADEMIC TERMS CARD */}
-            <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <h3 style={{ borderBottom: '2px solid #f3f4f6', paddingBottom: '10px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111' }}>
-                    <Calendar size={18} color="#3b82f6"/> Academic Terms
-                </h3>
+            {/* TOP ROW: TERMS & ADD PROGRAM */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(400px, 2fr)', gap: '24px' }}>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-                    <div style={{display: 'flex', gap: '10px'}}>
-                        <select value={newSchoolYear} onChange={e => setNewSchoolYear(e.target.value)} style={{...inputStyle, flex: 1}}>
-                            {schoolYearOptions.map(sy => <option key={sy} value={sy}>{sy}</option>)}
-                        </select>
-                        <select value={newSemester} onChange={e => setNewSemester(e.target.value)} style={{...inputStyle, flex: 1}}>
-                            <option value="First Semester">1st Sem</option>
-                            <option value="Second Semester">2nd Sem</option>
-                            <option value="Mid-Year Semester">Mid-Year</option>
-                        </select>
-                    </div>
-                    <button onClick={() => handleAdd('term', { value: newSchoolYear, semester: newSemester })} style={{...btnStyle, width: '100%', justifyContent: 'center', padding: '12px', marginTop: '4px', fontSize: '15px', boxShadow: '0 2px 4px rgba(16, 74, 40, 0.2)', transition: 'opacity 0.2s'}}
-                        onMouseOver={e => e.currentTarget.style.opacity = '0.9'}
-                        onMouseOut={e => e.currentTarget.style.opacity = '1'}
-                        >
+                {/* 🔒 ACADEMIC TERMS CARD */}
+                <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <h3 style={{ borderBottom: '2px solid #f3f4f6', paddingBottom: '10px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111' }}>
+                        <Calendar size={18} color="#3b82f6"/> Academic Terms
+                    </h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                        <div style={{display: 'flex', gap: '10px'}}>
+                            <select value={newSchoolYear} onChange={e => setNewSchoolYear(e.target.value)} style={{...inputStyle, flex: 1}}>
+                                {schoolYearOptions.map(sy => <option key={sy} value={sy}>{sy}</option>)}
+                            </select>
+                            <select value={newSemester} onChange={e => setNewSemester(e.target.value)} style={{...inputStyle, flex: 1}}>
+                                <option value="First Semester">1st Sem</option>
+                                <option value="Second Semester">2nd Sem</option>
+                                <option value="Mid-Year Semester">Mid-Year</option>
+                            </select>
+                        </div>
+                        <button onClick={() => handleAdd('term', { value: newSchoolYear, semester: newSemester })} style={{...btnStyle, width: '100%', justifyContent: 'center', padding: '12px', marginTop: '4px', fontSize: '15px', boxShadow: '0 2px 4px rgba(16, 74, 40, 0.2)', transition: 'opacity 0.2s'}} onMouseOver={e => e.currentTarget.style.opacity = '0.9'} onMouseOut={e => e.currentTarget.style.opacity = '1'}>
                             <Plus size={18}/> Add Term
                         </button>
+                    </div>
+
+                    <ul style={listStyle}>
+                        {data.terms?.map(t => (
+                            <li key={t.id} style={{...listItemStyle, borderLeft: t.is_active ? '4px solid #10b981' : '1px solid #e5e7eb', background: t.is_active ? '#ecfdf5' : 'white', flexDirection: 'column', alignItems: 'flex-start', gap: '10px'}}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                    <div>
+                                        <strong style={{ display: 'block', color: '#111', fontSize: '15px' }}>{t.school_year}</strong>
+                                        <span style={{ fontSize: '12px', color: '#666' }}>{t.semester}</span>
+                                    </div>
+                                    <button onClick={() => handleDelete('term', t.id)} style={iconBtnStyle} title="Delete"><Trash2 size={16} color="#ef4444"/></button>
+                                </div>
+                                <div style={{ width: '100%' }}>
+                                    {t.is_active ? (
+                                        <div style={{ background: '#d1fae5', color: '#065f46', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                            <CheckCircle size={14}/> ACTIVE TERM
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => initiateTermSwitch(t.id)} style={{ width: '100%', fontSize: '12px', padding: '6px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Set as Active Term</button>
+                                    )}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
-                <ul style={listStyle}>
-                    {data.terms?.map(t => (
-                        <li key={t.id} style={{...listItemStyle, borderLeft: t.is_active ? '4px solid #10b981' : '1px solid #e5e7eb', background: t.is_active ? '#ecfdf5' : 'white', flexDirection: 'column', alignItems: 'flex-start', gap: '10px'}}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                <div>
-                                    <strong style={{ display: 'block', color: '#111', fontSize: '15px' }}>{t.school_year}</strong>
-                                    <span style={{ fontSize: '12px', color: '#666' }}>{t.semester}</span>
-                                </div>
-                                <button onClick={() => handleDelete('term', t.id)} style={iconBtnStyle} title="Delete"><Trash2 size={16} color="#ef4444"/></button>
-                            </div>
-                            
-                            <div style={{ width: '100%' }}>
-                                {t.is_active ? (
-                                    <div style={{ background: '#d1fae5', color: '#065f46', padding: '6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                        <CheckCircle size={14}/> ACTIVE TERM
-                                    </div>
-                                ) : (
-                                    <button onClick={() => initiateTermSwitch(t.id)} style={{ width: '100%', fontSize: '12px', padding: '6px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Set as Active Term</button>
-                                )}
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            </div>
+                {/* ➕ ADD PROGRAM & SECTION CARD */}
+                <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <h3 style={{ borderBottom: '2px solid #f3f4f6', paddingBottom: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111' }}>
+                        <Layers size={18} color="#eab308"/> Add Program or Class Section
+                    </h3>
+                    
+                    {/* Add Program */}
+                    <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>Register New University Program</label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input placeholder="e.g. Bachelor of Science in Nursing" value={newProgram} onChange={e => setNewProgram(e.target.value.replace(/[^A-Za-z\s-]/g, '').toUpperCase())} style={{...inputStyle, flex: 2}} />
 
-            {/* RIGHT COLUMN: DYNAMIC PROGRAM DASHBOARD */}
-            <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                {!selectedProgram ? (
-                    // --- VIEW 1: PROGRAM LIST ---
-                    <>
-                        <h3 style={{ borderBottom: '2px solid #f3f4f6', paddingBottom: '10px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111' }}>
-                            <Layers size={18} color="#eab308"/> University Programs
-                        </h3>
-                        
-                        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-                            <input 
-                                placeholder="Add Program (e.g. BSIT, BA-Arch)" 
-                                value={newProgram} 
-                                onChange={e => setNewProgram(e.target.value.replace(/[^A-Za-z\s-]/g, '').toUpperCase())} 
-                                style={{...inputStyle, flex: 1}} 
-                            />
-                            <button onClick={() => handleAdd('program', { value: newProgram })} style={btnStyle}><Plus size={16}/> Add Program</button>
-                        </div>
+                            {/* NEW: Input for max years */}
+                            <input type="number" min="1" max="10" placeholder="Years" value={newProgramYears} onChange={e => setNewProgramYears(e.target.value)} style={{...inputStyle, width: '90px'}} title="Total Year Levels" />
 
-                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px'}}>
-                            {data.programs?.map(p => (
-                                <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setSelectedProgram(p)} onMouseOver={e => e.currentTarget.style.borderColor = '#3b82f6'} onMouseOut={e => e.currentTarget.style.borderColor = '#e5e7eb'}>
-                                    <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>{p.name}</span>
-                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <button style={{ background: '#dbeafe', color: '#0369a1', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                            Manage Classes <ChevronRight size={14}/>
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDelete('program', p.id); }} style={iconBtnStyle} title="Delete Program"><Trash2 size={16} color="#ef4444"/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </>
-                ) : (
-                    // --- VIEW 2: PROGRAM-SPECIFIC DASHBOARD ---
-                    <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f3f4f6', paddingBottom: '15px', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                <button onClick={() => setSelectedProgram(null)} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#475569' }} title="Back to Programs">
-                                    <ArrowLeft size={18} />
-                                </button>
-                                <h3 style={{ margin: 0, fontSize: '20px', color: '#0f172a' }}>
-                                    Manage Classes: <span style={{ color: '#2563eb' }}>{selectedProgram.name}</span>
-                                </h3>
-                            </div>
-                            
-                            <button onClick={handleAddNewYearLevel} style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Hash size={14}/> Add New Year Level to Database
+                            <button onClick={() => { handleAdd('program', { value: newProgram, maxYears: parseInt(newProgramYears, 10) || 4 }); setNewProgramYears(4); }} style={{...btnStyle, padding: '0 20px'}}>
+                                <Plus size={16}/> Save Program
                             </button>
                         </div>
+                    </div> {/* <-- THIS DIV WAS MISSING BEFORE AND CAUSED THE PARSING ERROR */}
 
-                        <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px dashed #cbd5e1', marginBottom: '25px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 'bold', color: '#475569', marginRight: '10px' }}>Generate New Class Section:</span>
-                            
-                            <select value={secYear} onChange={e => setSecYear(e.target.value)} style={{...inputStyle, width: '120px'}}>
-                                <option value="">Select Year</option>
-                                {data.yearLevels?.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
+                    {/* Add Class Section */}
+                    <div style={{ background: '#f0fdf4', padding: '20px', borderRadius: '8px', border: '1px dashed #86efac', marginTop: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#166534', marginBottom: '8px' }}>Generate New Class Section</label>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <select value={secProgram} onChange={e => setSecProgram(e.target.value)} style={{...inputStyle, flex: 2, minWidth: '200px'}}>
+                                <option value="">Select Program...</option>
+                                {data.programs?.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                             </select>
                             
-                            <input 
-                                placeholder="Block (e.g. A, 1)" 
-                                value={secBlock} 
-                                onChange={e => setSecBlock(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())} 
-                                style={{...inputStyle, width: '130px'}} 
-                                maxLength={3}
-                            />
-                            <button onClick={handleAddSection} style={btnStyle}><Plus size={20}/> Create Class</button>
+                            {/* DYNAMIC YEAR DROPDOWN */}
+                            <select value={secYear} onChange={e => setSecYear(e.target.value)} style={{...inputStyle, flex: 1, minWidth: '100px'}} disabled={!secProgram}>
+                                <option value="">Select Year</option>
+                                {secProgram && data.programs?.find(p => p.name === secProgram) && 
+                                    Array.from(
+                                        { length: data.programs.find(p => p.name === secProgram).max_years }, 
+                                        (_, i) => i + 1
+                                    ).map(y => (
+                                        <option key={y} value={y}>Year {y}</option>
+                                    ))
+                                }
+                            </select>
                             
-                            {secYear && secBlock && (
-                                <span style={{ marginLeft: '10px', fontSize: '13px', color: '#6b7280' }}>
-                                    Preview: <strong style={{ color: '#10b981' }}>{selectedProgram.name} {secYear}-{secBlock}</strong>
-                                </span>
-                            )}
+                            <input placeholder="Block (e.g. A, 1)" value={secBlock} onChange={e => setSecBlock(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())} style={{...inputStyle, width: '100px'}} maxLength={3}/>
+                            <button onClick={handleAddSection} style={{...btnStyle, background: '#16a34a'}}><Plus size={16}/> Create Class</button>
                         </div>
+                        {secProgram && secYear && secBlock && (
+                            <div style={{ marginTop: '12px', fontSize: '13px', color: '#166534' }}>
+                                Preview: <strong>{secProgram} {secYear}-{secBlock}</strong>
+                            </div>
+                        )}
+                    </div>
+                </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
-                            {data.yearLevels?.map(y => {
-                                const yearSections = data.sections?.filter(s => s.section_name.startsWith(`${selectedProgram.name} ${y.year_name}-`));
+            </div>
+
+            {/* FULL WIDTH: UNIVERSITY PROGRAMS DASHBOARD */}
+            <div style={{ background: 'white', padding: '30px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <h3 style={{ borderBottom: '2px solid #f3f4f6', paddingBottom: '15px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111', fontSize: '22px' }}>
+                    <Layers size={24} color="#eab308"/> University Programs Overview
+                </h3>
+
+                {data.programs?.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>No programs registered yet.</div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {data.programs?.map(p => {
+                            // Find all sections that belong to this specific program
+                            const programSections = data.sections?.filter(s => s.section_name.startsWith(`${p.name} `));
+                            
+                            // Group those sections by year level to build the hierarchy
+                            const sectionsByYear = {};
+                            programSections.forEach(s => {
+                                // Extract the "Year-Block" string by removing the program name from the start
+                                const yearBlockStr = s.section_name.substring(p.name.length).trim();
                                 
-                                return (
-                                    <div key={y.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', overflow: 'hidden' }}>
-                                        <div style={{ background: '#f1f5f9', padding: '12px 15px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <strong style={{ color: '#334155' }}>Year {y.year_name}</strong>
-                                            <button onClick={() => handleDelete('year', y.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }} title={`Delete Year ${y.year_name} from Database`}><Trash2 size={14} /></button>
+                                if (yearBlockStr) {
+                                    // Split at the first hyphen to cleanly separate the Year and Block
+                                    const hyphenIndex = yearBlockStr.indexOf('-');
+                                    
+                                    let y = "?";
+                                    let block = "?";
+
+                                    if (hyphenIndex !== -1) {
+                                        y = yearBlockStr.substring(0, hyphenIndex);
+                                        block = yearBlockStr.substring(hyphenIndex + 1);
+                                    } else {
+                                        y = yearBlockStr; // Fallback if no hyphen is found
+                                    }
+
+                                    if(!sectionsByYear[y]) sectionsByYear[y] = [];
+                                    sectionsByYear[y].push({ id: s.id, block: block });
+                                }
+                            });
+
+                            const isExpanded = expandedPrograms[p.name];
+
+                            return (
+                                <div key={p.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white', overflow: 'hidden' }}>
+                                    
+                                    {/* Program Header - Clickable to expand/collapse */}
+                                    <div 
+                                        onClick={() => toggleProgram(p.name)}
+                                        style={{ 
+                                            background: isExpanded ? '#f1f5f9' : 'white', 
+                                            padding: '16px 20px', 
+                                            borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none', 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center',
+                                            cursor: 'pointer',
+                                            transition: 'background 0.2s'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            {isExpanded ? <ChevronDown size={20} color="#64748b"/> : <ChevronRight size={20} color="#64748b"/>}
+                                            <h4 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>{p.name}</h4>
                                         </div>
-                                        <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
-                                            {yearSections.length === 0 ? (
-                                                <span style={{ color: '#9ca3af', fontSize: '13px', fontStyle: 'italic', textAlign: 'center', padding: '20px 0' }}>No sections added yet.</span>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDelete('program', p.id); }} 
+                                            style={{ background: 'none', color: '#dc2626', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Delete Program"
+                                        >
+                                            <Trash2 size={18}/>
+                                        </button>
+                                    </div>
+
+                                    {/* Expandable Sections Body */}
+                                    {isExpanded && (
+                                        <div style={{ padding: '0 20px 20px 50px' }}> 
+                                            <h5 style={{ margin: '15px 0', color: '#64748b', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                - Year Levels and Class Sections -
+                                            </h5>
+                                            
+                                            {Object.keys(sectionsByYear).length === 0 ? (
+                                                <div style={{ color: '#94a3b8', fontSize: '14px', fontStyle: 'italic', paddingLeft: '10px' }}>No classes generated for this program yet.</div>
                                             ) : (
-                                                yearSections.map(s => (
-                                                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                                                        <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>{s.section_name}</span>
-                                                        <button onClick={() => handleDelete('section', s.id)} style={iconBtnStyle} title="Delete Section"><X size={16} color="#ef4444"/></button>
-                                                    </div>
-                                                ))
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {Object.keys(sectionsByYear).sort((a,b) => parseInt(a, 10) - parseInt(b, 10)).map(year => (
+                                                        <div key={year} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                            {/* Sort the blocks alphabetically within the year */}
+                                                            {sectionsByYear[year].sort((a,b) => a.block.localeCompare(b.block)).map(sec => (
+                                                                <div key={sec.id} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '8px 15px', background: '#f8fafc', borderLeft: '3px solid #3b82f6', borderRadius: '4px' }}>
+                                                                    <span style={{ fontSize: '14px', color: '#334155', minWidth: '80px' }}>Year - {year}</span>
+                                                                    <span style={{ fontSize: '14px', color: '#334155', fontWeight: 'bold' }}>Section - {sec.block}</span>
+                                                                    <button 
+                                                                        onClick={() => handleDelete('section', sec.id)} 
+                                                                        style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                                                                        title="Delete Section"
+                                                                    >
+                                                                        <X size={16}/>
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            {/* Spacer between different year levels */}
+                                                            <div style={{ height: '5px' }}></div> 
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             )}
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
+
         </div>
 
         {/* --- ACADEMIC TERM ROLLOVER MODAL --- */}
@@ -324,6 +394,6 @@ export default function ManageAcademicSetup() {
 
 const inputStyle = { padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', outline: 'none', fontSize: '14px', boxSizing: 'border-box' };
 const btnStyle = { background: '#104a28', color: 'white', border: 'none', borderRadius: '6px', padding: '0 15px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' };
-const listStyle = { listStyle: 'none', padding: 0, margin: 0, maxHeight: '400px', overflowY: 'auto', overflowX: 'hidden' };
+const listStyle = { listStyle: 'none', padding: 0, margin: 0, maxHeight: '200px', overflowY: 'auto', overflowX: 'hidden' };
 const listItemStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '8px', boxSizing: 'border-box' };
 const iconBtnStyle = { background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' };

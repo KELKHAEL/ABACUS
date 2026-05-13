@@ -8,9 +8,9 @@ export default function ManageAnnouncements() {
   const [saving, setSaving] = useState(false);
   
   // --- DYNAMIC ACADEMIC SETUP STATES ---
-  const [academicPrograms, setAcademicPrograms] = useState([]);
-  const [academicYears, setAcademicYears] = useState([]);
-  const [academicSections, setAcademicSections] = useState([]);
+  const [academicPrograms, setAcademicPrograms] = useState([]); 
+  const [academicYears, setAcademicYears] = useState([]); 
+  const [academicSections, setAcademicSections] = useState([]); 
   const [instructorList, setInstructorList] = useState([]);
   
   // --- FILTER STATES ---
@@ -76,8 +76,10 @@ export default function ManageAnnouncements() {
       const instData = await instRes.json();
       
       if (!setupData.error) {
+        // ✅ Explicitly load programs and year levels from their respective tables
         setAcademicPrograms(setupData.programs || []);
         setAcademicYears(setupData.yearLevels || []);
+        
         const sortedSections = (setupData.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
         setAcademicSections(sortedSections);
       }
@@ -436,29 +438,15 @@ export default function ManageAnnouncements() {
                                 <option value="INSTRUCTORS">Instructors</option>
                             </select>
 
-                            {/* ✅ HIERARCHICAL STUDENTS MULTI-TARGET CONFIG */}
+                            {/* ✅ FIXED HIERARCHICAL STUDENTS MULTI-TARGET CONFIG */}
                             {audience === 'STUDENTS' && (
                                 <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px'}}>
                                     {studentTargets.map((t, idx) => {
                                         
-                                        const validYearsForProgram = academicSections
-                                            .filter(s => t.program === 'ALL' || s.section_name.startsWith(t.program))
-                                            .map(s => {
-                                                const parts = s.section_name.split(' ');
-                                                if (parts.length > 1) {
-                                                    const ys = parts[1].split('-');
-                                                    return ys[0];
-                                                }
-                                                return '';
-                                            }).filter(Boolean);
-                                        
-                                        const uniqueYears = [...new Set(validYearsForProgram)];
-
                                         const validSections = academicSections.filter(s => {
-                                            if(t.program === 'ALL') return true;
-                                            if(!s.section_name.startsWith(t.program)) return false;
-                                            if(t.year === 'ALL') return true;
-                                            return s.section_name.includes(`${t.program} ${t.year}-`);
+                                            if(t.program !== 'ALL' && !s.section_name.startsWith(t.program)) return false;
+                                            if(t.year !== 'ALL' && !s.section_name.includes(`${t.program === 'ALL' ? '' : t.program} ${t.year}-`)) return false;
+                                            return true;
                                         });
 
                                         return (
@@ -478,7 +466,7 @@ export default function ManageAnnouncements() {
                                                     <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Year Level</label>
                                                     <select disabled={isEditing || t.program === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.program === 'ALL') ? '#f3f4f6' : 'white'}} value={t.year} onChange={e => updateStudentTarget(idx, 'year', e.target.value)}>
                                                         <option value="ALL">All Years</option>
-                                                        {uniqueYears.map(y => <option key={y} value={y}>Year {y}</option>)}
+                                                        {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
                                                     </select>
                                                 </div>
 
@@ -487,7 +475,11 @@ export default function ManageAnnouncements() {
                                                     <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Class Section</label>
                                                     <select disabled={isEditing || t.year === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.year === 'ALL') ? '#f3f4f6' : 'white'}} value={t.section} onChange={e => updateStudentTarget(idx, 'section', e.target.value)}>
                                                         <option value="ALL">All Sections</option>
-                                                        {validSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+                                                        {validSections.map(s => {
+                                                            const parts = s.section_name.split('-');
+                                                            const trimmedName = parts.length > 1 ? parts.slice(1).join('-') : s.section_name;
+                                                            return <option key={s.id} value={s.section_name}>{trimmedName}</option>
+                                                        })}
                                                     </select>
                                                 </div>
 

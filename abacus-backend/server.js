@@ -112,6 +112,7 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN lockout_until DATETIME DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE allowed_students ADD COLUMN first_name VARCHAR(100), ADD COLUMN middle_name VARCHAR(100), ADD COLUMN last_name VARCHAR(100)"); } catch(e){}
+    try { await connection.query("ALTER TABLE programs ADD COLUMN max_years INT DEFAULT 4"); } catch(e){}
 
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
@@ -350,9 +351,9 @@ app.get('/academic-setup', async (req, res) => {
 
 app.post('/academic-setup/:type', async (req, res) => {
   const { type } = req.params;
-  const { value, semester } = req.body; 
+  const { value, semester, maxYears } = req.body; // <-- Add maxYears here
   try {
-    if (type === 'program') await db.query("INSERT INTO programs (name) VALUES (?)", [value]);
+    if (type === 'program') await db.query("INSERT INTO programs (name, max_years) VALUES (?, ?)", [value, maxYears || 4]); // <-- Insert maxYears
     else if (type === 'section') await db.query("INSERT INTO sections (section_name) VALUES (?)", [value]);
     else if (type === 'year') await db.query("INSERT INTO year_levels (year_name) VALUES (?)", [value]);
     else if (type === 'term') await db.query("INSERT INTO academic_terms (school_year, semester, is_active) VALUES (?, ?, 0)", [value, semester]);
