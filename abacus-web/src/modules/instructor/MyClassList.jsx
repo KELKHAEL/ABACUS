@@ -8,8 +8,6 @@ export default function MyClassList() {
   const [loading, setLoading] = useState(true);
   
   // Filter States
-  const [filterProgram, setFilterProgram] = useState('All');
-  const [filterYear, setFilterYear] = useState('All');
   const [filterSection, setFilterSection] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -73,21 +71,17 @@ export default function MyClassList() {
       setZoomLevel(1);
   };
 
-  // ✅ DYNAMIC DROPDOWN GENERATORS
-  const uniquePrograms = ['All', ...new Set(myStudents.map(s => s.program || 'BSIT'))];
-  const uniqueYears = ['All', ...new Set(myStudents.map(s => s.year_level))].sort();
+  // ✅ DYNAMIC DROPDOWN GENERATORS (Only Section needed now)
   const uniqueSections = ['All', ...new Set(myStudents.map(s => s.section))].sort();
 
   const filteredStudents = myStudents.filter(student => {
-    const matchProgram = filterProgram === 'All' || (student.program || 'BSIT') === filterProgram;
-    const matchYear = filterYear === 'All' || String(student.year_level) === String(filterYear);
     const matchSection = filterSection === 'All' || String(student.section) === String(filterSection);
     const matchSearch = student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         student.student_id.includes(searchTerm);
-    return matchProgram && matchYear && matchSection && matchSearch;
+    return matchSection && matchSearch;
   });
 
-  const isFiltering = filterProgram !== 'All' || filterYear !== 'All' || filterSection !== 'All' || searchTerm !== '';
+  const isFiltering = filterSection !== 'All' || searchTerm !== '';
 
   return (
     <div className="instructor-dashboard-container">
@@ -126,17 +120,12 @@ export default function MyClassList() {
                     <Search size={18} color="#666" />
                     <input placeholder="Search by Name or ID..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
                 </div>
-                <select className="gb-select" value={filterProgram} onChange={e => setFilterProgram(e.target.value)}>
-                    {uniquePrograms.map(p => <option key={p} value={p}>{p === 'All' ? 'All Programs' : p.replace('Bachelor of Science in', 'BS')}</option>)}
-                </select>
-                <select className="gb-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                    {uniqueYears.map(y => <option key={y} value={y}>{y === 'All' ? 'All Years' : `Year ${y}`}</option>)}
-                </select>
+                {/* ✅ FIX: We only need the Section Dropdown, trimmed for display */}
                 <select className="gb-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-                    {uniqueSections.map(s => <option key={s} value={s}>{s === 'All' ? 'All Sections' : `Section ${s}`}</option>)}
+                    {uniqueSections.map(s => <option key={s} value={s}>{s === 'All' ? 'All Classes' : s.split(' ').pop()}</option>)}
                 </select>
                 {isFiltering && (
-                    <button onClick={() => {setFilterYear('All'); setFilterSection('All'); setFilterProgram('All'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
+                    <button onClick={() => {setFilterSection('All'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
                 )}
             </div>
           </div>
@@ -163,7 +152,7 @@ export default function MyClassList() {
             <div className="empty-table-state">
                 <AlertCircle size={40} color="#cbd5e1" style={{marginBottom: '10px'}}/>
                 <p>No students found matching your specific filters.</p>
-                <button onClick={() => {setFilterYear('All'); setFilterSection('All'); setFilterProgram('All'); setSearchTerm('');}} style={{marginTop: '10px', background: 'none', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline'}}>Clear Filters</button>
+                <button onClick={() => {setFilterSection('All'); setSearchTerm('');}} style={{marginTop: '10px', background: 'none', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline'}}>Clear Filters</button>
             </div>
         ) : (
             <div className="table-responsive">
@@ -176,51 +165,55 @@ export default function MyClassList() {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredStudents.map(s => (
-                            <tr key={s.id} style={s.status === 'Dropped' ? {opacity: 0.6, background: '#f9fafb'} : {}}>
-                                <td>
-                                    <div className="student-cell">
-                                        <div className="student-avatar" style={s.status === 'Dropped' ? {background: '#eee', color: '#999'} : {}}>{s.full_name.charAt(0)}</div>
-                                        <span className="student-name-text">{s.full_name}</span>
-                                    </div>
-                                </td>
-                                <td className="mono-text">{s.student_id}</td>
-                                <td>{s.program || 'BSIT'}</td>
-                                <td><span className="pill-gray">{s.year_level} - {s.section}</span></td>
-                                <td>
-                                    <span className={`status-badge ${s.status?.toLowerCase() || 'regular'}`} style={s.status === 'Dropped' ? {background: '#fee2e2', color: '#991b1b'} : {}}>
-                                        {s.status || 'Regular'}
-                                    </span>
-                                </td>
-                                <td style={{textAlign: 'right'}}>
-                                    <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px', alignItems: 'center'}}>
-                                        <button title="Mark as Regular" onClick={() => handleStatusChange(s.id, 'Regular')} style={{background: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>REG</button>
-                                        <button title="Mark as Irregular" onClick={() => handleStatusChange(s.id, 'Irregular')} style={{background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>IRR</button>
-                                        <button title="Mark as Dropped" onClick={() => handleStatusChange(s.id, 'Dropped')} style={{background: '#ef4444', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>DRP</button>
-                                        <div style={{width: '1px', height: '20px', background: '#e2e8f0', margin: '0 4px'}}></div>
-                                        
-                                        {/* ✅ NEW: Dedicated View COR & View Grades Buttons */}
-                                        <button 
-                                            className="btn-icon-small" 
-                                            title="View COR" 
-                                            style={{color: s.cor_image_url ? '#0284c7' : '#cbd5e1'}}
-                                            onClick={() => s.cor_image_url ? openImagePreview(`https://abacus-w435.onrender.com${s.cor_image_url}`) : alert("No COR image uploaded by this student.")}
-                                        >
-                                            <FileImage size={18}/>
-                                        </button>
-                                        <button 
-                                            className="btn-icon-small" 
-                                            title="View Grades" 
-                                            style={{color: '#104a28'}}
-                                            onClick={() => navigate('/instructor/Gradebook')}
-                                        >
-                                            <BookOpen size={18}/>
-                                        </button>
+                        {filteredStudents.map(s => {
+                            // ✅ NEW TRIM LOGIC: Split by space and grab the last part (e.g. "BSIT 1-A" -> "1-A")
+                            const shortSection = s.section ? s.section.split(' ').pop() : '';
+                            
+                            return (
+                                <tr key={s.id} style={s.status === 'Dropped' ? {opacity: 0.6, background: '#f9fafb'} : {}}>
+                                    <td>
+                                        <div className="student-cell">
+                                            <div className="student-avatar" style={s.status === 'Dropped' ? {background: '#eee', color: '#999'} : {}}>{s.full_name.charAt(0)}</div>
+                                            <span className="student-name-text">{s.full_name}</span>
+                                        </div>
+                                    </td>
+                                    <td className="mono-text">{s.student_id}</td>
+                                    <td>{s.program || 'BSIT'}</td>
+                                    <td><span className="pill-gray">{shortSection}</span></td>
+                                    <td>
+                                        <span className={`status-badge ${s.status?.toLowerCase() || 'regular'}`} style={s.status === 'Dropped' ? {background: '#fee2e2', color: '#991b1b'} : {}}>
+                                            {s.status || 'Regular'}
+                                        </span>
+                                    </td>
+                                    <td style={{textAlign: 'right'}}>
+                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px', alignItems: 'center'}}>
+                                            <button title="Mark as Regular" onClick={() => handleStatusChange(s.id, 'Regular')} style={{background: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>REG</button>
+                                            <button title="Mark as Irregular" onClick={() => handleStatusChange(s.id, 'Irregular')} style={{background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>IRR</button>
+                                            <button title="Mark as Dropped" onClick={() => handleStatusChange(s.id, 'Dropped')} style={{background: '#ef4444', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>DRP</button>
+                                            <div style={{width: '1px', height: '20px', background: '#e2e8f0', margin: '0 4px'}}></div>
+                                            
+                                            <button 
+                                                className="btn-icon-small" 
+                                                title="View COR" 
+                                                style={{color: s.cor_image_url ? '#0284c7' : '#cbd5e1'}}
+                                                onClick={() => s.cor_image_url ? openImagePreview(`https://abacus-w435.onrender.com${s.cor_image_url}`) : alert("No COR image uploaded by this student.")}
+                                            >
+                                                <FileImage size={18}/>
+                                            </button>
+                                            <button 
+                                                className="btn-icon-small" 
+                                                title="View Grades" 
+                                                style={{color: '#104a28'}}
+                                                onClick={() => navigate('/instructor/Gradebook')}
+                                            >
+                                                <BookOpen size={18}/>
+                                            </button>
 
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
                 <div className="table-footer-hint">Showing {filteredStudents.length} official students in your masterlist</div>
@@ -228,14 +221,13 @@ export default function MyClassList() {
         )}
       </div>
 
-      {/* ✅ NEW: IMAGE PREVIEW MODAL WITH ZOOM */}
+      {/* IMAGE PREVIEW MODAL WITH ZOOM */}
       {viewImage && (
           <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(4px)'}} onClick={closeImagePreview}>
               <div style={{background: 'white', padding: '24px', borderRadius: '16px', position: 'relative', width: '90%', maxWidth: '1000px', height: '90%', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'}} onClick={e => e.stopPropagation()}>
                   
                   <button onClick={closeImagePreview} style={{position: 'absolute', top: -15, right: -15, background: '#ef4444', color: 'white', border: '2px solid white', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)'}}>X</button>
                   
-                  {/* Header & Zoom Controls */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
                       <h3 style={{margin: 0, color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
                           <FileImage size={20} color="#104a28"/> COR Document Preview
@@ -247,7 +239,6 @@ export default function MyClassList() {
                       </div>
                   </div>
                   
-                  {/* Scrollable Image Container */}
                   <div style={{background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start'}}>
                       <img 
                           src={viewImage} 

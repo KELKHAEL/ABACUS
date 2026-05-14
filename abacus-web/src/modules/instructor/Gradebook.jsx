@@ -80,7 +80,7 @@ export default function Gradebook() {
       });
 
       setStudents(mergedData);
-      setFilteredStudents(mergedData);
+      setFilteredStudents(mergedData); // Initialize the filtered state
     } catch (err) { console.error("Error fetching data:", err); } 
     finally { setLoading(false); }
   }, [navigate]);
@@ -92,14 +92,24 @@ export default function Gradebook() {
   // Extract merged class sections for the filter dropdown
   const uniqueClasses = ['All', ...new Set(students.map(s => s.section))].sort();
 
+  // ✅ FIX: The Search and Filter logic is now perfectly synced to keystrokes
   useEffect(() => {
     let result = students;
-    if (search) {
+    
+    // 1. Text Search Filter
+    if (search.trim() !== "") {
       const lower = search.toLowerCase();
-      result = result.filter(s => (s.fullName && s.fullName.toLowerCase().includes(lower)) || (s.email && s.email.toLowerCase().includes(lower)));
+      result = result.filter(s => 
+        (s.fullName && s.fullName.toLowerCase().includes(lower)) || 
+        (s.email && s.email.toLowerCase().includes(lower)) ||
+        (s.section && s.section.toLowerCase().includes(lower))
+      );
     }
-    // Filter by the new merged section name
-    if (classFilter !== "All") result = result.filter(s => String(s.section) === String(classFilter));
+    
+    // 2. Dropdown Filter
+    if (classFilter !== "All") {
+        result = result.filter(s => String(s.section) === String(classFilter));
+    }
     
     setFilteredStudents(result);
   }, [search, classFilter, students, viewMode]);
@@ -169,12 +179,19 @@ export default function Gradebook() {
         <div className="filters-content">
             <div className="search-box">
             <Search size={18} color="#666" />
-            <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input 
+                placeholder="Search name of student..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} // ✅ FIX: Corrected to setSearch
+            />
             </div>
 
             <select className="gb-select" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
-                {uniqueClasses.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
+                {uniqueClasses.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c.split(' ').pop()}</option>)}
             </select>
+            {(classFilter !== 'All' || search !== '') && (
+                <button onClick={() => {setClassFilter('All'); setSearch('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button> // ✅ FIX: Corrected to setSearch('')
+            )}
         </div>
       </div>
 
@@ -195,16 +212,21 @@ export default function Gradebook() {
           </thead>
           <tbody>
             {loading ? ( <tr><td colSpan="5" className="text-center p-4">Loading Gradebook...</td></tr>
-            ) : filteredStudents.length === 0 ? ( <tr><td colSpan="5" className="text-center p-4">No students assigned to your classes yet.</td></tr>
+            ) : filteredStudents.length === 0 ? ( <tr><td colSpan="5" className="text-center p-4">No students match your search.</td></tr>
             ) : (
               filteredStudents.map(student => {
                 const targetGrades = student.gradesList.filter(g => viewMode === 'archived' ? g.is_archived === 1 : g.is_archived === 0);
                 const avg = calculateAverage(student.gradesList, quizStatusMap, viewMode === 'archived');
+                
+                const shortSection = student.section ? student.section.split(' ').pop() : 'N/A';
+                const shortProgram = student.program 
+                    ? student.program.replace('Bachelor of Science in ', 'BS').replace('Bachelor of Secondary Education - Major in ', 'BSED ') 
+                    : "N/A";
 
                 return (
                   <tr key={student.id}>
                     <td><div className="student-name">{student.fullName || "Unknown"}</div><div className="student-email">{student.email}</div></td>
-                    <td className="text-center"><div className="badge-pill">{student.program || "N/A"}</div><div className="small-meta">{student.section}</div></td>
+                    <td className="text-center"><div className="badge-pill" title={student.program}>{shortProgram}</div><div className="small-meta">{shortSection}</div></td>
                     <td className="text-center"><span className="quiz-count">{targetGrades.length}</span></td>
                     <td className="text-center"><span className={`grade-avg ${avg >= 75 ? 'pass' : (avg === "N/A" ? 'neutral' : 'fail')}`}>{avg === "N/A" ? avg : `${avg}%`}</span></td>
                     <td className="text-right">
@@ -225,7 +247,7 @@ export default function Gradebook() {
         <div className="modal-overlay" onClick={() => setSelectedStudent(null)}>
           <div className="modal-content large" onClick={e => e.stopPropagation()}>
             <div className="modal-header-green" style={{background: viewMode === 'archived' ? '#475569' : '#104a28'}}>
-              <div><h2>{selectedStudent.fullName}</h2><p className="modal-subtitle-white">{selectedStudent.program} • {selectedStudent.section}</p></div>
+              <div><h2>{selectedStudent.fullName}</h2><p className="modal-subtitle-white">{selectedStudent.program.replace('Bachelor of Science in ', 'BS')} • {selectedStudent.section ? selectedStudent.section.split(' ').pop() : 'N/A'}</p></div>
               <button className="btn-close-white" onClick={() => setSelectedStudent(null)}><X size={24}/></button>
             </div>
             <div className="modal-body">

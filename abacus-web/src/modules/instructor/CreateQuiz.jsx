@@ -52,7 +52,7 @@ export default function CreateQuiz({ setActiveTab }) {
           const data = await res.json();
           setAllInstructorStudents(data.students || []);
 
-          // 2. ✅ BULLETPROOF FIX: Fetch fresh assigned classes from DB just in case localStorage is missing it
+          // 2. Fetch fresh assigned classes from DB just in case localStorage is missing it
           const usersRes = await fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR');
           const usersData = await usersRes.json();
           const currentInstructor = usersData.find(u => u.id === user.id);
@@ -270,8 +270,10 @@ export default function CreateQuiz({ setActiveTab }) {
                 >
                     {!isRetake && <option value="ALL" style={{fontWeight: 'bold'}}>All Assigned Classes</option>}
                     {isRetake && <option value="ALL" disabled>Select a Specific Class First</option>}
+                    
+                    {/* ✅ FIX: Dropdown displays short section names, but values are full strings */}
                     {myClasses.map((cls, idx) => (
-                        <option key={idx} value={cls}>{cls}</option>
+                        <option key={idx} value={cls}>{cls.split(' ').pop()}</option>
                     ))}
                 </select>
             </div>
