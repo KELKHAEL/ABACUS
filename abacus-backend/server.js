@@ -107,14 +107,19 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
+
     try { await connection.query("ALTER TABLE users MODIFY COLUMN section VARCHAR(50)"); } catch(e){}
+
     try { await connection.query("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE users ADD COLUMN lockout_until DATETIME DEFAULT NULL"); } catch(e){}
+
     try { await connection.query("ALTER TABLE allowed_students ADD COLUMN first_name VARCHAR(100), ADD COLUMN middle_name VARCHAR(100), ADD COLUMN last_name VARCHAR(100)"); } catch(e){}
     try { await connection.query("ALTER TABLE programs ADD COLUMN max_years INT DEFAULT 4"); } catch(e){}
 
     try { await connection.query("ALTER TABLE announcements MODIFY COLUMN target_section VARCHAR(255)"); } catch(e){}
+
+    try { await connection.query("ALTER TABLE student_grades ADD COLUMN responses JSON DEFAULT NULL"); } catch(e){}
 
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
@@ -613,7 +618,8 @@ app.delete('/quizzes/:id', async (req, res) => {
 });
 
 app.post('/grades', async (req, res) => {
-  const { userId, quizId, score, totalItems, subjectTitle } = req.body;
+  // ✅ FIX: Added responses to destructuring
+  const { userId, quizId, score, totalItems, subjectTitle, responses } = req.body;
   try {
     const [quizRows] = await db.query("SELECT * FROM quizzes WHERE id = ?", [quizId]);
     const quiz = quizRows[0];
@@ -622,6 +628,9 @@ app.post('/grades', async (req, res) => {
     let finalTitle = subjectTitle;
     const activeTermId = await getActiveTermId();
 
+    // Serialize responses into a string for TiDB if it exists
+    const responsesJSON = responses ? JSON.stringify(responses) : null;
+
     if (quiz && quiz.is_retake) {
        const deduction = quiz.penalty;
        finalScore = Math.max(0, score - deduction); 
@@ -629,9 +638,10 @@ app.post('/grades', async (req, res) => {
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
        finalTitle = subjectTitle + ` (-${deduction} pts Penalty)`;
 
+       // ✅ FIX: Insert responses
        await db.query(
-         `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
-         [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId]
+         `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id, responses) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId, responsesJSON]
        );
 
        return res.json({ success: true });
@@ -640,9 +650,10 @@ app.post('/grades', async (req, res) => {
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
     if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
+    // ✅ FIX: Insert responses
     await db.query(
-      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id) VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId]
+      `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id, responses) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId, responsesJSON]
     );
 
     res.json({ success: true });
@@ -653,7 +664,7 @@ app.get('/grades', async (req, res) => {
   try {
     const activeTermId = await getActiveTermId();
     const [grades] = await db.query(`
-      SELECT id, user_id, quiz_id, score as grade, total_items, subject_title as subjectTitle, date_taken as dateTaken, IF(term_id = ?, 0, 1) as is_archived
+      SELECT id, user_id, quiz_id, score as grade, total_items, subject_title as subjectTitle, date_taken as dateTaken, IF(term_id = ?, 0, 1) as is_archived, responses
       FROM student_grades ORDER BY date_taken DESC
     `, [activeTermId]);
     res.json(grades);

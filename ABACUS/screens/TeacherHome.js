@@ -68,16 +68,14 @@ export default function TeacherHome({ navigation }) {
   const [students, setStudents] = useState([]);
   const [loadingGrades, setLoadingGrades] = useState(false);
   const [instructorClasses, setInstructorClasses] = useState([]);
-  const [selectedClassIndex, setSelectedClassIndex] = useState(0);
+  const [selectedClassIndex, setSelectedClassIndex] = useState(0); // 0 corresponds to "ALL" locally now
   
   // Dynamic Academic Setup State
   const [academicPrograms, setAcademicPrograms] = useState([]);
-  const [academicYears, setAcademicYears] = useState([]);
   const [academicSections, setAcademicSections] = useState([]);
 
   // Admin Gradebook Filters
   const [adminProg, setAdminProg] = useState('ALL');
-  const [adminYear, setAdminYear] = useState('ALL');
   const [adminSec, setAdminSec] = useState('ALL');
 
   const isAdmin = user?.role === 'ADMIN';
@@ -90,8 +88,9 @@ export default function TeacherHome({ navigation }) {
       const data = await response.json();
       if (!data.error) {
         setAcademicPrograms(data.programs || []);
-        setAcademicYears(data.yearLevels || []);
-        setAcademicSections(data.sections || []);
+        // Sort alphabetically so the pills make sense
+        const sortedSections = (data.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
+        setAcademicSections(sortedSections);
       }
     } catch (error) {
       console.error("Failed to load academic setup", error);
@@ -123,11 +122,15 @@ export default function TeacherHome({ navigation }) {
         const res = await fetch(`${API_URL}/instructor/dashboard/${user.id}`);
         const data = await res.json();
         if (data.students) setStudents(data.students);
+        
         let classes = [];
+        // ✅ FIX: Load the correct strings array format: ["BSIT 1-A", "BSIT 1-B"]
         try {
             classes = typeof user.assigned_classes === 'string' ? JSON.parse(user.assigned_classes) : (user.assigned_classes || []);
         } catch(e) {}
         setInstructorClasses(classes);
+        // Default to "ALL" which is idx 0
+        setSelectedClassIndex(0);
       }
     } catch(e) { console.error(e); } 
     finally { setLoadingGrades(false); }
@@ -182,14 +185,13 @@ export default function TeacherHome({ navigation }) {
   const filteredStudents = students.filter(s => {
       if (isAdmin) {
           if (adminProg !== 'ALL' && s.program !== adminProg) return false;
-          if (adminYear !== 'ALL' && s.year_level !== adminYear) return false;
-          if (adminSec !== 'ALL' && s.section !== adminSec) return false;
+          if (adminSec !== 'ALL' && String(s.section) !== String(adminSec)) return false;
           return true;
       } else {
           if (instructorClasses.length === 0) return false;
-          const activeClass = instructorClasses[selectedClassIndex];
-          if (!activeClass) return true;
-          return s.year_level == activeClass.year && s.section == activeClass.section;
+          if (selectedClassIndex === 0) return true; // 0 index is the "All Classes" pill
+          const activeClassString = instructorClasses[selectedClassIndex - 1]; // Offset by 1 because of ALL
+          return String(s.section) === String(activeClassString);
       }
   });
 
@@ -425,29 +427,18 @@ export default function TeacherHome({ navigation }) {
                 ))}
             </ScrollView>
 
-            <View style={{flexDirection: 'row', gap: 10}}>
-                {/* Dynamic Years */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <TouchableOpacity style={[styles.gbChip, adminYear === 'ALL' && styles.chipActive]} onPress={() => setAdminYear('ALL')}>
-                        <Text style={[styles.chipText, adminYear === 'ALL' && styles.chipTextActive]}>All Yrs</Text>
-                    </TouchableOpacity>
-                    {academicYears.map(y => (
-                        <TouchableOpacity key={y.id} style={[styles.gbChip, adminYear === y.year_name && styles.chipActive]} onPress={() => setAdminYear(y.year_name)}>
-                            <Text style={[styles.chipText, adminYear === y.year_name && styles.chipTextActive]}>Year {y.year_name}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            {/* ✅ FIX: Dynamic Sections added for Admin */}
+            {/* ✅ FIX: Single Merged Sections row for Admin */}
             <View style={{flexDirection: 'row', gap: 10, marginTop: 10}}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <TouchableOpacity style={[styles.gbChip, adminSec === 'ALL' && styles.chipActive]} onPress={() => setAdminSec('ALL')}>
-                        <Text style={[styles.chipText, adminSec === 'ALL' && styles.chipTextActive]}>All Secs</Text>
+                        <Text style={[styles.chipText, adminSec === 'ALL' && styles.chipTextActive]}>All Sections</Text>
                     </TouchableOpacity>
                     {academicSections.map(s => (
                         <TouchableOpacity key={s.id} style={[styles.gbChip, adminSec === s.section_name && styles.chipActive]} onPress={() => setAdminSec(s.section_name)}>
-                            <Text style={[styles.chipText, adminSec === s.section_name && styles.chipTextActive]}>Sec {s.section_name}</Text>
+                            {/* Trims the front off to display clean tags like "1-A" */}
+                            <Text style={[styles.chipText, adminSec === s.section_name && styles.chipTextActive]}>
+                                Sec {s.section_name.split(' ').pop()}
+                            </Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -458,11 +449,19 @@ export default function TeacherHome({ navigation }) {
             {instructorClasses.length === 0 ? (
                 <Text style={styles.emptyText}>No assigned classes.</Text>
             ) : (
-                instructorClasses.map((cls, idx) => (
-                    <TouchableOpacity key={idx} style={[styles.gbChip, selectedClassIndex === idx && styles.chipActive]} onPress={() => setSelectedClassIndex(idx)}>
-                        <Text style={[styles.chipText, selectedClassIndex === idx && styles.chipTextActive]}>Year {cls.year} - Sec {cls.section}</Text>
+                <>
+                    <TouchableOpacity style={[styles.gbChip, selectedClassIndex === 0 && styles.chipActive]} onPress={() => setSelectedClassIndex(0)}>
+                        <Text style={[styles.chipText, selectedClassIndex === 0 && styles.chipTextActive]}>All Classes</Text>
                     </TouchableOpacity>
-                ))
+                    
+                    {instructorClasses.map((cls, idx) => (
+                        <TouchableOpacity key={idx} style={[styles.gbChip, selectedClassIndex === (idx + 1) && styles.chipActive]} onPress={() => setSelectedClassIndex(idx + 1)}>
+                            <Text style={[styles.chipText, selectedClassIndex === (idx + 1) && styles.chipTextActive]}>
+                                {cls.split(' ').pop()}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </>
             )}
           </ScrollView>
         )}
@@ -482,7 +481,7 @@ export default function TeacherHome({ navigation }) {
                 <View style={styles.studentAvatar}><Ionicons name="person" size={20} color="#104a28" /></View>
                 <View style={{flex: 1}}>
                     <Text style={styles.studentName} numberOfLines={1}>{s.full_name}</Text>
-                    <Text style={styles.studentInfo}>{s.student_id} • Yr {s.year_level} Sec {s.section}</Text>
+                    <Text style={styles.studentInfo}>{s.student_id} • {s.section}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#ccc" />
              </TouchableOpacity>
