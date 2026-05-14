@@ -629,7 +629,7 @@ app.post('/grades', async (req, res) => {
     let finalTitle = subjectTitle;
     const activeTermId = await getActiveTermId();
 
-    // Serialize responses into a string for TiDB if it exists
+    // ✅ FIX: Properly stringify the responses object before saving to MySQL
     const responsesJSON = responses ? JSON.stringify(responses) : null;
 
     if (quiz && quiz.is_retake) {
@@ -639,7 +639,7 @@ app.post('/grades', async (req, res) => {
        await db.query("DELETE FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quiz.parent_quiz_id]);
        finalTitle = subjectTitle + ` (-${deduction} pts Penalty)`;
 
-       // ✅ FIX: Insert responses
+       // ✅ FIX: Insert responses string
        await db.query(
          `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id, responses) VALUES (?, ?, ?, ?, ?, ?, ?)`,
          [userId, quiz.parent_quiz_id, finalScore, totalItems || 100, finalTitle, activeTermId, responsesJSON]
@@ -651,7 +651,7 @@ app.post('/grades', async (req, res) => {
     const [existing] = await db.query("SELECT id FROM student_grades WHERE user_id = ? AND quiz_id = ?", [userId, quizId]);
     if (existing.length > 0) return res.status(400).json({ success: false, error: "You have already submitted this quiz." });
 
-    // ✅ FIX: Insert responses
+    // ✅ FIX: Insert responses string
     await db.query(
       `INSERT INTO student_grades (user_id, quiz_id, score, total_items, subject_title, term_id, responses) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [userId, quizId, finalScore, totalItems || 100, finalTitle, activeTermId, responsesJSON]
