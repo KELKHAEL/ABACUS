@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ABACUS",
-    "slug": "abacus",
+    "slug": "abacusimulation",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/abacus_logo.png",
@@ -47,9 +47,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "5d4657fa-b7cc-4acd-987e-c3a3912c84cf"
+        "projectId": "023c2ca0-7c69-49d4-9fc9-b48505d2cdf6"
       }
-    },
-    "owner": "abacus-development"
+    }
   }
 }

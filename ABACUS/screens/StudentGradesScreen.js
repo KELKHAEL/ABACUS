@@ -13,7 +13,6 @@ export default function StudentGradesScreen({ route, navigation }) {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- PAPER VIEWER STATES ---
   const [paperModalVisible, setPaperModalVisible] = useState(false);
   const [selectedQuizDetails, setSelectedQuizDetails] = useState(null);
   const [selectedResponses, setSelectedResponses] = useState(null);
@@ -51,7 +50,6 @@ export default function StudentGradesScreen({ route, navigation }) {
     }
   };
 
-  // --- FETCH SPECIFIC QUIZ PAPER ---
   const openPaperViewer = async (quizId, responsesJSON) => {
     setPaperModalVisible(true);
     setLoadingPaper(true);
@@ -59,16 +57,19 @@ export default function StudentGradesScreen({ route, navigation }) {
     setSelectedResponses(null);
 
     try {
-        // ✅ FIX: Use the new /raw endpoint to completely bypass shuffling
         const response = await fetch(`${API_URL}/quizzes/${quizId}/raw`);
         const data = await response.json();
         
         setSelectedQuizDetails(data);
         
+        // Extract the responses dict
         let parsedResponses = {};
         if (responsesJSON) {
             try { 
                 parsedResponses = typeof responsesJSON === 'string' ? JSON.parse(responsesJSON) : responsesJSON; 
+                if (typeof parsedResponses === 'string') {
+                    parsedResponses = JSON.parse(parsedResponses);
+                }
             } catch(e) {
                 console.error("Failed to parse JSON", e);
             }
@@ -114,7 +115,6 @@ export default function StudentGradesScreen({ route, navigation }) {
               </View>
           </View>
 
-          {/* ✅ VIEW PAPER BUTTON */}
           {!isMissed && (
              <TouchableOpacity 
                 style={styles.viewPaperBtn} 
@@ -164,7 +164,6 @@ export default function StudentGradesScreen({ route, navigation }) {
         )}
       </View>
 
-      {/* ✅ PAPER VIEWER MODAL */}
       <Modal visible={paperModalVisible} animationType="slide" transparent={true} onRequestClose={() => setPaperModalVisible(false)}>
          <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -192,7 +191,7 @@ export default function StudentGradesScreen({ route, navigation }) {
                 ) : (
                     <ScrollView contentContainerStyle={{padding: 20}}>
                         {selectedQuizDetails.questions.map((q, idx) => {
-                            // Safely extract the raw text answer saved by QuizScreen.js
+                            // Extract raw text answer saved from the new QuizScreen logic
                             let rawAnswer = null;
                             if (selectedResponses) {
                                 rawAnswer = selectedResponses[q.id] !== undefined ? selectedResponses[q.id] : selectedResponses[String(q.id)];
@@ -208,16 +207,16 @@ export default function StudentGradesScreen({ route, navigation }) {
                                 isCorrect = displayAnswer.toLowerCase().trim() === correctKey.toLowerCase().trim();
                             } 
                             else if (q.type === 'multiple-choice') {
-                                // Since we use the raw endpoint, options are in original order, and rawAnswer is pure text
                                 displayAnswer = (rawAnswer !== null && rawAnswer !== undefined && rawAnswer !== "") ? String(rawAnswer) : "No Answer Provided";
                                 correctKey = q.options[q.correct_index || 0] || "Unknown";
                                 
-                                isCorrect = displayAnswer === correctKey;
+                                isCorrect = displayAnswer.trim() === correctKey.trim();
                             } 
                             else if (q.type === 'checkbox') {
-                                // rawAnswer is an array of strings the user chose
                                 if (Array.isArray(rawAnswer) && rawAnswer.length > 0) {
                                     displayAnswer = rawAnswer.join(', ');
+                                } else if (rawAnswer) {
+                                    displayAnswer = String(rawAnswer);
                                 }
                                 
                                 const correctIndices = q.correct_index || (q.correct_answer_text ? q.correct_answer_text.split(',').map(Number) : []);

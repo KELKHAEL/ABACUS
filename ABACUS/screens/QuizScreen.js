@@ -24,6 +24,7 @@ export default function QuizScreen({ route, navigation }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
   
+  // Keep track of raw answers for the paper viewer
   const [studentAnswers, setStudentAnswers] = useState({});
   
   const [textAnswer, setTextAnswer] = useState(""); 
@@ -104,17 +105,17 @@ export default function QuizScreen({ route, navigation }) {
   const handleCheatDetection = (reason) => {
     if (isCheating.current || showResult) return;
     isCheating.current = true;
-    finishQuiz(0, reason); 
+    finishQuiz(0, studentAnswers, reason); 
   };
 
   const handleMultipleChoice = (selectedIndex) => {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = Number(selectedIndex) === Number(currentQ.correctIndex);
     
-    // ✅ FIX: Save the EXACT TEXT of the option, not the index position.
-    setStudentAnswers(prev => ({...prev, [currentQ.id]: currentQ.options[selectedIndex]}));
+    // Grab the exact text of what was clicked
+    const answerText = currentQ.options[selectedIndex];
     
-    processAnswer(isCorrect);
+    processAnswer(isCorrect, currentQ.id, answerText);
   };
 
   const handleTextSubmit = () => {
@@ -122,10 +123,7 @@ export default function QuizScreen({ route, navigation }) {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = textAnswer.trim().toLowerCase() === currentQ.correctAnswerText?.trim().toLowerCase();
     
-    // ✅ FIX: Save the exact text typed
-    setStudentAnswers(prev => ({...prev, [currentQ.id]: textAnswer.trim()}));
-
-    processAnswer(isCorrect);
+    processAnswer(isCorrect, currentQ.id, textAnswer.trim());
   };
 
   const toggleCheckbox = (index) => {
@@ -141,19 +139,25 @@ export default function QuizScreen({ route, navigation }) {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = selectedChecks.includes(currentQ.correctIndex) && selectedChecks.length === 1;
     
-    // ✅ FIX: Save the exact array of TEXT options selected
+    // Get array of strings
     const selectedTexts = selectedChecks.map(idx => currentQ.options[idx]);
-    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedTexts}));
 
-    processAnswer(isCorrect);
+    processAnswer(isCorrect, currentQ.id, selectedTexts);
   };
 
-  const processAnswer = (isCorrect) => {
+  const processAnswer = (isCorrect, questionId, currentAnswerData) => {
     let newScore = score;
     if (isCorrect) {
       newScore = score + 1;
       setScore(newScore);
     }
+
+    // Force update the answers payload immediately
+    const updatedAnswers = {
+        ...studentAnswers,
+        [questionId]: currentAnswerData
+    };
+    setStudentAnswers(updatedAnswers);
 
     setTextAnswer(""); 
     setSelectedChecks([]); 
@@ -161,11 +165,12 @@ export default function QuizScreen({ route, navigation }) {
     if (currentQuestionIndex + 1 < quizData.questions.length) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
-      finishQuiz(newScore);
+      finishQuiz(newScore, updatedAnswers);
     }
   };
 
-  const finishQuiz = async (finalScore, cheatReason = null) => {
+  // ✅ FIX: Pass the updated dictionary directly into finishQuiz to prevent missing the final question
+  const finishQuiz = async (finalScore, finalAnswersDict = studentAnswers, cheatReason = null) => {
     setIsSubmitting(true);
     setShowResult(true); 
     setScore(finalScore);
@@ -182,7 +187,7 @@ export default function QuizScreen({ route, navigation }) {
             score: finalScore,
             totalItems: totalItems,
             subjectTitle: quizTitle,
-            responses: studentAnswers 
+            responses: finalAnswersDict 
         })
       });
 
@@ -376,17 +381,11 @@ export default function QuizScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-  flex: 1, 
-  backgroundColor: '#F8F9FD', 
-  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FD', paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FD' },
-  
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
   backBtn: { padding: 5 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', flex: 1, textAlign: 'center', marginHorizontal: 10 },
-
   startContent: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
   quizTitleLg: { fontSize: 24, fontWeight: '900', color: '#111', textAlign: 'center', marginBottom: 10 },
   quizDesc: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 30, lineHeight: 22 },
@@ -395,12 +394,10 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, color: '#444', fontWeight: '500', flexShrink: 1 },
   startBtn: { backgroundColor: '#104a28', width: '100%', padding: 18, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
   startBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-
   quizScroll: { padding: 20, paddingBottom: 50 },
   counter: { color: '#666', marginBottom: 15, fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
   questionCard: { backgroundColor: 'white', padding: 25, borderRadius: 15, marginBottom: 25, elevation: 2, shadowColor:'#000', shadowOpacity:0.05, shadowRadius:5, borderWidth: 1, borderColor: '#eee' },
   questionText: { fontSize: 18, lineHeight: 28, color: '#333', fontWeight: '600' },
-  
   optionsContainer: { gap: 12 },
   optionButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 18, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', elevation: 1 },
   optionSelected: { borderColor: '#104a28', backgroundColor: '#e8f5e9' },
@@ -409,14 +406,12 @@ const styles = StyleSheet.create({
   textInput: { backgroundColor: 'white', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#ccc', fontSize: 16, marginBottom: 20 },
   submitBtn: { backgroundColor: '#104a28', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   submitBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-
   resultContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
   resultTitle: { fontSize: 28, fontWeight: '900', color: '#111', marginTop: 20, marginBottom: 5 },
   resultSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
   scoreCircle: { width: 150, height: 150, borderRadius: 75, backgroundColor: '#fff', borderWidth: 8, borderColor: '#104a28', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
   scoreText: { fontSize: 32, fontWeight: '900', color: '#104a28' },
   percentageText: { fontSize: 20, fontWeight: 'bold', color: '#555', marginBottom: 40 },
-  
   resultActions: { width: '100%', gap: 15 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e8f5e9', padding: 16, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#bbf7d0' },
   actionBtnText: { fontSize: 15, fontWeight: 'bold', color: '#104a28' }
