@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, 
-  ScrollView, Modal, Alert, ActivityIndicator, Image, Platform 
+  ScrollView, Modal, Alert, ActivityIndicator, Image, Platform, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext';
@@ -20,6 +20,7 @@ export default function ProfileScreen({ navigation }) {
   const [isUploading, setIsUploading] = useState(false);
 
   const [setupData, setSetupData] = useState({ sections: [] });
+  const [showSectionDropdown, setShowSectionDropdown] = useState(false); // Controls the dropdown modal
 
   // Quick check for user role
   const isStudent = user?.role === 'STUDENT';
@@ -93,8 +94,6 @@ export default function ProfileScreen({ navigation }) {
     try {
       const formData = new FormData();
       
-      // ✅ FIX: Automatically parse the year out of the section string (e.g. "BSIT 1-A" -> "1") 
-      // so the backend doesn't throw a missing variable error.
       const inferredYear = newSection.match(/\s(\d+)-/);
       const yearToSubmit = inferredYear ? inferredYear[1] : '1';
 
@@ -175,13 +174,11 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
           
-          {/* ✅ ONLY render Year & Section if the user is a STUDENT */}
           {isStudent && (
             <View style={styles.infoRow}>
               <Ionicons name="school-outline" size={20} color="#666" />
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoLabel}>Class Section</Text>
-                {/* ✅ FIX: Now only displays the single unified string */}
                 <Text style={styles.infoValue}>{user.section}</Text>
               </View>
             </View>
@@ -191,7 +188,6 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.actionSection}>
           <Text style={styles.sectionTitle}>Account Actions</Text>
           
-          {/* ✅ ONLY render Request Promotion if the user is a STUDENT */}
           {isStudent && (
             <TouchableOpacity style={styles.promoteBtn} onPress={() => setShowModal(true)}>
               <Ionicons name="trending-up-outline" size={20} color="#104a28" />
@@ -220,13 +216,17 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.modalDesc}>Upload your new Certificate of Registration (COR) to be assigned to your new classes.</Text>
 
               <Text style={styles.inputLabel}>New Class Section</Text>
-              <View style={styles.pickerRow}>
-                {setupData.sections.map(s => (
-                  <TouchableOpacity key={s.id} style={[styles.pickerBtn, newSection === s.section_name && styles.pickerActive, {minWidth: '45%'}]} onPress={() => setNewSection(s.section_name)}>
-                    <Text style={[styles.pickerText, newSection === s.section_name && styles.pickerActiveText]}>{s.section_name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              
+              {/* ✅ CLEAN DROPDOWN REPLACEMENT */}
+              <TouchableOpacity 
+                style={styles.dropdownBtn} 
+                onPress={() => setShowSectionDropdown(true)}
+              >
+                  <Text style={{color: newSection ? '#333' : '#9ca3af', fontSize: 16, fontWeight: newSection ? '600' : 'normal'}}>
+                      {newSection || "Select your new section..."}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.toggleRow} onPress={() => setIsIrregular(!isIrregular)}>
                 <Ionicons name={isIrregular ? "checkbox" : "square-outline"} size={24} color={isIrregular ? "#104a28" : "#ccc"}/>
@@ -249,6 +249,37 @@ export default function ProfileScreen({ navigation }) {
                 {isUploading ? <ActivityIndicator color="white" /> : <Text style={styles.submitBtnText}>Submit & Update</Text>}
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ✅ SELECTION DROPDOWN MODAL */}
+      <Modal visible={showSectionDropdown} transparent={true} animationType="fade" onRequestClose={() => setShowSectionDropdown(false)}>
+        <View style={styles.dropdownOverlay}>
+          <View style={styles.dropdownContainer}>
+            <Text style={styles.dropdownTitle}>Select Section</Text>
+            
+            {setupData.sections.length === 0 ? (
+                <Text style={{textAlign: 'center', color: '#9ca3af', padding: 20}}>No sections available.</Text>
+            ) : (
+                <FlatList
+                  data={setupData.sections}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.dropdownItem} 
+                      onPress={() => { setNewSection(item.section_name); setShowSectionDropdown(false); }}
+                    >
+                      <Text style={styles.dropdownItemText}>{item.section_name}</Text>
+                      {newSection === item.section_name && <Ionicons name="checkmark" size={20} color="#104a28" />}
+                    </TouchableOpacity>
+                  )}
+                />
+            )}
+            
+            <TouchableOpacity style={styles.dropdownCloseBtn} onPress={() => setShowSectionDropdown(false)}>
+              <Text style={styles.dropdownCloseText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -311,11 +342,19 @@ const styles = StyleSheet.create({
   
   inputLabel: { fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 8, marginTop: 15 },
   
-  pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  pickerBtn: { minWidth: '22%', paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
-  pickerActive: { backgroundColor: '#104a28', borderColor: '#104a28' },
-  pickerText: { fontSize: 16, color: '#555', fontWeight: '600' },
-  pickerActiveText: { color: '#fff' },
+  // ✅ STYLES FOR THE NEW CLEAN DROPDOWN
+  dropdownBtn: { 
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+      backgroundColor: '#f9fafb', padding: 16, borderRadius: 12, 
+      borderWidth: 1, borderColor: '#d1d5db' 
+  },
+  dropdownOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  dropdownContainer: { width: '85%', backgroundColor: 'white', borderRadius: 16, padding: 20, maxHeight: '60%' },
+  dropdownTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#104a28', textAlign: 'center' },
+  dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  dropdownItemText: { fontSize: 16, color: '#334155', fontWeight: '500' },
+  dropdownCloseBtn: { marginTop: 15, padding: 14, alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: 10 },
+  dropdownCloseText: { color: '#64748b', fontWeight: 'bold', fontSize: 15 },
 
   toggleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20, padding: 15, backgroundColor: '#f9f9f9', borderRadius: 8 },
   toggleText: { marginLeft: 10, fontSize: 15, fontWeight: '600', color: '#333' },

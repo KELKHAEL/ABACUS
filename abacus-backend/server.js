@@ -441,8 +441,9 @@ app.get('/instructor/dashboard/:id', async (req, res) => {
 
     let myStudents = [];
     if (assignedClasses.length > 0) {
-      const conditions = assignedClasses.map(() => `(year_level = ? AND section = ?)`).join(' OR ');
-      const params = assignedClasses.flatMap(c => [c.year, c.section]);
+      // ✅ FIX: Use the merged section strings directly instead of c.year and c.section objects
+      const conditions = assignedClasses.map(() => `section = ?`).join(' OR ');
+      const params = assignedClasses;
       const [students] = await db.query(
         `SELECT id, full_name, student_id, program, year_level, section, status, cor_image_url FROM users WHERE role = 'STUDENT' AND is_deleted = 0 AND (${conditions})`,
         params
@@ -1080,6 +1081,9 @@ app.get('/admin/promotions/pending', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==========================
+// PENDING PROMOTIONS ENDPOINT
+// ==========================
 app.get('/instructor/:instructorId/promotions/pending', async (req, res) => {
     const { instructorId } = req.params;
     try {
@@ -1094,8 +1098,9 @@ app.get('/instructor/:instructorId/promotions/pending', async (req, res) => {
 
         if (assignedClasses.length === 0) return res.json([]); 
 
-        const conditions = assignedClasses.map(() => `(pending_year = ? AND pending_section = ?)`).join(' OR ');
-        const params = assignedClasses.flatMap(c => [c.year, c.section]);
+        // ✅ FIX: Match the pending_section column directly against the assignedClasses string array
+        const conditions = assignedClasses.map(() => `pending_section = ?`).join(' OR ');
+        const params = assignedClasses;
 
         const query = `
             SELECT id, full_name, student_id, program, year_level, section, 
