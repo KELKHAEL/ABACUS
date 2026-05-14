@@ -47,12 +47,10 @@ export default function CreateQuiz({ setActiveTab }) {
         try {
           const user = JSON.parse(userStr);
 
-          // 1. Fetch students for Retake selection
           const res = await fetch(`https://abacus-w435.onrender.com/instructor/dashboard/${user.id}`);
           const data = await res.json();
           setAllInstructorStudents(data.students || []);
 
-          // 2. Fetch fresh assigned classes from DB just in case localStorage is missing it
           const usersRes = await fetch('https://abacus-w435.onrender.com/users?role=INSTRUCTOR');
           const usersData = await usersRes.json();
           const currentInstructor = usersData.find(u => u.id === user.id);
@@ -84,13 +82,11 @@ export default function CreateQuiz({ setActiveTab }) {
       if (!q) return;
 
       if (location.state.retakeParentQuiz) {
-          // SETUP RETAKE MODE
           setIsRetake(true);
           setParentQuizId(q.id);
           setQuizTitle(`[RETAKE] ${q.title}`);
           setQuizDesc(`Retake assignment. Note: A point penalty deduction will be applied to the final score.`);
       } else {
-          // NORMAL EDIT MODE
           setIsEditing(true);
           setEditQuizId(q.id);
           setQuizTitle(q.title || "");
@@ -107,18 +103,24 @@ export default function CreateQuiz({ setActiveTab }) {
           setSelectedClassStr(q.target_section);
       }
       
-      if (q.due_date && !location.state.retakeParentQuiz) { // Don't copy old due date for retakes
+      if (q.due_date && !location.state.retakeParentQuiz) { 
          const dateObj = new Date(q.due_date);
          dateObj.setMinutes(dateObj.getMinutes() - dateObj.getTimezoneOffset());
          setDueDate(dateObj.toISOString().slice(0, 16));
       }
       
+      // ✅ FIX: Correctly map database keys to component state to prevent uncontrolled input warning
       if (q.questions && q.questions.length > 0) {
           const hydratedQuestions = q.questions.map(question => {
+            let base = {
+                ...question,
+                questionText: question.question_text || "",
+                correctAnswerText: question.correct_answer_text || ""
+            };
             if (question.type === 'checkbox') {
-              return { ...question, correctIndices: question.correct_answer_text ? question.correct_answer_text.split(',').map(Number) : [] };
+              return { ...base, correctIndices: question.correct_answer_text ? question.correct_answer_text.split(',').map(Number) : [] };
             }
-            return { ...question, correctIndices: [] };
+            return { ...base, correctIndices: [] };
           });
           setQuestions(hydratedQuestions);
       }
@@ -193,7 +195,9 @@ export default function CreateQuiz({ setActiveTab }) {
 
   // --- 3. SAVE TO MYSQL ---
   const publishQuiz = async () => {
+    // ✅ FIX: Crucial Validations to prevent 500 Database Crash
     if (!quizTitle.trim()) return alert("Please enter a Quiz Title.");
+    if (!dueDate) return alert("Please set a deadline / due date.");
     if (!selectedClassStr) return alert("Please select a target class.");
     if (isRetake && targetStudents.length === 0) return alert("Please select at least one student for the Retake.");
 
@@ -253,10 +257,10 @@ export default function CreateQuiz({ setActiveTab }) {
         
         <div className="quiz-title-card">
           <div className="top-accent" style={{background: isRetake ? '#eab308' : '#104a28'}}></div>
-          <input className="input-title-large" value={quizTitle} onChange={(e) => setQuizTitle(e.target.value)} placeholder="Untitled Quiz" />
-          <input className="input-desc" value={quizDesc} onChange={(e) => setQuizDesc(e.target.value)} placeholder="Form description" />
+          {/* ✅ FIX: Ensure values always default to empty string so they remain controlled */}
+          <input className="input-title-large" value={quizTitle || ""} onChange={(e) => setQuizTitle(e.target.value)} placeholder="Untitled Quiz" />
+          <input className="input-desc" value={quizDesc || ""} onChange={(e) => setQuizDesc(e.target.value)} placeholder="Form description" />
 
-          {/* TARGET SETTINGS */}
           <div style={{marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
             <div style={{flex: 1, minWidth: '250px'}}>
                 <label style={{fontSize: '12px', fontWeight: 'bold', color: '#555', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px'}}>
@@ -264,15 +268,14 @@ export default function CreateQuiz({ setActiveTab }) {
                 </label>
                 <select 
                     style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', background: '#f9fafb'}}
-                    value={selectedClassStr}
+                    value={selectedClassStr || ""}
                     onChange={(e) => { setSelectedClassStr(e.target.value); setTargetStudents([]); }}
-                    disabled={isRetake && isEditing} // Prevent changing target class on existing retakes
+                    disabled={isRetake && isEditing}
                 >
                     {!isRetake && <option value="ALL" style={{fontWeight: 'bold'}}>All Assigned Classes</option>}
                     {isRetake && <option value="ALL" disabled>Select a Specific Class First</option>}
-                    
-                    {/* ✅ FIX: Dropdown displays short section names, but values are full strings */}
                     {myClasses.map((cls, idx) => (
+                        /* ✅ FIX: Dropdown uses .split(' ').pop() to display short class */
                         <option key={idx} value={cls}>{cls.split(' ').pop()}</option>
                     ))}
                 </select>
@@ -285,12 +288,11 @@ export default function CreateQuiz({ setActiveTab }) {
                 <input 
                     type="datetime-local"
                     style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ef4444', color: '#111', fontWeight: 'bold'}}
-                    value={dueDate} onChange={(e) => setDueDate(e.target.value)} required
+                    value={dueDate || ""} onChange={(e) => setDueDate(e.target.value)}
                 />
             </div>
           </div>
 
-          {/* RETAKE SETTINGS PANEL */}
           {isRetake && (
              <div style={{marginTop: '20px', padding: '20px', background: '#fefce8', border: '1px solid #fde047', borderRadius: '8px'}}>
                  <h4 style={{color: '#854d0e', marginTop: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px'}}><RotateCcw size={18}/> Retake Settings</h4>
@@ -301,7 +303,7 @@ export default function CreateQuiz({ setActiveTab }) {
                          <input 
                              type="number" 
                              style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #fde047', background: 'white'}}
-                             value={penalty} 
+                             value={penalty || ""} 
                              onChange={e => setPenalty(e.target.value)} 
                              min="0"
                          />
@@ -332,13 +334,12 @@ export default function CreateQuiz({ setActiveTab }) {
           )}
         </div>
 
-        {/* QUESTIONS LIST */}
         {questions.map((q, qIdx) => (
           <div key={q.id} className={`question-card-modern ${activeQuestion === q.id ? 'active' : ''}`} onClick={() => setActiveQuestion(q.id)}>
             <div className="drag-handle-modern"><MoreVertical size={16} color="#e0e0e0" /></div>
             
             <div className="q-header-row">
-              <input className="input-question-text" value={q.questionText} onChange={(e) => updateQuestion(qIdx, 'questionText', e.target.value)} placeholder="Question" />
+              <input className="input-question-text" value={q.questionText || ""} onChange={(e) => updateQuestion(qIdx, 'questionText', e.target.value)} placeholder="Question" />
               <div className="select-wrapper">
                 {q.type === 'multiple-choice' && <Circle size={18} className="select-icon" />}
                 {q.type === 'checkbox' && <CheckSquare size={18} className="select-icon" />}
@@ -356,7 +357,7 @@ export default function CreateQuiz({ setActiveTab }) {
               {q.type === 'short' && (
                 <div className="short-answer-box">
                   <div className="short-label">Correct Answer Key:</div>
-                  <input type="text" className="input-short-answer" value={q.correctAnswerText} onChange={(e) => updateQuestion(qIdx, 'correctAnswerText', e.target.value)} placeholder="Type the correct answer here..." />
+                  <input type="text" className="input-short-answer" value={q.correctAnswerText || ""} onChange={(e) => updateQuestion(qIdx, 'correctAnswerText', e.target.value)} placeholder="Type the correct answer here..." />
                   <div className="helper-text">Answers will be auto-graded (case-insensitive).</div>
                 </div>
               )}
@@ -370,7 +371,7 @@ export default function CreateQuiz({ setActiveTab }) {
                         <div className={`selector-icon ${isCorrect ? 'correct' : ''}`} style={{ borderRadius: q.type === 'checkbox' ? '4px' : '50%' }} onClick={() => toggleCorrectAnswer(qIdx, oIdx)}>
                             {isCorrect ? <Check size={14} color="white" /> : null}
                         </div>
-                        <input className={`input-option ${isCorrect ? 'correct-text' : ''}`} value={opt} onChange={(e) => updateOption(qIdx, oIdx, e.target.value)} placeholder={`Option ${oIdx + 1}`} />
+                        <input className={`input-option ${isCorrect ? 'correct-text' : ''}`} value={opt || ""} onChange={(e) => updateOption(qIdx, oIdx, e.target.value)} placeholder={`Option ${oIdx + 1}`} />
                         {q.options.length > 1 && (<button className="btn-remove-opt" onClick={() => removeOption(qIdx, oIdx)}><X size={18} /></button>)}
                         </div>
                     );

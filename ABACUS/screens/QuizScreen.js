@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import * as ScreenCapture from 'expo-screen-capture'; 
 
-// ❗ REPLACE THIS WITH YOUR PC'S IP ADDRESS OR NGROK URL
+// REPLACE THIS WITH YOUR PC'S IP ADDRESS OR NGROK URL
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function QuizScreen({ route, navigation }) {
@@ -26,6 +26,9 @@ export default function QuizScreen({ route, navigation }) {
   // Quiz Logic States
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
+  
+  // NEW: Keep track of raw answers for the paper viewer
+  const [studentAnswers, setStudentAnswers] = useState({});
   
   // Inputs
   const [textAnswer, setTextAnswer] = useState(""); 
@@ -58,7 +61,7 @@ export default function QuizScreen({ route, navigation }) {
   }, [quizId, navigation]);
 
   // ==========================================
-  // 🛡️ ANTI-CHEAT SECURITY MODULE 🛡️
+  //  ANTI-CHEAT SECURITY MODULE 
   // ==========================================
   useEffect(() => {
     // Only activate security if the quiz is actively being taken
@@ -124,6 +127,10 @@ export default function QuizScreen({ route, navigation }) {
   const handleMultipleChoice = (selectedIndex) => {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = selectedIndex === currentQ.correctIndex;
+    
+    // ✅ FIX: Save what the student clicked
+    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedIndex}));
+    
     processAnswer(isCorrect);
   };
 
@@ -131,6 +138,10 @@ export default function QuizScreen({ route, navigation }) {
     if (!textAnswer.trim()) return Alert.alert("Required", "Please type an answer.");
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = textAnswer.trim().toLowerCase() === currentQ.correctAnswerText?.trim().toLowerCase();
+    
+    // ✅ FIX: Save what the student typed
+    setStudentAnswers(prev => ({...prev, [currentQ.id]: textAnswer.trim()}));
+
     processAnswer(isCorrect);
   };
 
@@ -146,6 +157,10 @@ export default function QuizScreen({ route, navigation }) {
     if (selectedChecks.length === 0) return Alert.alert("Required", "Select at least one option.");
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = selectedChecks.includes(currentQ.correctIndex) && selectedChecks.length === 1;
+    
+    // ✅ FIX: Save the array of indices they checked
+    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedChecks}));
+
     processAnswer(isCorrect);
   };
 
@@ -183,15 +198,16 @@ export default function QuizScreen({ route, navigation }) {
             quizId: quizId,
             score: finalScore,
             totalItems: totalItems,
-            subjectTitle: quizTitle
+            subjectTitle: quizTitle,
+            responses: studentAnswers // ✅ FIX: Attach the mapped answers to the payload
         })
       });
 
       setIsSubmitting(false);
       
       if (cheatReason) {
-         Alert.alert("🚨 Quiz Terminated", `Violation: ${cheatReason}\n\nYour score has been recorded as 0.`, [
-          { text: "Understood", onPress: () => navigation.goBack() } // ✅ Safely goes back without looping
+         Alert.alert("Quiz Terminated", `Violation: ${cheatReason}\n\nYour score has been recorded as 0.`, [
+          { text: "Understood", onPress: () => navigation.goBack() } 
          ]);
       }
 

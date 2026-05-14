@@ -105,6 +105,7 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN is_retake BOOLEAN DEFAULT FALSE"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN parent_quiz_id INT DEFAULT NULL"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN target_students TEXT DEFAULT NULL"); } catch(e){}
+    try { await connection.query("ALTER TABLE quizzes MODIFY COLUMN target_section VARCHAR(255)"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN penalty INT DEFAULT 0"); } catch(e){}
     try { await connection.query("ALTER TABLE quizzes ADD COLUMN time_limit INT DEFAULT 0"); } catch(e){}
 
