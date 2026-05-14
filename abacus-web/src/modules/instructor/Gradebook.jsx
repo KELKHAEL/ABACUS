@@ -15,9 +15,7 @@ export default function Gradebook() {
   const [viewMode, setViewMode] = useState('active'); 
 
   const [search, setSearch] = useState("");
-  const [programFilter, setProgramFilter] = useState("All");
-  const [yearFilter, setYearFilter] = useState("All");
-  const [sectionFilter, setSectionFilter] = useState("All");
+  const [classFilter, setClassFilter] = useState("All");
 
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -69,8 +67,6 @@ export default function Gradebook() {
       setQuizStatusMap(statusMap);
 
       const mergedData = assignedStudents.map(student => {
-          // ✅ FIX: Because server.js now safely inserts retake grades under the PARENT quiz ID,
-          // we just grab all grades belonging to the student. No complex filtering needed!
           const studentGrades = gradesData.filter(g => g.user_id === student.id);
 
           return {
@@ -78,7 +74,6 @@ export default function Gradebook() {
               fullName: student.full_name ? student.full_name.toUpperCase() : '', 
               email: student.email,
               program: student.program || 'BSIT', 
-              yearLevel: student.year_level,
               section: student.section, 
               gradesList: studentGrades 
           };
@@ -94,9 +89,8 @@ export default function Gradebook() {
     fetchData();
   }, [fetchData]);
 
-  const uniquePrograms = ['All', ...new Set(students.map(s => s.program))];
-  const uniqueYears = ['All', ...new Set(students.map(s => s.yearLevel))].sort();
-  const uniqueSections = ['All', ...new Set(students.map(s => s.section))].sort();
+  // Extract merged class sections for the filter dropdown
+  const uniqueClasses = ['All', ...new Set(students.map(s => s.section))].sort();
 
   useEffect(() => {
     let result = students;
@@ -104,11 +98,11 @@ export default function Gradebook() {
       const lower = search.toLowerCase();
       result = result.filter(s => (s.fullName && s.fullName.toLowerCase().includes(lower)) || (s.email && s.email.toLowerCase().includes(lower)));
     }
-    if (programFilter !== "All") result = result.filter(s => s.program === programFilter);
-    if (yearFilter !== "All") result = result.filter(s => String(s.yearLevel) === String(yearFilter));
-    if (sectionFilter !== "All") result = result.filter(s => String(s.section) === String(sectionFilter));
+    // Filter by the new merged section name
+    if (classFilter !== "All") result = result.filter(s => String(s.section) === String(classFilter));
+    
     setFilteredStudents(result);
-  }, [search, programFilter, yearFilter, sectionFilter, students, viewMode]);
+  }, [search, classFilter, students, viewMode]);
 
   const openStudentModal = (student, editMode = false) => {
     setSelectedStudent(student);
@@ -178,14 +172,8 @@ export default function Gradebook() {
             <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
-            <select className="gb-select" value={programFilter} onChange={e => setProgramFilter(e.target.value)}>
-                {uniquePrograms.map(p => <option key={p} value={p}>{p === 'All' ? 'All Programs' : p.replace('Bachelor of Science in', 'BS')}</option>)}
-            </select>
-            <select className="gb-select" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-                {uniqueYears.map(y => <option key={y} value={y}>{y === 'All' ? 'All Years' : `Year ${y}`}</option>)}
-            </select>
-            <select className="gb-select" value={sectionFilter} onChange={e => setSectionFilter(e.target.value)}>
-                {uniqueSections.map(s => <option key={s} value={s}>{s === 'All' ? 'All Sections' : `Section ${s}`}</option>)}
+            <select className="gb-select" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
+                {uniqueClasses.map(c => <option key={c} value={c}>{c === 'All' ? 'All Classes' : c}</option>)}
             </select>
         </div>
       </div>
@@ -216,7 +204,7 @@ export default function Gradebook() {
                 return (
                   <tr key={student.id}>
                     <td><div className="student-name">{student.fullName || "Unknown"}</div><div className="student-email">{student.email}</div></td>
-                    <td className="text-center"><div className="badge-pill">{student.program || "N/A"}</div><div className="small-meta">{student.yearLevel} - {student.section}</div></td>
+                    <td className="text-center"><div className="badge-pill">{student.program || "N/A"}</div><div className="small-meta">{student.section}</div></td>
                     <td className="text-center"><span className="quiz-count">{targetGrades.length}</span></td>
                     <td className="text-center"><span className={`grade-avg ${avg >= 75 ? 'pass' : (avg === "N/A" ? 'neutral' : 'fail')}`}>{avg === "N/A" ? avg : `${avg}%`}</span></td>
                     <td className="text-right">
@@ -237,7 +225,7 @@ export default function Gradebook() {
         <div className="modal-overlay" onClick={() => setSelectedStudent(null)}>
           <div className="modal-content large" onClick={e => e.stopPropagation()}>
             <div className="modal-header-green" style={{background: viewMode === 'archived' ? '#475569' : '#104a28'}}>
-              <div><h2>{selectedStudent.fullName}</h2><p className="modal-subtitle-white">{selectedStudent.program} • {selectedStudent.yearLevel} - {selectedStudent.section}</p></div>
+              <div><h2>{selectedStudent.fullName}</h2><p className="modal-subtitle-white">{selectedStudent.program} • {selectedStudent.section}</p></div>
               <button className="btn-close-white" onClick={() => setSelectedStudent(null)}><X size={24}/></button>
             </div>
             <div className="modal-body">

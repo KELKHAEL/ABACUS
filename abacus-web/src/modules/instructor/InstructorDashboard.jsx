@@ -4,7 +4,7 @@ import { Users, FileText, ArrowRight, BarChart2, Activity, Megaphone, History, M
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './Instructor.css';
 
-export default function InstructorDashboard() {
+export default function InstructorDashboard({ setActiveTab }) {
   const [quizzes, setQuizzes] = useState([]);
   const [studentCount, setStudentCount] = useState(0); 
   const [announcements, setAnnouncements] = useState([]); 
@@ -87,24 +87,21 @@ export default function InstructorDashboard() {
   
   const currentChartData = targetQuizzes.filter(q => {
       if (chartClassFilter === 'ALL') return true;
-      return q.target_year === 'ALL' || `${q.target_year}-${q.target_section}` === chartClassFilter;
+      return q.target_section === 'ALL' || q.target_section === chartClassFilter;
   }).map(quiz => {
       let filteredStudentsInClass = [];
       
       if (chartClassFilter === 'ALL') {
-          if (quiz.target_year === 'ALL') {
+          if (quiz.target_section === 'ALL') {
               filteredStudentsInClass = assignedStudents;
           } else {
               filteredStudentsInClass = assignedStudents.filter(s => 
-                  String(s.year_level) === String(quiz.target_year) && 
                   String(s.section) === String(quiz.target_section)
               );
           }
       } else {
-          const [fYear, fSec] = chartClassFilter.split('-');
           filteredStudentsInClass = assignedStudents.filter(s => 
-              String(s.year_level) === String(fYear) && 
-              String(s.section) === String(fSec)
+              String(s.section) === String(chartClassFilter)
           );
       }
 
@@ -125,8 +122,8 @@ export default function InstructorDashboard() {
           targetStudents: filteredStudentsInClass.length,
           taken: participatingStudentIds.size,
           targetLabel: chartClassFilter === 'ALL' 
-              ? (quiz.target_year === 'ALL' ? 'All Classes' : `Yr ${quiz.target_year}-S${quiz.target_section}`)
-              : `Yr ${chartClassFilter.replace('-', '-S')}`
+              ? (quiz.target_section === 'ALL' ? 'All Classes' : quiz.target_section)
+              : chartClassFilter
       };
   });
 
@@ -163,7 +160,7 @@ export default function InstructorDashboard() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '40px' }}>
           
-          <div style={boxStyle('#3b82f6')} onClick={() => navigate('/instructor/MyClassList')}>
+          <div style={boxStyle('#3b82f6')} onClick={() => { if(setActiveTab) setActiveTab('my-classes'); else navigate('/instructor/MyClassList'); }}>
               <div>
                   <h4 style={titleStyle}>Total Enrolled</h4>
                   <span style={numberStyle}>{studentCount}</span>
@@ -172,7 +169,7 @@ export default function InstructorDashboard() {
               <div style={iconBgStyle('#eff6ff')}><Users size={32} color="#3b82f6" /></div>
           </div>
 
-          <div style={boxStyle('#eab308')} onClick={() => navigate('/instructor/ManageQuizzes')}>
+          <div style={boxStyle('#eab308')} onClick={() => { if(setActiveTab) setActiveTab('manage-quizzes'); else navigate('/instructor/ManageQuizzes'); }}>
               <div>
                   <h4 style={titleStyle}>Active Quizzes</h4>
                   <span style={numberStyle}>{activeQuizzes.length}</span>
@@ -181,7 +178,7 @@ export default function InstructorDashboard() {
               <div style={iconBgStyle('#fefce8')}><FileText size={32} color="#eab308" /></div>
           </div>
 
-          <div style={boxStyle(pendingCount > 0 ? '#f59e0b' : '#8b5cf6')} onClick={() => navigate('/instructor/InstructorPromotions')}>
+          <div style={boxStyle(pendingCount > 0 ? '#f59e0b' : '#8b5cf6')} onClick={() => { if(setActiveTab) setActiveTab('promotions'); else navigate('/instructor/InstructorPromotions'); }}>
               <div>
                   <h4 style={titleStyle}>Pending Verification</h4>
                   <span style={numberStyle}>{pendingCount}</span>
@@ -230,8 +227,8 @@ export default function InstructorDashboard() {
                     >
                         <option value="ALL">All Assigned Classes</option>
                         {assignedClasses.map((cls, idx) => (
-                            <option key={idx} value={`${cls.year}-${cls.section}`}>
-                                Year {cls.year} - Sec {cls.section}
+                            <option key={idx} value={cls}>
+                                {cls}
                             </option>
                         ))}
                     </select>

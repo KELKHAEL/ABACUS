@@ -19,8 +19,7 @@ export default function ManageQuizzes() {
   const [trashLoading, setTrashLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterYear, setFilterYear] = useState('ALL');
-  const [filterSection, setFilterSection] = useState('ALL');
+  const [filterClass, setFilterClass] = useState('ALL');
   
   const navigate = useNavigate();
 
@@ -138,21 +137,16 @@ export default function ManageQuizzes() {
     }
   };
 
-  const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
-  const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
+  const uniqueClasses = [...assignedClasses].sort();
 
   const filteredQuizzes = quizzes.filter(q => {
-      // ✅ FIX: Removed the UI filter that was hiding Retake quizzes. 
-      // You can now see them, edit them, and delete them!
-
       const isTargetMode = viewMode === 'active' ? !q.is_archived : q.is_archived;
       if (!isTargetMode || q.status === 'deleted') return false;
 
       const matchSearch = (q.title || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const matchYear = filterYear === 'ALL' || q.target_year === 'ALL' || String(q.target_year) === String(filterYear);
-      const matchSection = filterSection === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterSection);
+      const matchClass = filterClass === 'ALL' || q.target_section === 'ALL' || String(q.target_section) === String(filterClass);
       
-      return matchSearch && matchYear && matchSection;
+      return matchSearch && matchClass;
   });
 
   return (
@@ -190,16 +184,13 @@ export default function ManageQuizzes() {
                 <Search size={18} color="#666" />
                 <input placeholder="Search Quiz Title..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
             </div>
-            <select className="gb-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                <option value="ALL">All Years</option>
-                {uniqueYears.map(y => <option key={y} value={y}>Year {y}</option>)}
+            
+            <select className="gb-select" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+                <option value="ALL">All Assigned Classes</option>
+                {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select className="gb-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-                <option value="ALL">All Sections</option>
-                {uniqueSections.map(s => <option key={s} value={s}>Section {s}</option>)}
-            </select>
-            {(filterYear !== 'ALL' || filterSection !== 'ALL' || searchTerm !== '') && (
-                <button onClick={() => {setFilterYear('ALL'); setFilterSection('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
+            {(filterClass !== 'ALL' || searchTerm !== '') && (
+                <button onClick={() => {setFilterClass('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
             )}
         </div>
       </div>
@@ -221,7 +212,7 @@ export default function ManageQuizzes() {
                 <h3 className="card-title">{quiz.title}</h3>
                 <div className="card-tags">
                     {quiz.is_retake ? <span className="tag" style={{background:'#fef08a', color:'#854d0e', fontWeight:'bold'}}>Retake Quiz (-{quiz.penalty} pts)</span> : null}
-                    {quiz.target_year && <span className="tag tag-year"><Target size={12}/> {quiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${quiz.target_year}-${quiz.target_section}`}</span>}
+                    <span className="tag tag-year"><Target size={12}/> {quiz.target_section === 'ALL' ? 'All Assigned Classes' : quiz.target_section}</span>
                     {quiz.due_date && (
                         <span style={{fontSize: '11px', background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'}}>
                             <Clock size={12}/> Due: {new Date(quiz.due_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
@@ -261,7 +252,7 @@ export default function ManageQuizzes() {
                     </h2>
                     <div style={{display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap'}}>
                         <span style={{fontSize: '12px', background: 'rgba(255,255,255,0.2)', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px'}}>
-                            <Target size={14}/> {viewingQuiz.target_year === 'ALL' ? 'All Assigned Classes' : `Year ${viewingQuiz.target_year} - Sec ${viewingQuiz.target_section}`}
+                            <Target size={14}/> {viewingQuiz.target_section === 'ALL' ? 'All Assigned Classes' : viewingQuiz.target_section}
                         </span>
                         {viewingQuiz.due_date ? (
                             <span style={{fontSize: '12px', background: '#fee2e2', color: '#991b1b', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold'}}>
@@ -330,7 +321,7 @@ export default function ManageQuizzes() {
                                             </div>
                                         </td>
                                         <td style={{fontSize: '12px', color: '#6b7280'}}>
-                                            {item.target_year === 'ALL' ? 'All Classes' : `Yr ${item.target_year} - Sec ${item.target_section}`}
+                                            {item.target_section === 'ALL' ? 'All Classes' : item.target_section}
                                         </td>
                                         <td>
                                             <div style={{display: 'flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 'bold', fontSize: '13px'}}>

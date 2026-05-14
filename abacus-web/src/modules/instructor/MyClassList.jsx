@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, User, Mail, ArrowLeft, Info, UserPlus, AlertCircle, FileImage, BookOpen, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Search, Filter, User, Mail, ArrowLeft, Info, UserPlus, AlertCircle, FileImage, BookOpen, ZoomIn, ZoomOut, RotateCcw, Users } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import './Instructor.css';
 

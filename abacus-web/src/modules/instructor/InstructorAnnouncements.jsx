@@ -15,14 +15,14 @@ export default function InstructorAnnouncements() {
   
   const [viewMode, setViewMode] = useState('sent'); 
 
-  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterClass, setFilterClass] = useState('ALL');
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterDay, setFilterDay] = useState('ALL');
 
   const [showModal, setShowModal] = useState(false);
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null); // Now stores an Array of IDs for the batch
+  const [editId, setEditId] = useState(null); 
   
   const [trashList, setTrashList] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
@@ -32,12 +32,10 @@ export default function InstructorAnnouncements() {
 
   const navigate = useNavigate();
 
-  // ✅ NEW: Helper function to group mass-postings into a single UI card
   const groupAnnouncements = (rawList) => {
     const grouped = [];
     const map = {};
     (rawList || []).forEach(ann => {
-      // Group by exact Title, Content, and the minute it was posted
       const timeKey = new Date(ann.created_at).toISOString().slice(0, 16); 
       const key = `${ann.title}-${ann.content}-${timeKey}`;
       
@@ -45,12 +43,12 @@ export default function InstructorAnnouncements() {
         map[key] = {
           ...ann,
           grouped_ids: [ann.id],
-          target_classes: [{ year: ann.target_year, section: ann.target_section }]
+          target_classes: [ann.target_section]
         };
         grouped.push(map[key]);
       } else {
         map[key].grouped_ids.push(ann.id);
-        map[key].target_classes.push({ year: ann.target_year, section: ann.target_section });
+        map[key].target_classes.push(ann.target_section);
       }
     });
     return grouped;
@@ -81,7 +79,6 @@ export default function InstructorAnnouncements() {
       const res = await fetch(`https://abacus-w435.onrender.com/announcements/instructor/${user.id}`);
       const data = await res.json();
       
-      // ✅ Apply Grouping so it doesn't flood the UI
       setAnnouncements(groupAnnouncements(data));
 
       const adminRes = await fetch(`https://abacus-w435.onrender.com/announcements/admin-to-instructor/${user.id}`);
@@ -101,7 +98,6 @@ export default function InstructorAnnouncements() {
         const res = await fetch(`https://abacus-w435.onrender.com/trash/announcements/instructor/${user.id}`);
         const data = await res.json();
         
-        // ✅ Apply Grouping to Trash Bin as well
         setTrashList(groupAnnouncements(data));
     } catch (error) { console.error("Error fetching trash:", error); } 
     finally { setTrashLoading(false); }
@@ -109,7 +105,6 @@ export default function InstructorAnnouncements() {
 
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
-  // ✅ Batch Deletions
   const handleSoftDelete = async (groupedIds) => {
     if (window.confirm("Move this announcement to Trash? It will be removed from the students' app immediately.")) {
       try {
@@ -145,7 +140,7 @@ export default function InstructorAnnouncements() {
 
   const openEditModal = (ann) => {
     setIsEditing(true);
-    setEditId(ann.grouped_ids); // Pass array of batch IDs
+    setEditId(ann.grouped_ids); 
     setFormData({ title: ann.title, content: ann.content });
     setSelectedClasses(ann.target_classes); 
     setShowModal(true);
@@ -162,7 +157,6 @@ export default function InstructorAnnouncements() {
     setSaving(true);
     try {
       if (isEditing) {
-          // ✅ Edit ALL announcements in this batch grouping at once
           await Promise.all(editId.map((id, index) => {
               return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
@@ -170,21 +164,20 @@ export default function InstructorAnnouncements() {
                   body: JSON.stringify({
                       title: formData.title,
                       content: formData.content,
-                      targetYear: selectedClasses[index].year,
-                      targetSection: selectedClasses[index].section
+                      targetYear: 'ALL',
+                      targetSection: selectedClasses[index]
                   })
               });
           }));
           alert("Announcement updated successfully!");
       } else {
-          // ✅ Post new announcement (Backend loop handles multiple targets)
           const payload = {
               title: formData.title, 
               content: formData.content, 
               authorRole: 'INSTRUCTOR', 
               authorName: user.fullName, 
               authorId: user.id,
-              targets: selectedClasses.map(c => ({ targetYear: c.year, targetSection: c.section }))
+              targets: selectedClasses.map(c => ({ targetYear: 'ALL', targetSection: c }))
           };
           const res = await fetch('https://abacus-w435.onrender.com/announcements', { 
               method: 'POST', 
@@ -211,14 +204,12 @@ export default function InstructorAnnouncements() {
   const currentDataList = viewMode === 'sent' ? announcements : adminAnnouncements;
   const filteredList = currentDataList.filter(item => {
     const d = new Date(item.created_at);
-    if (filterYear !== 'ALL' && d.getFullYear().toString() !== filterYear) return false;
+    if (filterClass !== 'ALL' && item.target_section !== 'ALL' && !item.target_classes.includes(filterClass)) return false;
     if (filterMonth !== 'ALL' && (d.getMonth() + 1).toString() !== filterMonth) return false;
     if (filterDay !== 'ALL' && d.getDate().toString() !== filterDay) return false;
     return true;
   });
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({length: 5}, (_, i) => currentYear - i);
   const months = Array.from({length: 12}, (_, i) => i + 1);
   const days = Array.from({length: 31}, (_, i) => i + 1);
 
@@ -265,9 +256,9 @@ export default function InstructorAnnouncements() {
         <div style={{display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#555'}}>
             <Filter size={18}/> Filters:
         </div>
-        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} style={{padding: '8px', borderRadius: '6px', border: '1px solid #ccc', outline: 'none'}}>
-            <option value="ALL">All Years</option>
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
+        <select value={filterClass} onChange={e => setFilterClass(e.target.value)} style={{padding: '8px', borderRadius: '6px', border: '1px solid #ccc', outline: 'none'}}>
+            <option value="ALL">All Classes</option>
+            {assignedClasses.map(cls => <option key={cls} value={cls}>{cls}</option>)}
         </select>
         <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{padding: '8px', borderRadius: '6px', border: '1px solid #ccc', outline: 'none'}}>
             <option value="ALL">All Months</option>
@@ -277,8 +268,8 @@ export default function InstructorAnnouncements() {
             <option value="ALL">All Days</option>
             {days.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        {(filterYear !== 'ALL' || filterMonth !== 'ALL' || filterDay !== 'ALL') && (
-            <button onClick={() => {setFilterYear('ALL'); setFilterMonth('ALL'); setFilterDay('ALL');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold'}}>
+        {(filterClass !== 'ALL' || filterMonth !== 'ALL' || filterDay !== 'ALL') && (
+            <button onClick={() => {setFilterClass('ALL'); setFilterMonth('ALL'); setFilterDay('ALL');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold'}}>
                 Clear Filters
             </button>
         )}
@@ -315,14 +306,13 @@ export default function InstructorAnnouncements() {
                     
                     {viewMode === 'sent' && (
                         <td>
-                            {/* ✅ DISPLAY GROUPED BADGE */}
                             {ann.target_classes && ann.target_classes.length > 1 ? (
                                 <span style={{fontSize:'11px', background:'#f3f4f6', color: '#104a28', padding:'4px 8px', borderRadius:'4px', border:'1px solid #bbf7d0', fontWeight: 'bold'}}>
                                     {ann.target_classes.length} Classes Selected
                                 </span>
                             ) : (
                                 <span style={{fontSize:'11px', background:'#f3f4f6', padding:'4px 8px', borderRadius:'4px', border:'1px solid #e5e7eb', fontWeight: 'bold'}}>
-                                    Yr {ann.target_year} - Sec {ann.target_section}
+                                    {ann.target_section}
                                 </span>
                             )}
                         </td>
@@ -341,7 +331,6 @@ export default function InstructorAnnouncements() {
                         <td style={{textAlign: 'right'}}>
                             <div className="action-buttons" style={{justifyContent: 'flex-end'}}>
                                 <button className="btn-icon btn-edit" onClick={() => openEditModal(ann)} title="Edit Announcement"><Edit size={18} /></button>
-                                {/* ✅ Uses the Grouped IDs to delete the whole batch */}
                                 <button className="btn-icon btn-delete" onClick={() => handleSoftDelete(ann.grouped_ids)} title="Move to Trash"><Trash2 size={18} /></button>
                             </div>
                         </td>
@@ -377,7 +366,7 @@ export default function InstructorAnnouncements() {
                                                 </span>
                                             ) : (
                                                 <span style={{fontSize:'11px', background:'#f3f4f6', color: '#6b7280', padding:'4px 8px', borderRadius:'4px', fontWeight: 'bold'}}>
-                                                    Yr {item.target_year} - Sec {item.target_section}
+                                                    {item.target_section}
                                                 </span>
                                             )}
                                         </td>
@@ -401,7 +390,6 @@ export default function InstructorAnnouncements() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => !saving && setShowModal(false)}>
-            {/* ✅ FIX: Modal is now a flex column with a strict max-height to ensure internal scrolling */}
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh'}}>
                 
                 <div style={{background: '#104a28', padding: '24px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0}}>
@@ -409,7 +397,6 @@ export default function InstructorAnnouncements() {
                     {!saving && <button onClick={() => setShowModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#a7f3d0'}}><X size={24}/></button>}
                 </div>
                 
-                {/* ✅ FIX: Form takes up remaining space, enabling overflow scroll inside */}
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div style={{padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', flex: 1}}>
                         <div>
@@ -438,7 +425,7 @@ export default function InstructorAnnouncements() {
                                     </label>
                                     
                                     {assignedClasses.map((ac, i) => {
-                                        const isChecked = selectedClasses.some(sc => sc.year === ac.year && sc.section === ac.section);
+                                        const isChecked = selectedClasses.includes(ac);
                                         return (
                                             <label key={i} style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
                                                 <input 
@@ -447,11 +434,11 @@ export default function InstructorAnnouncements() {
                                                     disabled={isEditing} 
                                                     onChange={(e) => {
                                                         if (e.target.checked) setSelectedClasses([...selectedClasses, ac]);
-                                                        else setSelectedClasses(selectedClasses.filter(sc => !(sc.year === ac.year && sc.section === ac.section)));
+                                                        else setSelectedClasses(selectedClasses.filter(sc => sc !== ac));
                                                     }}
                                                     style={{width: '16px', height: '16px', accentColor: '#104a28'}}
                                                 />
-                                                Year {ac.year} - Section {ac.section}
+                                                {ac}
                                             </label>
                                         )
                                     })}

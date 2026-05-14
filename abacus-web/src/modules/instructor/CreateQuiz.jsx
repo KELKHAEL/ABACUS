@@ -25,7 +25,7 @@ export default function CreateQuiz({ setActiveTab }) {
   const [classStudents, setClassStudents] = useState([]);
 
   const [myClasses, setMyClasses] = useState([]);
-  const [selectedClassStr, setSelectedClassStr] = useState("ALL-ALL"); 
+  const [selectedClassStr, setSelectedClassStr] = useState("ALL"); 
 
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDesc, setQuizDesc] = useState("");
@@ -70,9 +70,8 @@ export default function CreateQuiz({ setActiveTab }) {
 
   // Filter students to only show ones in the selected class (for Retake selection)
   useEffect(() => {
-    if (selectedClassStr !== 'ALL-ALL') {
-        const [y, s] = selectedClassStr.split('-');
-        setClassStudents(allInstructorStudents.filter(st => String(st.year_level) === String(y) && String(st.section) === String(s)));
+    if (selectedClassStr !== 'ALL') {
+        setClassStudents(allInstructorStudents.filter(st => String(st.section) === String(selectedClassStr)));
     } else {
         setClassStudents([]);
     }
@@ -104,8 +103,8 @@ export default function CreateQuiz({ setActiveTab }) {
           }
       }
       
-      if (q.target_year && q.target_section) {
-          setSelectedClassStr(`${q.target_year}-${q.target_section}`);
+      if (q.target_section) {
+          setSelectedClassStr(q.target_section);
       }
       
       if (q.due_date && !location.state.retakeParentQuiz) { // Don't copy old due date for retakes
@@ -210,13 +209,11 @@ export default function CreateQuiz({ setActiveTab }) {
       const user = userStr ? JSON.parse(userStr) : null;
       if (!user) return alert("You must be logged in.");
 
-      const [tYear, tSection] = selectedClassStr.split('-');
-
       const payload = {
         title: quizTitle,
         description: quizDesc,
-        targetYear: tYear,
-        targetSection: tSection,
+        targetYear: 'ALL',
+        targetSection: selectedClassStr,
         dueDate: dueDate,
         createdBy: user.id,
         questions: questions,
@@ -271,10 +268,10 @@ export default function CreateQuiz({ setActiveTab }) {
                     onChange={(e) => { setSelectedClassStr(e.target.value); setTargetStudents([]); }}
                     disabled={isRetake && isEditing} // Prevent changing target class on existing retakes
                 >
-                    {!isRetake && <option value="ALL-ALL" style={{fontWeight: 'bold'}}>All Assigned Classes</option>}
-                    {isRetake && <option value="ALL-ALL" disabled>Select a Specific Class First</option>}
+                    {!isRetake && <option value="ALL" style={{fontWeight: 'bold'}}>All Assigned Classes</option>}
+                    {isRetake && <option value="ALL" disabled>Select a Specific Class First</option>}
                     {myClasses.map((cls, idx) => (
-                        <option key={idx} value={`${cls.year}-${cls.section}`}>Year {cls.year} - Section {cls.section}</option>
+                        <option key={idx} value={cls}>{cls}</option>
                     ))}
                 </select>
             </div>

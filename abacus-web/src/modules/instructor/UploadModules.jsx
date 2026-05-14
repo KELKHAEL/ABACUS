@@ -17,8 +17,7 @@ export default function UploadModules() {
 
   // --- FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterYear, setFilterYear] = useState('ALL');
-  const [filterSection, setFilterSection] = useState('ALL');
+  const [filterClass, setFilterClass] = useState('ALL');
 
   const [showModal, setShowModal] = useState(false);
   const [showTrashModal, setShowTrashModal] = useState(false);
@@ -116,7 +115,7 @@ export default function UploadModules() {
 
   const addClassRow = () => {
     if (assignedClasses.length === 0) return alert("You do not have any classes assigned to you.");
-    setFormData({ ...formData, targetClasses: [...formData.targetClasses, { ...assignedClasses[0] }] });
+    setFormData({ ...formData, targetClasses: [...formData.targetClasses, assignedClasses[0]] });
   };
 
   const removeClassRow = (index) => {
@@ -127,7 +126,7 @@ export default function UploadModules() {
 
   const updateClassRow = (index, selectedClassString) => {
     const updated = [...formData.targetClasses];
-    updated[index] = JSON.parse(selectedClassString);
+    updated[index] = selectedClassString;
     setFormData({ ...formData, targetClasses: updated });
   };
 
@@ -165,9 +164,8 @@ export default function UploadModules() {
       return diffDays > 0 ? diffDays : 0; 
   };
 
-  // ✅ EXTRACT FILTERS
-  const uniqueYears = [...new Set(assignedClasses.map(c => c.year))].sort();
-  const uniqueSections = [...new Set(assignedClasses.map(c => c.section))].sort();
+  // ✅ EXTRACT FILTERS (Merged Strings)
+  const uniqueClasses = [...assignedClasses].sort();
 
   // ✅ VIEW MODE LOGIC & FILTERING
   const filteredModules = modules.filter(m => {
@@ -183,10 +181,9 @@ export default function UploadModules() {
     try { tClasses = JSON.parse(m.target_classes || '[]'); } catch(e) {}
     
     const isAll = tClasses.length === 0;
-    const matchYear = filterYear === 'ALL' || isAll || tClasses.some(c => String(c.year) === String(filterYear));
-    const matchSection = filterSection === 'ALL' || isAll || tClasses.some(c => String(c.section) === String(filterSection));
+    const matchClass = filterClass === 'ALL' || isAll || tClasses.includes(filterClass);
     
-    return matchSearch && matchYear && matchSection;
+    return matchSearch && matchClass;
   });
 
   return (
@@ -236,16 +233,12 @@ export default function UploadModules() {
                 <Search size={18} color="#666" />
                 <input placeholder="Search Title or Description..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
             </div>
-            <select className="gb-select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                <option value="ALL">All Years</option>
-                {uniqueYears.map(y => <option key={y} value={y}>Year {y}</option>)}
+            <select className="gb-select" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+                <option value="ALL">All Assigned Classes</option>
+                {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select className="gb-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-                <option value="ALL">All Sections</option>
-                {uniqueSections.map(s => <option key={s} value={s}>Section {s}</option>)}
-            </select>
-            {(filterYear !== 'ALL' || filterSection !== 'ALL' || searchTerm !== '') && (
-                <button onClick={() => {setFilterYear('ALL'); setFilterSection('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
+            {(filterClass !== 'ALL' || searchTerm !== '') && (
+                <button onClick={() => {setFilterClass('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
             )}
         </div>
       </div>
@@ -289,7 +282,7 @@ export default function UploadModules() {
                           {displayClasses.length > 0 ? (
                               displayClasses.map((cls, idx) => (
                                   <span key={idx} style={{fontSize:'11px', background:'#f3f4f6', padding:'2px 6px', borderRadius:'4px', border:'1px solid #e5e7eb'}}>
-                                      Yr {cls.year} - S{cls.section}
+                                      {cls}
                                   </span>
                               ))
                           ) : (
@@ -428,13 +421,13 @@ export default function UploadModules() {
                                 <div key={idx} style={{display:'flex', gap:'10px', marginBottom:'8px', alignItems:'center'}}>
                                     <select 
                                         style={{width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', outline: 'none', background: 'white'}}
-                                        value={JSON.stringify(cls)} 
+                                        value={cls} 
                                         onChange={(e) => updateClassRow(idx, e.target.value)}
                                     >
                                         {/* Populate options based ONLY on instructor's assigned classes */}
                                         {assignedClasses.map((ac, i) => (
-                                            <option key={i} value={JSON.stringify(ac)}>
-                                                Year {ac.year} - Section {ac.section}
+                                            <option key={i} value={ac}>
+                                                {ac}
                                             </option>
                                         ))}
                                     </select>
