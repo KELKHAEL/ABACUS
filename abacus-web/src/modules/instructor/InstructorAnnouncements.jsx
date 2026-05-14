@@ -48,7 +48,9 @@ export default function InstructorAnnouncements() {
         grouped.push(map[key]);
       } else {
         map[key].grouped_ids.push(ann.id);
-        map[key].target_classes.push(ann.target_section);
+        if (!map[key].target_classes.includes(ann.target_section)) {
+            map[key].target_classes.push(ann.target_section);
+        }
       }
     });
     return grouped;
@@ -157,7 +159,10 @@ export default function InstructorAnnouncements() {
     setSaving(true);
     try {
       if (isEditing) {
-          await Promise.all(editId.map((id, index) => {
+          // Edit existing items safely using their ID
+          await Promise.all(editId.map(async (id, index) => {
+              // Safety catch: If there are fewer selected classes than IDs, default to ALL or first class.
+              const targetSection = selectedClasses[index] || selectedClasses[0] || 'ALL';
               return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
@@ -165,7 +170,7 @@ export default function InstructorAnnouncements() {
                       title: formData.title,
                       content: formData.content,
                       targetYear: 'ALL',
-                      targetSection: selectedClasses[index]
+                      targetSection: targetSection
                   })
               });
           }));
@@ -204,7 +209,7 @@ export default function InstructorAnnouncements() {
   const currentDataList = viewMode === 'sent' ? announcements : adminAnnouncements;
   const filteredList = currentDataList.filter(item => {
     const d = new Date(item.created_at);
-    if (filterClass !== 'ALL' && item.target_section !== 'ALL' && !item.target_classes.includes(filterClass)) return false;
+    if (filterClass !== 'ALL' && item.target_section !== 'ALL' && !item.target_classes?.includes(filterClass)) return false;
     if (filterMonth !== 'ALL' && (d.getMonth() + 1).toString() !== filterMonth) return false;
     if (filterDay !== 'ALL' && d.getDate().toString() !== filterDay) return false;
     return true;

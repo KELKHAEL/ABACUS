@@ -14,13 +14,12 @@ export default function ProfileScreen({ navigation }) {
   
   // Promotion Modal States
   const [showModal, setShowModal] = useState(false);
-  const [newYear, setNewYear] = useState("");
   const [newSection, setNewSection] = useState("");
   const [isIrregular, setIsIrregular] = useState(false);
   const [corImage, setCorImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const [setupData, setSetupData] = useState({ yearLevels: [], sections: [] });
+  const [setupData, setSetupData] = useState({ sections: [] });
 
   // Quick check for user role
   const isStudent = user?.role === 'STUDENT';
@@ -31,12 +30,9 @@ export default function ProfileScreen({ navigation }) {
         const response = await fetch(`${API_URL}/academic-setup`);
         const data = await response.json();
         if (!data.error) {
-           setSetupData({
-               yearLevels: data.yearLevels || [],
-               sections: data.sections || []
-           });
-           if (data.yearLevels?.length > 0) setNewYear(data.yearLevels[0].year_name);
-           if (data.sections?.length > 0) setNewSection(data.sections[0].section_name);
+           const sortedSections = (data.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
+           setSetupData({ sections: sortedSections });
+           if (sortedSections.length > 0) setNewSection(sortedSections[0].section_name);
         }
       } catch (error) {
         console.error("Could not fetch academic setup:", error);
@@ -87,13 +83,23 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert("Required", "Please upload a photo of your Certificate of Registration (COR) as proof.");
       return;
     }
+    if (!newSection) {
+      Alert.alert("Required", "Please select a target class section.");
+      return;
+    }
 
     setIsUploading(true);
 
     try {
       const formData = new FormData();
+      
+      // ✅ FIX: Automatically parse the year out of the section string (e.g. "BSIT 1-A" -> "1") 
+      // so the backend doesn't throw a missing variable error.
+      const inferredYear = newSection.match(/\s(\d+)-/);
+      const yearToSubmit = inferredYear ? inferredYear[1] : '1';
+
       formData.append('userId', user.id);
-      formData.append('manualYear', newYear);
+      formData.append('manualYear', yearToSubmit);
       formData.append('manualSection', newSection);
       formData.append('isIrregular', isIrregular.toString());
       
@@ -174,8 +180,9 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.infoRow}>
               <Ionicons name="school-outline" size={20} color="#666" />
               <View style={styles.infoTextContainer}>
-                <Text style={styles.infoLabel}>Year & Section</Text>
-                <Text style={styles.infoValue}>Year {user.yearLevel || user.year_level} - Section {user.section}</Text>
+                <Text style={styles.infoLabel}>Class Section</Text>
+                {/* ✅ FIX: Now only displays the single unified string */}
+                <Text style={styles.infoValue}>{user.section}</Text>
               </View>
             </View>
           )}
@@ -212,19 +219,10 @@ export default function ProfileScreen({ navigation }) {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalDesc}>Upload your new Certificate of Registration (COR) to be assigned to your new classes.</Text>
 
-              <Text style={styles.inputLabel}>New Year Level</Text>
-              <View style={styles.pickerRow}>
-                {setupData.yearLevels.map(y => (
-                  <TouchableOpacity key={y.id} style={[styles.pickerBtn, newYear === y.year_name && styles.pickerActive]} onPress={() => setNewYear(y.year_name)}>
-                    <Text style={[styles.pickerText, newYear === y.year_name && styles.pickerActiveText]}>{y.year_name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>New Section</Text>
+              <Text style={styles.inputLabel}>New Class Section</Text>
               <View style={styles.pickerRow}>
                 {setupData.sections.map(s => (
-                  <TouchableOpacity key={s.id} style={[styles.pickerBtn, newSection === s.section_name && styles.pickerActive]} onPress={() => setNewSection(s.section_name)}>
+                  <TouchableOpacity key={s.id} style={[styles.pickerBtn, newSection === s.section_name && styles.pickerActive, {minWidth: '45%'}]} onPress={() => setNewSection(s.section_name)}>
                     <Text style={[styles.pickerText, newSection === s.section_name && styles.pickerActiveText]}>{s.section_name}</Text>
                   </TouchableOpacity>
                 ))}

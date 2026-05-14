@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function RegisterScreen({ navigation }) {
-  const [setupData, setSetupData] = useState({ programs: [], yearLevels: [], sections: [] });
+  const [setupData, setSetupData] = useState({ programs: [], sections: [] });
   const [loadingSetup, setLoadingSetup] = useState(true);
 
   const [studentId, setStudentId] = useState('');
@@ -21,7 +21,6 @@ export default function RegisterScreen({ navigation }) {
   const [fullServerName, setFullServerName] = useState('');
   
   const [program, setProgram] = useState('');
-  const [yearLevel, setYearLevel] = useState('');
   const [section, setSection] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,7 +28,6 @@ export default function RegisterScreen({ navigation }) {
   const [corImage, setCorImage] = useState(null);
 
   const [showProgramModal, setShowProgramModal] = useState(false);
-  const [showYearModal, setShowYearModal] = useState(false);
   const [showSectionModal, setShowSectionModal] = useState(false);
 
   const [generatedOtp, setGeneratedOtp] = useState(null); 
@@ -48,10 +46,11 @@ export default function RegisterScreen({ navigation }) {
         const response = await fetch(`${API_URL}/academic-setup`);
         const data = await response.json();
         if (!data.error) {
+           // Sort sections alphabetically so they appear cleanly (e.g. BSIT 1-A, BSIT 1-B)
+           const sortedSections = (data.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
            setSetupData({
                programs: data.programs || [],
-               yearLevels: data.yearLevels || [],
-               sections: data.sections || []
+               sections: sortedSections
            });
         }
       } catch (error) {
@@ -148,7 +147,7 @@ export default function RegisterScreen({ navigation }) {
           const data = await res.json();
           
           if (data.success) {
-              // ✅ SMART FALLBACK: If the backend is slow to update, this manually splits the fullName so the boxes still fill perfectly!
+              // SMART FALLBACK
               let fetchedFirst = data.firstName;
               let fetchedLast = data.lastName;
               let fetchedMiddle = data.middleName;
@@ -182,8 +181,8 @@ export default function RegisterScreen({ navigation }) {
   };
 
   const handleRegister = async () => {
-    if (!program || !yearLevel || !section || !password || !confirmPassword) {
-      return Alert.alert("Missing Fields", "Please fill in all details, including Program, Year, and Section.");
+    if (!program || !section || !password || !confirmPassword) {
+      return Alert.alert("Missing Fields", "Please fill in all details, including Program and Class Section.");
     }
     if (!corImage) {
         return Alert.alert("COR Required", "Please upload a photo of your Certificate of Registration (COR) as proof.");
@@ -203,7 +202,12 @@ export default function RegisterScreen({ navigation }) {
       formData.append('studentId', studentId);
       formData.append('email', email);
       formData.append('password', password);
-      formData.append('yearLevel', yearLevel);
+      
+      // ✅ FIX: Since we no longer use a dedicated year dropdown, we can pull the year from the first character of the block (e.g. "BSIT 1-A" -> "1").
+      // Or we can just set it to a placeholder like '1' because the system now relies entirely on the 'section' column.
+      const inferredYear = section.match(/\s(\d+)-/);
+      formData.append('yearLevel', inferredYear ? inferredYear[1] : '1');
+      
       formData.append('section', section);
       formData.append('program', program);
       
@@ -353,20 +357,13 @@ export default function RegisterScreen({ navigation }) {
                   <Text style={{color: program ? '#333' : '#aaa', fontSize: 14, fontWeight: program ? 'bold' : 'normal'}}>{program || "Select your program"}</Text>
                 </TouchableOpacity>
 
-                <View style={{flexDirection: 'row', gap: 10}}>
-                  <View style={{flex: 1}}>
-                    <Text style={styles.label}>Year Level</Text>
-                    <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowYearModal(true)}>
-                      <Text style={{color: yearLevel ? '#333' : '#aaa', fontSize: 14, fontWeight: yearLevel ? 'bold' : 'normal'}}>{yearLevel ? `Year ${yearLevel}` : "Select"}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{flex: 1}}>
-                    <Text style={styles.label}>Section</Text>
-                    <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowSectionModal(true)}>
-                      <Text style={{color: section ? '#333' : '#aaa', fontSize: 14, fontWeight: section ? 'bold' : 'normal'}}>{section ? `Section ${section}` : "Select"}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                {/* ✅ REPLACED THE DOUBLE DROPDOWN WITH A SINGLE CLASS SECTION DROPDOWN */}
+                <Text style={styles.label}>Active Class Section</Text>
+                <TouchableOpacity style={[styles.input, {justifyContent: 'center'}]} onPress={() => setShowSectionModal(true)}>
+                    <Text style={{color: section ? '#333' : '#aaa', fontSize: 14, fontWeight: section ? 'bold' : 'normal'}}>
+                        {section || "Select your Section (e.g. BSIT 1-A)"}
+                    </Text>
+                </TouchableOpacity>
 
                 <Text style={styles.label}>Certificate of Registration (Proof)</Text>
                 <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
@@ -402,8 +399,7 @@ export default function RegisterScreen({ navigation }) {
 
       {/* MODALS */}
       {renderSelectionModal(showProgramModal, setShowProgramModal, "Select Program", setupData.programs, 'name', program, setProgram)}
-      {renderSelectionModal(showYearModal, setShowYearModal, "Select Year", setupData.yearLevels, 'year_name', yearLevel, setYearLevel)}
-      {renderSelectionModal(showSectionModal, setShowSectionModal, "Select Section", setupData.sections, 'section_name', section, setSection)}
+      {renderSelectionModal(showSectionModal, setShowSectionModal, "Select Class Section", setupData.sections, 'section_name', section, setSection)}
       
     </SafeAreaView>
   );

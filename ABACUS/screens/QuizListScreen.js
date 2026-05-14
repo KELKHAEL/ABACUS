@@ -53,10 +53,10 @@ export default function QuizListScreen({ navigation }) {
       const now = new Date();
 
       const activeRelevant = allQuizzes.filter(q => {
-        const matchYear = !q.target_year || q.target_year === 'ALL' || String(q.target_year) === String(user.yearLevel);
+        // ✅ NEW LOGIC: Match against the single unified class section string
         const matchSec = !q.target_section || q.target_section === 'ALL' || String(q.target_section) === String(user.section);
         
-        if (q.status !== 'active' || q.is_archived || !matchYear || !matchSec) return false;
+        if (q.status !== 'active' || q.is_archived || !matchSec) return false;
 
         if (q.is_retake) {
             try {
@@ -72,8 +72,6 @@ export default function QuizListScreen({ navigation }) {
       const completed = [];
 
       activeRelevant.forEach(q => {
-          // ✅ BUG FIX: If it's a retake, we must check if a grade exists for the PARENT quiz ID that contains the "Penalty" string
-          // This tells us if the user has completed THIS specific retake session.
           let gradeEntry;
           if (q.is_retake) {
               gradeEntry = userGrades.find(g => g.quiz_id === q.parent_quiz_id && g.subjectTitle && g.subjectTitle.includes('Penalty'));
@@ -96,8 +94,6 @@ export default function QuizListScreen({ navigation }) {
           }
       });
 
-      // Filter out duplicate display in Completed list (Don't show the Retake as a separate completed item)
-      // The original parent quiz will already show up in the Completed list with the updated score.
       const finalCompleted = completed.filter(q => !q.is_retake);
 
       const archived = allQuizzes.filter(q => q.is_archived && takenQuizIds.includes(q.id) && !q.is_retake).map(q => {

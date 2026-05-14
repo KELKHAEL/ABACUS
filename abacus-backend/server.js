@@ -114,6 +114,8 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE allowed_students ADD COLUMN first_name VARCHAR(100), ADD COLUMN middle_name VARCHAR(100), ADD COLUMN last_name VARCHAR(100)"); } catch(e){}
     try { await connection.query("ALTER TABLE programs ADD COLUMN max_years INT DEFAULT 4"); } catch(e){}
 
+    try { await connection.query("ALTER TABLE announcements MODIFY COLUMN target_section VARCHAR(255)"); } catch(e){}
+
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
     try { await connection.query(`DELETE sg FROM student_grades sg JOIN users u ON sg.user_id = u.id WHERE (LOWER(u.section) LIKE '%assign%' OR LOWER(u.section) LIKE '%assi%' OR u.section IS NULL) AND sg.subject_title LIKE '%(Missed)%'`); } catch(e) {}
