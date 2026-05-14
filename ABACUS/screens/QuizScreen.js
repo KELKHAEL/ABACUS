@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import * as ScreenCapture from 'expo-screen-capture'; 
 
-// REPLACE THIS WITH YOUR PC'S IP ADDRESS OR NGROK URL
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function QuizScreen({ route, navigation }) {
@@ -18,27 +17,21 @@ export default function QuizScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [quizData, setQuizData] = useState(null);
   
-  // View States
   const [hasStarted, setHasStarted] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Quiz Logic States
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
   
-  // NEW: Keep track of raw answers for the paper viewer
   const [studentAnswers, setStudentAnswers] = useState({});
   
-  // Inputs
   const [textAnswer, setTextAnswer] = useState(""); 
   const [selectedChecks, setSelectedChecks] = useState([]); 
 
-  // Security Refs
   const appState = useRef(AppState.currentState);
   const isCheating = useRef(false);
 
-  // --- FETCH QUIZ DETAILS ---
   useEffect(() => {
     const fetchQuizDetails = async () => {
       try {
@@ -60,22 +53,15 @@ export default function QuizScreen({ route, navigation }) {
     fetchQuizDetails();
   }, [quizId, navigation]);
 
-  // ==========================================
-  //  ANTI-CHEAT SECURITY MODULE 
-  // ==========================================
   useEffect(() => {
-    // Only activate security if the quiz is actively being taken
     if (loading || !hasStarted || showResult) return;
 
-    // 1. Block Android Screenshots
     ScreenCapture.preventScreenCaptureAsync();
 
-    // 2. Listen for iOS Screenshots
     const screenshotSubscription = ScreenCapture.addScreenshotListener(() => {
       handleCheatDetection("Screenshot or Screen Recording detected!");
     });
 
-    // 3. Listen for App Backgrounding
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
         handleCheatDetection("App moved to background. You cannot leave the quiz to search for answers.");
@@ -83,14 +69,12 @@ export default function QuizScreen({ route, navigation }) {
       appState.current = nextAppState;
     });
 
-    // 4. Intercept Android Hardware Back Button
     const onBackPress = () => {
       promptLeaveWarning();
       return true; 
     };
     const backSubscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-    // 5. Intercept UI Back Button
     const navUnsubscribe = navigation.addListener('beforeRemove', (e) => {
       if (showResult || isCheating.current) return; 
       e.preventDefault();
@@ -120,16 +104,15 @@ export default function QuizScreen({ route, navigation }) {
   const handleCheatDetection = (reason) => {
     if (isCheating.current || showResult) return;
     isCheating.current = true;
-    finishQuiz(0, reason); // Auto-submit with 0
+    finishQuiz(0, reason); 
   };
-  // ==========================================
 
   const handleMultipleChoice = (selectedIndex) => {
     const currentQ = quizData.questions[currentQuestionIndex];
-    let isCorrect = selectedIndex === currentQ.correctIndex;
+    let isCorrect = Number(selectedIndex) === Number(currentQ.correctIndex);
     
-    // ✅ FIX: Save what the student clicked
-    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedIndex}));
+    // ✅ FIX: Save the EXACT TEXT of the option, not the index position.
+    setStudentAnswers(prev => ({...prev, [currentQ.id]: currentQ.options[selectedIndex]}));
     
     processAnswer(isCorrect);
   };
@@ -139,7 +122,7 @@ export default function QuizScreen({ route, navigation }) {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = textAnswer.trim().toLowerCase() === currentQ.correctAnswerText?.trim().toLowerCase();
     
-    // ✅ FIX: Save what the student typed
+    // ✅ FIX: Save the exact text typed
     setStudentAnswers(prev => ({...prev, [currentQ.id]: textAnswer.trim()}));
 
     processAnswer(isCorrect);
@@ -158,8 +141,9 @@ export default function QuizScreen({ route, navigation }) {
     const currentQ = quizData.questions[currentQuestionIndex];
     let isCorrect = selectedChecks.includes(currentQ.correctIndex) && selectedChecks.length === 1;
     
-    // ✅ FIX: Save the array of indices they checked
-    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedChecks}));
+    // ✅ FIX: Save the exact array of TEXT options selected
+    const selectedTexts = selectedChecks.map(idx => currentQ.options[idx]);
+    setStudentAnswers(prev => ({...prev, [currentQ.id]: selectedTexts}));
 
     processAnswer(isCorrect);
   };
@@ -181,7 +165,6 @@ export default function QuizScreen({ route, navigation }) {
     }
   };
 
-  // --- SAVE RESULTS ---
   const finishQuiz = async (finalScore, cheatReason = null) => {
     setIsSubmitting(true);
     setShowResult(true); 
@@ -199,7 +182,7 @@ export default function QuizScreen({ route, navigation }) {
             score: finalScore,
             totalItems: totalItems,
             subjectTitle: quizTitle,
-            responses: studentAnswers // ✅ FIX: Attach the mapped answers to the payload
+            responses: studentAnswers 
         })
       });
 
@@ -220,8 +203,6 @@ export default function QuizScreen({ route, navigation }) {
     }
   };
 
-  // --- RENDER STATES ---
-
   if (loading || !quizData) {
     return (
       <SafeAreaView style={styles.centerContainer}>
@@ -231,7 +212,6 @@ export default function QuizScreen({ route, navigation }) {
     );
   }
 
-  // 1. START SCREEN
   if (!hasStarted) {
     return (
       <SafeAreaView style={styles.container}>
@@ -267,7 +247,6 @@ export default function QuizScreen({ route, navigation }) {
     );
   }
 
-  // 2. RESULTS SCREEN
   if (showResult) {
     const totalItems = quizData.questions.length;
     const percentage = totalItems > 0 ? (score / totalItems) * 100 : 0;
@@ -312,7 +291,6 @@ export default function QuizScreen({ route, navigation }) {
     );
   }
 
-  // 3. ACTIVE QUIZ SCREEN
   const currentQ = quizData.questions[currentQuestionIndex];
 
   const renderInputArea = () => {
@@ -358,7 +336,6 @@ export default function QuizScreen({ route, navigation }) {
       );
     }
 
-    // Default: Multiple Choice / True False
     return (
       <View style={styles.optionsContainer}>
         {currentQ.options.map((option, index) => (
@@ -401,7 +378,7 @@ export default function QuizScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { 
   flex: 1, 
-  backgroundColor: '#F8F9FD', // or '#fff' depending on the screen
+  backgroundColor: '#F8F9FD', 
   paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 
   },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FD' },

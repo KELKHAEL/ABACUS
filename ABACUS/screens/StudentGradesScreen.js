@@ -59,16 +59,19 @@ export default function StudentGradesScreen({ route, navigation }) {
     setSelectedResponses(null);
 
     try {
-        const response = await fetch(`${API_URL}/quizzes/${quizId}`);
+        // ✅ FIX: Use the new /raw endpoint to completely bypass shuffling
+        const response = await fetch(`${API_URL}/quizzes/${quizId}/raw`);
         const data = await response.json();
         
         setSelectedQuizDetails(data);
         
-        // Parse the responses if they exist, otherwise empty object
         let parsedResponses = {};
         if (responsesJSON) {
-            try { parsedResponses = typeof responsesJSON === 'string' ? JSON.parse(responsesJSON) : responsesJSON; } 
-            catch(e) {}
+            try { 
+                parsedResponses = typeof responsesJSON === 'string' ? JSON.parse(responsesJSON) : responsesJSON; 
+            } catch(e) {
+                console.error("Failed to parse JSON", e);
+            }
         }
         setSelectedResponses(parsedResponses);
         
@@ -111,7 +114,7 @@ export default function StudentGradesScreen({ route, navigation }) {
               </View>
           </View>
 
-          {/* ✅ NEW: VIEW PAPER BUTTON */}
+          {/* ✅ VIEW PAPER BUTTON */}
           {!isMissed && (
              <TouchableOpacity 
                 style={styles.viewPaperBtn} 
@@ -161,7 +164,7 @@ export default function StudentGradesScreen({ route, navigation }) {
         )}
       </View>
 
-      {/* ✅ NEW: PAPER VIEWER MODAL */}
+      {/* ✅ PAPER VIEWER MODAL */}
       <Modal visible={paperModalVisible} animationType="slide" transparent={true} onRequestClose={() => setPaperModalVisible(false)}>
          <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -189,33 +192,41 @@ export default function StudentGradesScreen({ route, navigation }) {
                 ) : (
                     <ScrollView contentContainerStyle={{padding: 20}}>
                         {selectedQuizDetails.questions.map((q, idx) => {
-                            const rawAnswer = selectedResponses ? selectedResponses[q.id] : null;
+                            // Safely extract the raw text answer saved by QuizScreen.js
+                            let rawAnswer = null;
+                            if (selectedResponses) {
+                                rawAnswer = selectedResponses[q.id] !== undefined ? selectedResponses[q.id] : selectedResponses[String(q.id)];
+                            }
+
                             let isCorrect = false;
                             let displayAnswer = "No Answer Provided";
                             let correctKey = "Unknown";
 
                             if (q.type === 'short') {
-                                displayAnswer = rawAnswer || "No Answer Provided";
+                                displayAnswer = (rawAnswer !== null && rawAnswer !== undefined && rawAnswer !== "") ? String(rawAnswer) : "No Answer Provided";
                                 correctKey = q.correct_answer_text || q.correctAnswerText || "";
                                 isCorrect = displayAnswer.toLowerCase().trim() === correctKey.toLowerCase().trim();
                             } 
                             else if (q.type === 'multiple-choice') {
-                                if (rawAnswer !== null && rawAnswer !== undefined && q.options[rawAnswer]) {
-                                    displayAnswer = q.options[rawAnswer];
-                                }
-                                correctKey = q.options[q.correctIndex || 0] || "Unknown";
-                                isCorrect = rawAnswer === q.correctIndex;
+                                // Since we use the raw endpoint, options are in original order, and rawAnswer is pure text
+                                displayAnswer = (rawAnswer !== null && rawAnswer !== undefined && rawAnswer !== "") ? String(rawAnswer) : "No Answer Provided";
+                                correctKey = q.options[q.correct_index || 0] || "Unknown";
+                                
+                                isCorrect = displayAnswer === correctKey;
                             } 
                             else if (q.type === 'checkbox') {
+                                // rawAnswer is an array of strings the user chose
                                 if (Array.isArray(rawAnswer) && rawAnswer.length > 0) {
-                                    displayAnswer = rawAnswer.map(i => q.options[i]).join(', ');
+                                    displayAnswer = rawAnswer.join(', ');
                                 }
                                 
-                                const correctIndices = q.correctIndices || (q.correct_answer_text ? q.correct_answer_text.split(',').map(Number) : []);
-                                correctKey = correctIndices.map(i => q.options[i]).join(', ');
+                                const correctIndices = q.correct_index || (q.correct_answer_text ? q.correct_answer_text.split(',').map(Number) : []);
+                                correctKey = Array.isArray(correctIndices) ? correctIndices.map(i => q.options[i]).join(', ') : "Unknown";
                                 
-                                if (Array.isArray(rawAnswer) && rawAnswer.length === correctIndices.length) {
-                                    isCorrect = rawAnswer.every(val => correctIndices.includes(val));
+                                const correctStringsArray = Array.isArray(correctIndices) ? correctIndices.map(i => q.options[i]) : [];
+                                
+                                if (Array.isArray(rawAnswer) && rawAnswer.length === correctStringsArray.length) {
+                                    isCorrect = rawAnswer.every(val => correctStringsArray.includes(val));
                                 } else {
                                     isCorrect = false;
                                 }

@@ -115,6 +115,7 @@ export default function UploadModules() {
 
   const addClassRow = () => {
     if (assignedClasses.length === 0) return alert("You do not have any classes assigned to you.");
+    // ✅ FIX: Default to the first available string class
     setFormData({ ...formData, targetClasses: [...formData.targetClasses, assignedClasses[0]] });
   };
 
@@ -126,6 +127,7 @@ export default function UploadModules() {
 
   const updateClassRow = (index, selectedClassString) => {
     const updated = [...formData.targetClasses];
+    // ✅ FIX: Saving the string directly
     updated[index] = selectedClassString;
     setFormData({ ...formData, targetClasses: updated });
   };
@@ -141,6 +143,7 @@ export default function UploadModules() {
     const payload = new FormData();
     payload.append('title', formData.title);
     payload.append('description', formData.description);
+    // ✅ FIX: Storing array of strings cleanly
     payload.append('targetClasses', JSON.stringify(formData.targetClasses));
     payload.append('uploadedBy', user.id);
     payload.append('pdfFile', formData.file);
@@ -165,7 +168,8 @@ export default function UploadModules() {
   };
 
   // ✅ EXTRACT FILTERS (Merged Strings)
-  const uniqueClasses = [...assignedClasses].sort();
+  // Maps over the instructor classes to get just the string array
+  const uniqueClasses = [...assignedClasses].map(c => typeof c === 'string' ? c : c.section).sort();
 
   // ✅ VIEW MODE LOGIC & FILTERING
   const filteredModules = modules.filter(m => {
@@ -181,7 +185,11 @@ export default function UploadModules() {
     try { tClasses = JSON.parse(m.target_classes || '[]'); } catch(e) {}
     
     const isAll = tClasses.length === 0;
-    const matchClass = filterClass === 'ALL' || isAll || tClasses.includes(filterClass);
+    
+    // Normalize target classes to strings for matching
+    const normalizedTargets = tClasses.map(t => typeof t === 'string' ? t : t.section);
+    
+    const matchClass = filterClass === 'ALL' || isAll || normalizedTargets.includes(filterClass);
     
     return matchSearch && matchClass;
   });
@@ -235,7 +243,7 @@ export default function UploadModules() {
             </div>
             <select className="gb-select" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
                 <option value="ALL">All Assigned Classes</option>
-                {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                {uniqueClasses.map(c => <option key={c} value={c}>{c.split(' ').pop()}</option>)}
             </select>
             {(filterClass !== 'ALL' || searchTerm !== '') && (
                 <button onClick={() => {setFilterClass('ALL'); setSearchTerm('');}} style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold'}}>Clear</button>
@@ -264,6 +272,9 @@ export default function UploadModules() {
                 let displayClasses = [];
                 try { displayClasses = JSON.parse(mod.target_classes || '[]'); } catch(e) {}
 
+                // Safely format targets even if they are old object arrays instead of strings
+                const safeTargets = displayClasses.map(c => typeof c === 'string' ? c : c.section);
+
                 return (
                   <tr key={mod.id} style={{opacity: viewMode === 'archived' ? 0.8 : 1}}>
                     <td>
@@ -279,10 +290,10 @@ export default function UploadModules() {
                     </td>
                     <td>
                       <div style={{display:'flex', flexWrap:'wrap', gap:'4px'}}>
-                          {displayClasses.length > 0 ? (
-                              displayClasses.map((cls, idx) => (
+                          {safeTargets.length > 0 ? (
+                              safeTargets.map((cls, idx) => (
                                   <span key={idx} style={{fontSize:'11px', background:'#f3f4f6', padding:'2px 6px', borderRadius:'4px', border:'1px solid #e5e7eb'}}>
-                                      {cls}
+                                      {cls.split(' ').pop()}
                                   </span>
                               ))
                           ) : (
@@ -424,12 +435,15 @@ export default function UploadModules() {
                                         value={cls} 
                                         onChange={(e) => updateClassRow(idx, e.target.value)}
                                     >
-                                        {/* Populate options based ONLY on instructor's assigned classes */}
-                                        {assignedClasses.map((ac, i) => (
-                                            <option key={i} value={ac}>
-                                                {ac}
-                                            </option>
-                                        ))}
+                                        {/* ✅ Populate options using pure strings */}
+                                        {assignedClasses.map((ac, i) => {
+                                            const classStr = typeof ac === 'string' ? ac : ac.section;
+                                            return (
+                                                <option key={i} value={classStr}>
+                                                    {classStr.split(' ').pop()}
+                                                </option>
+                                            )
+                                        })}
                                     </select>
                                     
                                     <button type="button" onClick={() => removeClassRow(idx)} style={{color:'#dc2626', background:'none', border:'none', cursor:'pointer'}}><X size={18}/></button>

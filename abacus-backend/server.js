@@ -257,7 +257,7 @@ app.get('/trash/instructors', async (req, res) => {
 });
 
 app.post('/users', async (req, res) => {
-  const { fullName, email, password, role, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses } = req.body;
+  const { fullName, email, password, role, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses, cor_status } = req.body;
   try {
     const [existing] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
     if (existing.length > 0) return res.status(400).json({ error: "Email already in use" });
@@ -265,11 +265,12 @@ app.post('/users', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const uniqueId = studentId || employeeId; 
     const classesStr = assignedClasses ? JSON.stringify(assignedClasses) : null;
+    const finalCorStatus = cor_status || null; // <--- ADDED
 
     await db.query(
-      `INSERT INTO users (full_name, email, password_hash, role, student_id, year_level, section, program, status, department, assigned_classes, is_deleted) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [fullName, email, hashedPassword, role, uniqueId, yearLevel, section, program || 'BSIT', status || 'Regular', department, classesStr]
+      `INSERT INTO users (full_name, email, password_hash, role, student_id, year_level, section, program, status, department, assigned_classes, is_deleted, cor_status) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [fullName, email, hashedPassword, role, uniqueId, yearLevel, section, program || 'BSIT', status || 'Regular', department, classesStr, finalCorStatus]
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -277,14 +278,24 @@ app.post('/users', async (req, res) => {
 
 app.put('/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { fullName, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses } = req.body;
+  const { fullName, studentId, yearLevel, section, program, status, employeeId, department, assignedClasses, cor_status } = req.body;
   try {
     const uniqueId = studentId || employeeId;
     const classesStr = assignedClasses ? JSON.stringify(assignedClasses) : null;
-    await db.query(
-      `UPDATE users SET full_name = ?, student_id = ?, year_level = ?, section = ?, program = ?, status = ?, department = ?, assigned_classes = ? WHERE id = ?`,
-      [fullName, uniqueId, yearLevel, section, program, status, department, classesStr, id]
-    );
+    
+    // <--- ADDED: Allow admin to force approval
+    if (cor_status) {
+         await db.query(
+          `UPDATE users SET full_name = ?, student_id = ?, year_level = ?, section = ?, program = ?, status = ?, department = ?, assigned_classes = ?, cor_status = ? WHERE id = ?`,
+          [fullName, uniqueId, yearLevel, section, program, status, department, classesStr, cor_status, id]
+        );
+    } else {
+        await db.query(
+          `UPDATE users SET full_name = ?, student_id = ?, year_level = ?, section = ?, program = ?, status = ?, department = ?, assigned_classes = ? WHERE id = ?`,
+          [fullName, uniqueId, yearLevel, section, program, status, department, classesStr, id]
+        );
+    }
+    
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -517,6 +528,27 @@ app.get('/quizzes/:id', async (req, res) => {
     for (let i = questions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+
+    res.json({ ...quiz[0], questions });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unshuffled Quiz Fetch for Instructor "View Paper" Modal
+app.get('/quizzes/:id/raw', async (req, res) => {
+  try {
+    const [quiz] = await db.query("SELECT * FROM quizzes WHERE id = ?", [req.params.id]);
+    if (quiz.length === 0) return res.status(404).json({ error: "Quiz not found" });
+
+    const [questions] = await db.query("SELECT * FROM quiz_questions WHERE quiz_id = ?", [req.params.id]);
+    
+    for (const q of questions) {
+      const [options] = await db.query("SELECT option_text FROM question_options WHERE question_id = ? ORDER BY option_order ASC", [q.id]);
+      
+      q.options = options.map(o => o.option_text);
+      q.correctAnswerText = q.correct_answer_text;
+      q.questionText = q.question_text;
+      q.type = q.question_type;
     }
 
     res.json({ ...quiz[0], questions });
@@ -1021,14 +1053,16 @@ app.get('/modules/student/:id', async (req, res) => {
     if (students.length === 0) return res.status(404).json({ error: "Student not found" });
     const { year_level, section } = students[0];
 
-    // 🚨 BULLETPROOF ENROLLMENT GUARD
+    // BULLETPROOF ENROLLMENT GUARD
     if (!section || section.toLowerCase().includes('assign') || section.toLowerCase().includes('assi')) {
         return res.json([]);
     }
 
     const activeTermId = await getActiveTermId();
+    
+    // FIX: We now select the uploader's assigned_classes as well
     const [modules] = await db.query(`
-      SELECT modules.*, users.full_name as author, IF(modules.term_id = ?, 0, 1) as is_archived 
+      SELECT modules.*, users.full_name as author, users.assigned_classes as instructor_classes, IF(modules.term_id = ?, 0, 1) as is_archived 
       FROM modules 
       JOIN users ON modules.uploaded_by = users.id 
       ORDER BY created_at DESC
@@ -1036,11 +1070,30 @@ app.get('/modules/student/:id', async (req, res) => {
     
     const relevantModules = modules.filter(mod => {
       try {
-        const targets = JSON.parse(mod.target_classes);
-        if (!targets || targets.length === 0) return true; 
-        return targets.some(t => t.year == year_level && t.section == section);
-      } catch (e) { return true; }
+        const targets = JSON.parse(mod.target_classes || '[]');
+        
+        // If specific targets exist for this module, check if the student is in one of them
+        if (targets && targets.length > 0) {
+            return targets.some(t => {
+                // Handle the new string format ("Bachelor of Science in...")
+                if (typeof t === 'string') return t === section;
+                // Handle the old object format ({year: '4', section: '1'})
+                return t.year == year_level && t.section == section;
+            });
+        } 
+        
+        // FIX: If targets is empty, it means "All My Classes". 
+        // We must check if the student belongs to ANY class assigned to THIS specific instructor.
+        const instructorClasses = JSON.parse(mod.instructor_classes || '[]');
+        
+        return instructorClasses.some(ic => {
+             if (typeof ic === 'string') return ic === section;
+             return ic.year == year_level && ic.section == section;
+        });
+
+      } catch (e) { return false; }
     });
+    
     res.json(relevantModules);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -6,6 +6,8 @@ export default function ManageStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // --- DYNAMIC ACADEMIC SETUP STATES ---
+  const [academicPrograms, setAcademicPrograms] = useState([]);
   const [academicYears, setAcademicYears] = useState([]);
   const [academicSections, setAcademicSections] = useState([]);
 
@@ -56,8 +58,7 @@ export default function ManageStudents() {
 
   const [formData, setFormData] = useState({
     firstName: '', middleName: '', lastName: '', email: '', studentId: '',
-    program: 'Bachelor of Science in Information Technology',
-    yearLevel: '1', section: '1', status: 'Regular', password: ''
+    program: '', section: 'To be assigned', status: 'Regular', password: ''
   });
 
   const generatePassword = () => {
@@ -77,16 +78,20 @@ export default function ManageStudents() {
       const studentData = await studentsRes.json();
       const setupData = await setupRes.json();
 
+      let defaultProgram = '';
+
       if (!setupData.error) {
+        setAcademicPrograms(setupData.programs || []);
         setAcademicYears(setupData.yearLevels || []);
-        // Sorted alphabetically to match the Instructors logic
         const sortedSections = (setupData.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
         setAcademicSections(sortedSections);
+
+        if (setupData.programs && setupData.programs.length > 0) defaultProgram = setupData.programs[0].name;
       }
       
       const formatted = studentData.map(user => ({
         id: user.id, fullName: user.full_name ? user.full_name.toUpperCase() : '', email: user.email, studentId: user.student_id,
-        program: user.program || 'Bachelor of Science in Information Technology',
+        program: user.program || defaultProgram,
         yearLevel: user.year_level, section: user.section, status: user.status || 'Regular', defaultPassword: '' 
       }));
 
@@ -110,9 +115,8 @@ export default function ManageStudents() {
     setEditId(null);
     setFormData({ 
       firstName: '', middleName: '', lastName: '', email: '', studentId: '', 
-      program: 'Bachelor of Science in Information Technology', 
-      yearLevel: academicYears.length > 0 ? academicYears[0].year_name : '1', 
-      section: academicSections.length > 0 ? academicSections[0].section_name : '1', 
+      program: academicPrograms.length > 0 ? academicPrograms[0].name : '', 
+      section: 'To be assigned', 
       status: 'Regular', password: generatePassword()
     });
     setShowModal(true);
@@ -138,7 +142,7 @@ export default function ManageStudents() {
 
     setFormData({
       firstName: fName, middleName: mName, lastName: lName, email: student.email, studentId: cleanStudentId,
-      program: student.program, yearLevel: student.yearLevel, section: student.section, status: student.status || 'Regular', password: ''
+      program: student.program, section: student.section, status: student.status || 'Regular', password: ''
     });
     setShowModal(true);
   };
@@ -146,7 +150,6 @@ export default function ManageStudents() {
   const handleSaveStudent = async (e) => {
     e.preventDefault();
     if(!formData.lastName || !formData.firstName) return alert("Name fields required.");
-    // ENTRAPMENT: Strict Email Validation
     if (!formData.email.trim().toLowerCase().endsWith('@cvsu.edu.ph')) return alert("Invalid Email! Must end with @cvsu.edu.ph");
 
     const finalLastName = formData.lastName.toUpperCase().trim();
@@ -154,7 +157,24 @@ export default function ManageStudents() {
     let finalMiddleName = formData.middleName ? formData.middleName.trim().charAt(0).toUpperCase() + '.' : '';
     const fullNameCombined = finalMiddleName ? `${finalLastName}, ${finalFirstName} ${finalMiddleName}` : `${finalLastName}, ${finalFirstName}`;
 
-    const payload = { ...formData, email: formData.email.trim().toLowerCase(), fullName: fullNameCombined, role: 'STUDENT' };
+    // ✅ AUTOMATICALLY EXTRACT YEAR FROM SECTION NAME
+    let extractedYear = '1'; // Default
+    if (formData.section && formData.section !== 'To be assigned') {
+        const parts = formData.section.split(' ');
+        if (parts.length > 1) {
+            const shortSection = parts.pop(); // gets "4-A"
+            extractedYear = shortSection.split('-')[0]; // gets "4"
+        }
+    }
+
+    const payload = { 
+        ...formData, 
+        email: formData.email.trim().toLowerCase(), 
+        fullName: fullNameCombined, 
+        role: 'STUDENT',
+        yearLevel: extractedYear,
+        cor_status: 'Approved' // Bypass pending verification
+    };
 
     try {
       let url = isEditing ? `https://abacus-w435.onrender.com/users/${editId}` : 'https://abacus-w435.onrender.com/users';
@@ -201,7 +221,7 @@ export default function ManageStudents() {
     const matchesSearch = student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || student.studentId?.includes(searchTerm);
     const matchesBatch = filterBatch !== 'ALL' ? (student.studentId && String(student.studentId).startsWith(filterBatch)) : true;
     const matchesYear = filterYear !== 'ALL' ? student.yearLevel == filterYear : true; 
-    const matchesSection = filterSection !== 'ALL' ? student.section == filterSection : true;
+    const matchesSection = filterSection !== 'ALL' ? student.section === filterSection : true;
     const matchesStatus = filterStatus !== 'ALL' ? student.status === filterStatus : true;
     return matchesSearch && matchesBatch && matchesYear && matchesSection && matchesStatus;
   });
@@ -212,6 +232,22 @@ export default function ManageStudents() {
       if (status === 'Irregular') return 'badge-irregular';
       if (status === 'Dropped') return 'badge-dropped';
       return 'badge-regular';
+  };
+
+  // ✅ ONLY SHOW SECTIONS BELONGING TO THE SELECTED PROGRAM
+  const getFilteredFormSections = () => {
+      if (!formData.program) return [];
+      return academicSections.filter(s => s.section_name.startsWith(formData.program));
+  };
+
+  const getShortProgramName = (fullName) => {
+      if (!fullName) return '';
+      if (fullName.includes("Bachelor of Science in Information Technology")) return "BSIT";
+      if (fullName.includes("Bachelor of Secondary Education - Major in Mathematics")) return "BSEd Math";
+      if (fullName.includes("Bachelor of Secondary Education - Major in English")) return "BSEd English";
+      if (fullName.includes("Bachelor of Science in Business Management")) return "BSBM";
+      if (fullName.includes("Bachelor of Science in Computer Science")) return "BSCS";
+      return fullName.replace('Bachelor of Science in', 'BS').replace('Bachelor of Secondary Education', 'BSEd');
   };
 
   return (
@@ -238,10 +274,9 @@ export default function ManageStudents() {
           <option value="ALL">All Years</option>
           {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
         </select>
-        {/* ENTRAPMENT: Filter dropdown mapped correctly to newly merged sections */}
         <select className="filter-select" value={filterSection} onChange={e => setFilterSection(e.target.value)}>
           <option value="ALL">All Sections</option>
-          {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+          {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name.split(' ').pop()}</option>)}
         </select>
         <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="ALL">All Statuses</option>
@@ -269,7 +304,7 @@ export default function ManageStudents() {
                       <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}><User size={16} color="#104a28"/> {student.fullName}</div>
                       <div style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px'}}><Mail size={12}/> {student.email}</div>
                     </td>
-                    <td><span style={{fontSize: '12px', fontWeight: '500', color: '#555'}}>{student.program.replace('Bachelor of Science in', 'BS')}</span></td>
+                    <td><span style={{fontSize: '12px', fontWeight: '500', color: '#555'}}>{getShortProgramName(student.program)}</span></td>
                     <td>{isNew ? <span className="badge badge-new">Verification</span> : <span className={`badge ${getStatusClass(student.status)}`}>{student.status || 'Regular'}</span>}</td>
                     <td style={{fontFamily: 'monospace'}}>{student.studentId || 'N/A'}</td>
                     
@@ -277,7 +312,7 @@ export default function ManageStudents() {
                       {student.section === 'To be assigned' ? (
                           <span style={{background: '#f1f5f9', color: '#6b7280', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'}}>Needs Enrollment</span>
                       ) : (
-                          student.section 
+                          <span style={{fontWeight: 'bold', color: '#374151'}}>{student.section.split(' ').pop()}</span> 
                       )}
                     </td>
 
@@ -296,7 +331,6 @@ export default function ManageStudents() {
         </table>
       </div>
 
-      {/* TRASH BIN HIDDEN FOR BREVITY - IDENTICAL TO YOURS */}
       {showTrashModal && (
         <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{width: '700px', padding: 0, overflow: 'hidden'}}>
@@ -344,7 +378,6 @@ export default function ManageStudents() {
               <div style={{display: 'flex', gap: '16px'}}>
                   <div className="form-group" style={{flex: 1}}>
                     <label className="form-label">Last Name <span style={{color:'red'}}>*</span></label>
-                    {/* ENTRAPMENT: ONLY LETTERS AND SPACES */}
                     <input className="form-input" required placeholder="Dela Cruz" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value.replace(/[^A-Za-z\s]/g, '')})} />
                   </div>
                   <div className="form-group" style={{flex: 1}}>
@@ -355,23 +388,21 @@ export default function ManageStudents() {
               
               <div className="form-group">
                   <label className="form-label">Middle Name</label>
-                  {/* ENTRAPMENT: 2 CHARS MAX, LETTERS AND PERIODS ONLY */}
                   <input className="form-input" maxLength={2} placeholder="A." value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value.replace(/[^A-Za-z.]/g, '')})} />
               </div>
               
               <div className="form-group">
                   <label className="form-label">Student ID <span style={{color:'red'}}>*</span></label>
-                  {/* ENTRAPMENT: NUMBERS ONLY */}
                   <input className="form-input" required placeholder="20221045" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value.replace(/[^0-9]/g, '')})} />
               </div>
 
+              {/* ✅ DYNAMIC PROGRAM DROPDOWN */}
               <div className="form-group">
                 <label className="form-label">Program</label>
-                <select className="form-input" value={formData.program} onChange={e => setFormData({...formData, program: e.target.value})}>
-                  <option value="Bachelor of Science in Information Technology">Bachelor of Science in Information Technology</option>
-                  <option value="Bachelor of Secondary Education - Major in Mathematics">Bachelor of Secondary Education - Major in Mathematics</option>
-                  <option value="Bachelor of Secondary Education - Major in English">Bachelor of Secondary Education - Major in English</option>
-                  <option value="Bachelor of Science in Business Management">Bachelor of Science in Business Management</option>
+                <select className="form-input" value={formData.program} onChange={e => setFormData({...formData, program: e.target.value, section: 'To be assigned'})}>
+                  {academicPrograms.map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -383,25 +414,29 @@ export default function ManageStudents() {
                 {!isEditing && <div className="form-group" style={{flex: 1}}><label className="form-label">Password</label><input className="form-input" value={formData.password} readOnly /></div>}
               </div>
               
-              <div style={{display: 'flex', gap: '16px'}}>
-                <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">Year (Record keeping only)</label>
-                    <select className="form-input" value={formData.yearLevel} onChange={e => setFormData({...formData, yearLevel: e.target.value})}>
-                        {academicYears.map(y => <option key={y.id} value={y.year_name}>{y.year_name}</option>)}
-                    </select>
-                </div>
-                <div className="form-group" style={{flex: 1}}>
-                    <label className="form-label">Active Class Section</label>
-                    {/* ✅ MAPPED TO THE NEW MERGED SECTIONS TABLE */}
-                    <select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}>
-                        <option value="To be assigned">Needs Enrollment</option>
-                        {academicSections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
-                    </select>
-                </div>
+              {/* ✅ DYNAMIC SECTION DROPDOWN DEPENDING ON PROGRAM (No Year Level Required) */}
+              <div className="form-group">
+                  <label className="form-label">Active Class Section</label>
+                  <select className="form-input" value={formData.section} onChange={e => setFormData({...formData, section: e.target.value})}>
+                      <option value="To be assigned">Needs Enrollment (To be assigned)</option>
+                      {getFilteredFormSections().map(s => (
+                          <option key={s.id} value={s.section_name}>{s.section_name}</option>
+                      ))}
+                  </select>
               </div>
 
-              <div className="form-group"><label className="form-label">Status</label><select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Regular">Regular</option><option value="Irregular">Irregular</option><option value="Dropped">Dropped</option></select></div>
-              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn-save">Save</button></div>
+              <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                      <option value="Regular">Regular</option>
+                      <option value="Irregular">Irregular</option>
+                      <option value="Dropped">Dropped</option>
+                  </select>
+              </div>
+              <div className="modal-actions">
+                  <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
+                  <button type="submit" className="btn-save">Save</button>
+              </div>
             </form>
           </div>
         </div>

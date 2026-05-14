@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Megaphone, Plus, Trash2, Calendar, Target, User, Edit, RotateCcw, Filter, X, AlertTriangle, Clock } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Calendar, Target, User, Edit, RotateCcw, Filter, X, AlertTriangle, Clock, CheckSquare } from 'lucide-react';
 import './ManageAnnouncements.css';
 
 export default function ManageAnnouncements() {
@@ -29,8 +29,9 @@ export default function ManageAnnouncements() {
   const [audience, setAudience] = useState('STUDENTS'); 
   const [formData, setFormData] = useState({ title: '', content: '' });
   
-  const [studentTargets, setStudentTargets] = useState([{ program: 'ALL', year: 'ALL', section: 'ALL' }]);
-  const [instructorTargets, setInstructorTargets] = useState(['ALL']);
+  // --- CHECKBOX STATES ---
+  const [selectedSections, setSelectedSections] = useState([]);
+  const [selectedInstructors, setSelectedInstructors] = useState([]);
 
   const currentUser = { name: "Registrar", role: "ADMIN" };
 
@@ -76,10 +77,8 @@ export default function ManageAnnouncements() {
       const instData = await instRes.json();
       
       if (!setupData.error) {
-        // ✅ Explicitly load programs and year levels from their respective tables
         setAcademicPrograms(setupData.programs || []);
         setAcademicYears(setupData.yearLevels || []);
-        
         const sortedSections = (setupData.sections || []).sort((a,b) => a.section_name.localeCompare(b.section_name));
         setAcademicSections(sortedSections);
       }
@@ -136,8 +135,8 @@ export default function ManageAnnouncements() {
     setEditId(null);
     setAudience('STUDENTS');
     setFormData({ title: '', content: '' });
-    setStudentTargets([{ program: 'ALL', year: 'ALL', section: 'ALL' }]);
-    setInstructorTargets(['ALL']);
+    setSelectedSections([]);
+    setSelectedInstructors([]);
     setShowModal(true);
   };
 
@@ -148,21 +147,10 @@ export default function ManageAnnouncements() {
     
     if (item.target_year === 'INSTRUCTORS') {
       setAudience('INSTRUCTORS');
-      setInstructorTargets(item.target_classes.map(c => c.section));
+      setSelectedInstructors(item.target_classes.map(c => c.section));
     } else {
       setAudience('STUDENTS');
-      
-      const parsedTargets = item.target_classes.map(c => {
-          if(c.section === 'ALL') return { program: 'ALL', year: 'ALL', section: 'ALL' };
-          const parts = c.section.split(' ');
-          if(parts.length < 2) return { program: 'ALL', year: 'ALL', section: c.section };
-          
-          const prog = parts[0];
-          const ys = parts[1].split('-');
-          return { program: prog, year: ys[0] || 'ALL', section: c.section };
-      });
-      
-      setStudentTargets(parsedTargets);
+      setSelectedSections(item.target_classes.map(c => c.section));
     }
     setShowModal(true);
   };
@@ -170,23 +158,14 @@ export default function ManageAnnouncements() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.content) return alert("Title and Content are required!");
-    if (audience === 'STUDENTS' && studentTargets.length === 0) return alert("Please select at least one student class.");
-    if (audience === 'INSTRUCTORS' && instructorTargets.length === 0) return alert("Please select at least one instructor target.");
+    if (audience === 'STUDENTS' && selectedSections.length === 0) return alert("Please select at least one student class.");
+    if (audience === 'INSTRUCTORS' && selectedInstructors.length === 0) return alert("Please select at least one instructor target.");
 
     setSaving(true);
     try {
       if (isEditing) {
+          // Simplistic edit logic - only update title/content for existing ones since audience modification is disabled
           await Promise.all(editId.map((id, index) => {
-              const targetObj = audience === 'STUDENTS' ? studentTargets[index] : null;
-              const instructorTarget = audience === 'INSTRUCTORS' ? instructorTargets[index] : null;
-              
-              let finalSection = 'ALL';
-              if(audience === 'STUDENTS' && targetObj) {
-                  finalSection = targetObj.section === 'ALL' ? 'ALL' : targetObj.section;
-              } else if (audience === 'INSTRUCTORS') {
-                  finalSection = instructorTarget;
-              }
-
               return fetch(`https://abacus-w435.onrender.com/announcements/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
@@ -194,7 +173,7 @@ export default function ManageAnnouncements() {
                       title: formData.title,
                       content: formData.content,
                       targetYear: audience === 'STUDENTS' ? 'CLASS' : 'INSTRUCTORS',
-                      targetSection: finalSection
+                      targetSection: audience === 'STUDENTS' ? selectedSections[0] : selectedInstructors[0] // Edge case logic 
                   })
               });
           }));
@@ -202,15 +181,17 @@ export default function ManageAnnouncements() {
       } else {
           let finalTargets = [];
           if(audience === 'STUDENTS') {
-              studentTargets.forEach(t => {
-                  if(t.program === 'ALL' || t.year === 'ALL' || t.section === 'ALL') {
-                      finalTargets.push({ targetYear: 'CLASS', targetSection: 'ALL' });
-                  } else {
-                      finalTargets.push({ targetYear: 'CLASS', targetSection: t.section });
-                  }
-              });
+              if (selectedSections.includes('ALL')) {
+                  finalTargets.push({ targetYear: 'ALL', targetSection: 'ALL' });
+              } else {
+                  selectedSections.forEach(sec => finalTargets.push({ targetYear: 'CLASS', targetSection: sec }));
+              }
           } else {
-              finalTargets = instructorTargets.map(id => ({ targetYear: 'INSTRUCTORS', targetSection: id }));
+              if (selectedInstructors.includes('ALL')) {
+                  finalTargets.push({ targetYear: 'INSTRUCTORS', targetSection: 'ALL' });
+              } else {
+                  selectedInstructors.forEach(inst => finalTargets.push({ targetYear: 'INSTRUCTORS', targetSection: inst }));
+              }
           }
 
           const payload = {
@@ -236,28 +217,70 @@ export default function ManageAnnouncements() {
     finally { setSaving(false); }
   };
 
-  const updateStudentTarget = (index, field, value) => {
-      const newTargets = [...studentTargets];
-      
-      if(field === 'program') {
-          newTargets[index] = { program: value, year: 'ALL', section: 'ALL' }; 
-      } else if (field === 'year') {
-          newTargets[index] = { ...newTargets[index], year: value, section: 'ALL' }; 
-      } else {
-          newTargets[index] = { ...newTargets[index], section: value };
+  // --- CHECKBOX HANDLERS ---
+  const toggleSection = (sectionName) => {
+      if (sectionName === 'ALL') {
+          if (selectedSections.includes('ALL')) setSelectedSections([]);
+          else setSelectedSections(['ALL', ...academicSections.map(s => s.section_name)]);
+          return;
       }
       
-      setStudentTargets(newTargets);
+      let newSelection = [...selectedSections];
+      if (newSelection.includes(sectionName)) {
+          newSelection = newSelection.filter(s => s !== sectionName && s !== 'ALL');
+      } else {
+          newSelection.push(sectionName);
+          if (newSelection.length === academicSections.length) newSelection.push('ALL');
+      }
+      setSelectedSections(newSelection);
   };
-  const removeStudentTarget = (index) => setStudentTargets(studentTargets.filter((_, i) => i !== index));
 
-  const updateInstructorTarget = (index, value) => {
-      if(value !== 'ALL' && instructorTargets.includes(value)) return alert("Instructor already selected!");
-      const newTargets = [...instructorTargets];
-      newTargets[index] = value;
-      setInstructorTargets(newTargets);
+  const toggleProgram = (programName) => {
+      const programSections = academicSections.filter(s => s.section_name.startsWith(programName)).map(s => s.section_name);
+      const allSelected = programSections.every(s => selectedSections.includes(s));
+
+      let newSelection = [...selectedSections].filter(s => s !== 'ALL');
+      if (allSelected) {
+          newSelection = newSelection.filter(s => !programSections.includes(s));
+      } else {
+          programSections.forEach(s => { if(!newSelection.includes(s)) newSelection.push(s); });
+          if (newSelection.length === academicSections.length) newSelection.push('ALL');
+      }
+      setSelectedSections(newSelection);
+  }
+
+  const toggleYearGroup = (programName, yearName) => {
+      const prefix = `${programName} ${yearName}-`;
+      const yearSections = academicSections.filter(s => s.section_name.startsWith(prefix)).map(s => s.section_name);
+      const allSelected = yearSections.every(s => selectedSections.includes(s));
+
+      let newSelection = [...selectedSections].filter(s => s !== 'ALL');
+      if (allSelected) {
+          newSelection = newSelection.filter(s => !yearSections.includes(s));
+      } else {
+          yearSections.forEach(s => { if(!newSelection.includes(s)) newSelection.push(s); });
+          if (newSelection.length === academicSections.length) newSelection.push('ALL');
+      }
+      setSelectedSections(newSelection);
+  }
+
+  const toggleInstructor = (instructorId) => {
+      if (instructorId === 'ALL') {
+          if (selectedInstructors.includes('ALL')) setSelectedInstructors([]);
+          else setSelectedInstructors(['ALL', ...instructorList.map(i => i.id.toString())]);
+          return;
+      }
+
+      let newSelection = [...selectedInstructors];
+      const strId = instructorId.toString();
+      if (newSelection.includes(strId)) {
+          newSelection = newSelection.filter(i => i !== strId && i !== 'ALL');
+      } else {
+          newSelection.push(strId);
+          if (newSelection.length === instructorList.length) newSelection.push('ALL');
+      }
+      setSelectedInstructors(newSelection);
   };
-  const removeInstructorTarget = (index) => setInstructorTargets(instructorTargets.filter((_, i) => i !== index));
 
   const filteredAnnouncements = announcements.filter(item => {
     const d = new Date(item.created_at);
@@ -433,94 +456,97 @@ export default function ManageAnnouncements() {
                         
                         <div style={{background:'#fafafa', padding:'15px', borderRadius:'8px', border:'1px solid #eee'}}>
                             <label style={{display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '10px'}}><Target size={14} style={{verticalAlign: 'middle', marginRight: '4px'}}/> Target Audience</label>
-                            <select value={audience} onChange={e => setAudience(e.target.value)} disabled={isEditing} style={{width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', outline: 'none', background: isEditing ? '#f3f4f6' : 'white', marginBottom: '15px', opacity: isEditing ? 0.7 : 1}}>
-                                <option value="STUDENTS">Students</option>
-                                <option value="INSTRUCTORS">Instructors</option>
-                            </select>
+                            <div style={{display: 'flex', gap: '15px', marginBottom: '15px'}}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer'}}>
+                                    <input type="radio" name="audience" value="STUDENTS" checked={audience === 'STUDENTS'} onChange={() => setAudience('STUDENTS')} disabled={isEditing} />
+                                    <span style={{fontWeight: '500', color: '#333'}}>Students</span>
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer'}}>
+                                    <input type="radio" name="audience" value="INSTRUCTORS" checked={audience === 'INSTRUCTORS'} onChange={() => setAudience('INSTRUCTORS')} disabled={isEditing} />
+                                    <span style={{fontWeight: '500', color: '#333'}}>Instructors</span>
+                                </label>
+                            </div>
 
-                            {/* ✅ FIXED HIERARCHICAL STUDENTS MULTI-TARGET CONFIG */}
+                            {/* --- CHECKBOX LIST FOR STUDENTS --- */}
                             {audience === 'STUDENTS' && (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px'}}>
-                                    {studentTargets.map((t, idx) => {
-                                        
-                                        const validSections = academicSections.filter(s => {
-                                            if(t.program !== 'ALL' && !s.section_name.startsWith(t.program)) return false;
-                                            if(t.year !== 'ALL' && !s.section_name.includes(`${t.program === 'ALL' ? '' : t.program} ${t.year}-`)) return false;
-                                            return true;
-                                        });
+                                <div style={{border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', overflow: 'hidden'}}>
+                                    <div style={{padding: '12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb'}}>
+                                        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: isEditing ? 'not-allowed' : 'pointer'}}>
+                                            <input type="checkbox" checked={selectedSections.includes('ALL')} onChange={() => toggleSection('ALL')} disabled={isEditing} style={{width: '16px', height: '16px'}}/>
+                                            <span style={{fontWeight: 'bold', color: '#111827'}}>Select All Students</span>
+                                        </label>
+                                    </div>
+                                    <div style={{maxHeight: '280px', overflowY: 'auto', padding: '10px'}}>
+                                        {academicPrograms.map(prog => {
+                                            const programSections = academicSections.filter(s => s.section_name.startsWith(prog.name));
+                                            if (programSections.length === 0) return null;
+                                            
+                                            // Group sections by year within the program
+                                            const groupedByYear = {};
+                                            programSections.forEach(sec => {
+                                                const parts = sec.section_name.split(' ');
+                                                if (parts.length > 1) {
+                                                    const ys = parts.pop(); // e.g. "1-A"
+                                                    const year = ys.split('-')[0]; // "1"
+                                                    if (!groupedByYear[year]) groupedByYear[year] = [];
+                                                    groupedByYear[year].push(sec);
+                                                }
+                                            });
 
-                                        return (
-                                            <div key={idx} style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', background: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
-                                                
-                                                {/* 1. Pick Program */}
-                                                <div style={{flex: 1, minWidth: '150px'}}>
-                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Program</label>
-                                                    <select disabled={isEditing} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: isEditing ? '#f3f4f6' : 'white'}} value={t.program} onChange={e => updateStudentTarget(idx, 'program', e.target.value)}>
-                                                        <option value="ALL">All Programs</option>
-                                                        {academicPrograms.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                                    </select>
+                                            return (
+                                                <div key={prog.id} style={{marginBottom: '20px', border: '1px solid #f3f4f6', borderRadius: '8px', overflow: 'hidden'}}>
+                                                    <div style={{background: '#f9fafb', padding: '8px 12px', borderBottom: '1px solid #f3f4f6'}}>
+                                                        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: isEditing ? 'not-allowed' : 'pointer'}}>
+                                                            <input type="checkbox" checked={programSections.every(s => selectedSections.includes(s.section_name))} onChange={() => toggleProgram(prog.name)} disabled={isEditing} style={{width: '14px', height: '14px'}}/>
+                                                            <span style={{fontWeight: 'bold', color: '#1f2937', fontSize: '13px'}}>{prog.name}</span>
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    <div style={{padding: '10px 12px'}}>
+                                                        {Object.keys(groupedByYear).sort().map(year => (
+                                                            <div key={year} style={{marginBottom: '10px'}}>
+                                                                <label style={{display: 'flex', alignItems: 'center', gap: '6px', cursor: isEditing ? 'not-allowed' : 'pointer', marginBottom: '6px'}}>
+                                                                    <input type="checkbox" checked={groupedByYear[year].every(s => selectedSections.includes(s.section_name))} onChange={() => toggleYearGroup(prog.name, year)} disabled={isEditing} style={{width: '13px', height: '13px'}}/>
+                                                                    <span style={{fontWeight: '600', color: '#4b5563', fontSize: '12px'}}>Year {year}</span>
+                                                                </label>
+                                                                
+                                                                <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px', paddingLeft: '20px'}}>
+                                                                    {groupedByYear[year].map(sec => (
+                                                                        <label key={sec.id} style={{display: 'flex', alignItems: 'center', gap: '4px', background: selectedSections.includes(sec.section_name) ? '#e6f4ea' : '#f3f4f6', padding: '4px 10px', borderRadius: '15px', cursor: isEditing ? 'not-allowed' : 'pointer', border: selectedSections.includes(sec.section_name) ? '1px solid #104a28' : '1px solid transparent'}}>
+                                                                            <input type="checkbox" checked={selectedSections.includes(sec.section_name)} onChange={() => toggleSection(sec.section_name)} disabled={isEditing} style={{width: '12px', height: '12px'}}/>
+                                                                            <span style={{fontSize: '11px', color: selectedSections.includes(sec.section_name) ? '#104a28' : '#4b5563', fontWeight: '600'}}>{sec.section_name.split(' ').pop()}</span>
+                                                                        </label>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
-
-                                                {/* 2. Pick Year Level */}
-                                                <div style={{flex: 1, minWidth: '100px'}}>
-                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Year Level</label>
-                                                    <select disabled={isEditing || t.program === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.program === 'ALL') ? '#f3f4f6' : 'white'}} value={t.year} onChange={e => updateStudentTarget(idx, 'year', e.target.value)}>
-                                                        <option value="ALL">All Years</option>
-                                                        {academicYears.map(y => <option key={y.id} value={y.year_name}>Year {y.year_name}</option>)}
-                                                    </select>
-                                                </div>
-
-                                                {/* 3. Pick Section */}
-                                                <div style={{flex: 1, minWidth: '150px'}}>
-                                                    <label style={{fontSize: '11px', fontWeight: 'bold', color: '#6b7280', display: 'block', marginBottom: '4px'}}>Class Section</label>
-                                                    <select disabled={isEditing || t.year === 'ALL'} style={{width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', background: (isEditing || t.year === 'ALL') ? '#f3f4f6' : 'white'}} value={t.section} onChange={e => updateStudentTarget(idx, 'section', e.target.value)}>
-                                                        <option value="ALL">All Sections</option>
-                                                        {validSections.map(s => {
-                                                            const parts = s.section_name.split('-');
-                                                            const trimmedName = parts.length > 1 ? parts.slice(1).join('-') : s.section_name;
-                                                            return <option key={s.id} value={s.section_name}>{trimmedName}</option>
-                                                        })}
-                                                    </select>
-                                                </div>
-
-                                                {studentTargets.length > 1 && !isEditing && (
-                                                    <button type="button" onClick={() => removeStudentTarget(idx)} style={{background: '#fee2e2', color: '#dc2626', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', alignSelf: 'flex-end', height: '35px'}}>
-                                                        <Trash2 size={16}/>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )
-                                    })}
-                                    
-                                    {!isEditing && (
-                                        <button type="button" onClick={() => setStudentTargets([...studentTargets, {program: 'ALL', year: 'ALL', section: 'ALL'}])} style={{alignSelf: 'flex-start', background: 'none', border: 'none', color: '#104a28', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', marginTop: '5px'}}>
-                                            <Plus size={16}/> Add Another Target
-                                        </button>
-                                    )}
+                                            )
+                                        })}
+                                    </div>
                                 </div>
                             )}
 
-                            {/* DYNAMIC INSTRUCTORS MULTI-TARGET CONFIG */}
+                            {/* --- CHECKBOX LIST FOR INSTRUCTORS --- */}
                             {audience === 'INSTRUCTORS' && (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px'}}>
-                                    {instructorTargets.map((inst, idx) => (
-                                        <div key={idx} style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                            <select disabled={isEditing} style={{flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', background: isEditing ? '#f3f4f6' : 'white', opacity: isEditing ? 0.7 : 1}} value={inst} onChange={e => updateInstructorTarget(idx, e.target.value)}>
-                                                <option value="ALL">ALL INSTRUCTORS</option>
-                                                {instructorList.map(instructor => <option key={instructor.id} value={instructor.id}>{instructor.full_name}</option>)}
-                                            </select>
-                                            {instructorTargets.length > 1 && !isEditing && (
-                                                <button type="button" onClick={() => removeInstructorTarget(idx)} style={{background: '#fee2e2', color: '#dc2626', border: 'none', padding: '10px', borderRadius: '6px', cursor: 'pointer'}}>
-                                                    <Trash2 size={16}/>
-                                                </button>
-                                            )}
+                                <div style={{border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', overflow: 'hidden'}}>
+                                    <div style={{padding: '12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb'}}>
+                                        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: isEditing ? 'not-allowed' : 'pointer'}}>
+                                            <input type="checkbox" checked={selectedInstructors.includes('ALL')} onChange={() => toggleInstructor('ALL')} disabled={isEditing} style={{width: '16px', height: '16px'}}/>
+                                            <span style={{fontWeight: 'bold', color: '#111827'}}>Select All Instructors</span>
+                                        </label>
+                                    </div>
+                                    <div style={{maxHeight: '200px', overflowY: 'auto', padding: '10px'}}>
+                                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
+                                            {instructorList.map(inst => (
+                                                <label key={inst.id} style={{display: 'flex', alignItems: 'center', gap: '6px', background: '#f3f4f6', padding: '6px 12px', borderRadius: '20px', cursor: isEditing ? 'not-allowed' : 'pointer', border: selectedInstructors.includes(inst.id.toString()) ? '1px solid #104a28' : '1px solid transparent'}}>
+                                                    <input type="checkbox" checked={selectedInstructors.includes(inst.id.toString())} onChange={() => toggleInstructor(inst.id)} disabled={isEditing} style={{width: '14px', height: '14px'}}/>
+                                                    <span style={{fontSize: '12px', color: selectedInstructors.includes(inst.id.toString()) ? '#104a28' : '#4b5563', fontWeight: '500'}}>{inst.full_name}</span>
+                                                </label>
+                                            ))}
                                         </div>
-                                    ))}
-                                    {!isEditing && (
-                                        <button type="button" onClick={() => setInstructorTargets([...instructorTargets, 'ALL'])} style={{alignSelf: 'flex-start', background: 'none', border: 'none', color: '#104a28', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', marginTop: '5px'}}>
-                                            <Plus size={16}/> Add Another Instructor Target
-                                        </button>
-                                    )}
+                                    </div>
                                 </div>
                             )}
                             
