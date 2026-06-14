@@ -194,3 +194,54 @@
   outline: none;
   box-shadow: 0 0 0 2px rgba(16, 74, 40, 0.1);
 }
+
+@media (max-width: 1024px) {
+  .page-container {
+    padding: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 20px 16px;
+  }
+
+  .page-header,
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-wrapper {
+    min-width: 0;
+  }
+
+  .table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 760px;
+  }
+
+  .modal-content {
+    width: 92%;
+    padding: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 24px;
+  }
+
+  .filter-bar {
+    padding: 16px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 14px 16px;
+  }
+}

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import './AdminSidebar.css';
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ isMobileOpen = false }) {
   const location = useLocation();
 
   // Helper to check if the current path matches the link
@@ -26,7 +26,7 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isMobileOpen ? 'mobile-open' : 'mobile-hidden'}`}>
       {/* Header */}
       <div className="sidebar-header">
         <div className="brand">

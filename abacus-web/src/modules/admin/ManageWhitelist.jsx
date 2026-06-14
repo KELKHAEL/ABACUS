@@ -17,6 +17,9 @@ export default function ManageWhitelist() {
 
   const [filterYear, setFilterYear] = useState('ALL');
   const fileInputRef = useRef(null);
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const fetchWhitelist = async () => {
     setLoading(true);
@@ -132,9 +135,9 @@ export default function ManageWhitelist() {
       if (validData.length === 0) {
         if (formattedData.length > 0) {
             const sample = formattedData[0];
-            alert(`Import Error: Rows were rejected.\nRow 1: ID:"${sample.studentId}", Email:"${sample.email}"\nFix: Emails MUST end with '@cvsu.edu.ph'.`);
+            await showAlert(`Import Error: Rows were rejected.\nRow 1: ID:"${sample.studentId}", Email:"${sample.email}"\nFix: Emails MUST end with '@cvsu.edu.ph'.`, { title: 'Import Error' });
         } else {
-            alert("Import Error: The Excel sheet appears empty or invalid.");
+            await showAlert("Import Error: The Excel sheet appears empty or invalid.", { title: 'Import Error' });
         }
         return;
       }
@@ -148,10 +151,10 @@ export default function ManageWhitelist() {
   // --- ➕ MANUAL ADD HANDLER ---
   const handleManualAdd = () => {
       if (!newData.studentId || !newData.email || !newData.lastName || !newData.firstName) {
-          return alert("Student ID, Email, First Name, and Last Name are required.");
+          return showAlert("Student ID, Email, First Name, and Last Name are required.", { title: 'Missing Fields' });
       }
       if (!newData.email.endsWith('@cvsu.edu.ph')) {
-          return alert("Email must end with @cvsu.edu.ph");
+          return showAlert("Email must end with @cvsu.edu.ph", { title: 'Invalid Email' });
       }
 
       const payload = [{
@@ -176,21 +179,21 @@ export default function ManageWhitelist() {
         });
         const result = await res.json();
         if (result.success) {
-            alert(`Success!\n\n Newly Added: ${result.newlyAdded}\n Modified: ${result.modified}\n Ignored (Duplicates): ${result.duplicates}`);
+            await showAlert(`Success!\n\n Newly Added: ${result.newlyAdded}\n Modified: ${result.modified}\n Ignored (Duplicates): ${result.duplicates}`, { title: 'Import Complete' });
             setShowAddModal(false);
             setNewData({ studentId: '', email: '', firstName: '', middleName: '', lastName: '' }); 
             fetchWhitelist();
         }
-      } catch (err) { alert("Server connection failed."); }
+      } catch (err) { await showAlert("Server connection failed.", { title: 'Import Failed' }); }
   };
 
   // --- 🗑️ & ✏️ EDIT HANDLERS ---
   const deleteFromWhitelist = async (id) => {
-      if(!window.confirm("Remove this student from the allowed list?")) return;
+      if(!await showConfirm("Remove this student from the allowed list?", { title: 'Remove Student', confirmText: 'Remove' })) return;
       try {
           await fetch(`https://abacus-w435.onrender.com/allowed-students/${id}`, { method: 'DELETE' });
           fetchWhitelist(); 
-      } catch (e) { alert("Failed to delete"); }
+      } catch (e) { await showAlert("Failed to delete", { title: 'Delete Failed' }); }
   };
 
   const startEditing = (item) => {
@@ -206,7 +209,7 @@ export default function ManageWhitelist() {
 
   const saveEdit = async (id) => {
       if (!editData.studentId || !editData.email || !editData.lastName || !editData.firstName) {
-          return alert("ID, Email, First Name, and Last Name are required.");
+          return showAlert("ID, Email, First Name, and Last Name are required.", { title: 'Missing Fields' });
       }
       try {
           const res = await fetch(`https://abacus-w435.onrender.com/allowed-students/${id}`, {
@@ -224,8 +227,8 @@ export default function ManageWhitelist() {
           if (data.success) {
               setEditingId(null);
               fetchWhitelist();
-          } else { alert("Failed to update: " + data.error); }
-      } catch (e) { alert("Server Error."); }
+          } else { await showAlert("Failed to update: " + data.error, { title: 'Update Failed' }); }
+      } catch (e) { await showAlert("Server Error.", { title: 'Update Failed' }); }
   };
 
   // --- 🔍 FILTER LOGIC ---

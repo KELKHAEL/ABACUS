@@ -17,6 +17,9 @@ export default function ManagePromotions() {
   const [programFilter, setProgramFilter] = useState("All");
   const [yearFilter, setYearFilter] = useState("All");
   const [sectionFilter, setSectionFilter] = useState("All");
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const canMassSelect = programFilter !== "All" && yearFilter !== "All" && sectionFilter !== "All";
 
@@ -91,24 +94,24 @@ export default function ManagePromotions() {
   }, [search, programFilter, yearFilter, sectionFilter, pendingRequests]);
 
   const handleApprove = async (id, name) => {
-    if (!window.confirm(`Approve promotion for ${name}? This will apply their new classes and require them to log in again.`)) return;
+    if (!await showConfirm(`Approve promotion for ${name}? This will apply their new classes and require them to log in again.`, { title: 'Approve Promotion', confirmText: 'Approve' })) return;
     try {
       await fetch(`https://abacus-w435.onrender.com/admin/promotions/${id}/approve`, { method: 'PUT' });
       fetchData();
-    } catch (err) { alert("Failed to approve request."); }
+    } catch (err) { await showAlert("Failed to approve request.", { title: 'Approval Failed' }); }
   };
 
   const handleReject = async (id, name) => {
-    if (!window.confirm(`Reject promotion for ${name}? This will clear their COR and flag them as rejected.`)) return;
+    if (!await showConfirm(`Reject promotion for ${name}? This will clear their COR and flag them as rejected.`, { title: 'Reject Promotion', confirmText: 'Reject' })) return;
     try {
       await fetch(`https://abacus-w435.onrender.com/admin/promotions/${id}/reject`, { method: 'PUT' });
       fetchData();
-    } catch (err) { alert("Failed to reject request."); }
+    } catch (err) { await showAlert("Failed to reject request.", { title: 'Rejection Failed' }); }
   };
 
   const handleMassApprove = async () => {
-    if (selectedIds.length === 0) return alert("Select at least one student to approve.");
-    if (!window.confirm(`Are you sure you want to MASS APPROVE ${selectedIds.length} students for Year ${yearFilter} - Section ${sectionFilter}? This will require them to log in again.`)) return;
+    if (selectedIds.length === 0) return showAlert("Select at least one student to approve.", { title: 'Nothing Selected' });
+    if (!await showConfirm(`Are you sure you want to MASS APPROVE ${selectedIds.length} students for Year ${yearFilter} - Section ${sectionFilter}? This will require them to log in again.`, { title: 'Mass Approval', confirmText: 'Approve All' })) return;
     
     try {
       await fetch('https://abacus-w435.onrender.com/admin/promotions/mass-approve', {
@@ -118,7 +121,7 @@ export default function ManagePromotions() {
       });
       fetchData();
     } catch(e) {
-      alert("Failed to mass approve.");
+      await showAlert("Failed to mass approve.", { title: 'Mass Approval Failed' });
     }
   };
 

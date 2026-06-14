@@ -117,3 +117,84 @@
   background-color: rgba(255, 69, 58, 0.1);
   color: #ff453a;
 }
+
+.mobile-sidebar-toggle {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 220px;
+    padding: 18px 14px 28px;
+  }
+
+  .sidebar-header {
+    margin-bottom: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    top: auto;
+    left: auto;
+    box-shadow: none;
+    padding: 16px;
+  }
+
+  .sidebar.mobile-hidden {
+    display: none;
+  }
+
+  .sidebar-header {
+    margin-bottom: 16px;
+  }
+
+  .nav-menu {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nav-item {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: flex-start;
+  }
+
+  .sidebar-footer {
+    margin-bottom: 0;
+  }
+
+  .logout-btn {
+    justify-content: center;
+  }
+
+  .mobile-sidebar-toggle {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 3000;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 999px;
+    background: #104a28;
+    color: white;
+    box-shadow: 0 10px 24px rgba(16, 74, 40, 0.25);
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-item {
+    flex-basis: 100%;
+  }
+
+  .brand-title {
+    font-size: 18px;
+  }
+}

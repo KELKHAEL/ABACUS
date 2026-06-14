@@ -23,6 +23,9 @@ export default function UploadModules() {
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashList, setTrashList] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const [formData, setFormData] = useState({
     title: '', description: '', targetClasses: [], file: null
@@ -75,28 +78,28 @@ export default function UploadModules() {
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
   const handleSoftDelete = async (id) => {
-    if (window.confirm("Move this module to Trash? It will be hidden from students immediately.")) {
+    if (await showConfirm("Move this module to Trash? It will be hidden from students immediately.", { title: 'Move to Trash', confirmText: 'Trash' })) {
       try {
         const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/soft-delete`, { method: 'PUT' });
         if (res.ok) fetchDashboardData();
-      } catch (e) { alert("Failed to trash module."); }
+      } catch (e) { await showAlert("Failed to trash module.", { title: 'Trash Failed' }); }
     }
   };
 
   const handleRestore = async (id) => {
-    if(!window.confirm("Restore this module? Students will be able to see it again.")) return;
+    if(!await showConfirm("Restore this module? Students will be able to see it again.", { title: 'Restore Module', confirmText: 'Restore' })) return;
     try {
         const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/restore`, { method: 'PUT' });
         if (res.ok) { fetchTrash(); fetchDashboardData(); }
-    } catch (e) { alert("Failed to restore"); }
+    } catch (e) { await showAlert("Failed to restore", { title: 'Restore Failed' }); }
   };
 
   const handlePermanentDelete = async (id) => {
-    if(!window.confirm("WARNING: This will permanently delete the module file and record.")) return;
+    if(!await showConfirm("WARNING: This will permanently delete the module file and record.", { title: 'Permanent Delete', confirmText: 'Delete' })) return;
     try {
         const res = await fetch(`https://abacus-w435.onrender.com/modules/${id}/permanent`, { method: 'DELETE' });
         if (res.ok) fetchTrash();
-    } catch (e) { alert("Failed to delete permanently"); }
+    } catch (e) { await showAlert("Failed to delete permanently", { title: 'Delete Failed' }); }
   };
 
   const openUploadModal = () => {
@@ -107,14 +110,14 @@ export default function UploadModules() {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile && selectedFile.type !== 'application/pdf') {
-      alert("Please upload a valid PDF file.");
+      showAlert("Please upload a valid PDF file.", { title: 'Invalid File' });
       e.target.value = null; return;
     }
     setFormData({ ...formData, file: selectedFile });
   };
 
   const addClassRow = () => {
-    if (assignedClasses.length === 0) return alert("You do not have any classes assigned to you.");
+    if (assignedClasses.length === 0) return showAlert("You do not have any classes assigned to you.", { title: 'No Classes' });
     // ✅ FIX: Default to the first available string class
     setFormData({ ...formData, targetClasses: [...formData.targetClasses, assignedClasses[0]] });
   };
@@ -134,8 +137,8 @@ export default function UploadModules() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!formData.file) return alert("Please select a PDF file to upload.");
-    if (!formData.title) return alert("Please enter a title.");
+    if (!formData.file) return showAlert("Please select a PDF file to upload.", { title: 'Missing File' });
+    if (!formData.title) return showAlert("Please enter a title.", { title: 'Missing Title' });
 
     const userStr = localStorage.getItem('user');
     const user = JSON.parse(userStr);
@@ -153,10 +156,10 @@ export default function UploadModules() {
       const res = await fetch('https://abacus-w435.onrender.com/modules', { method: 'POST', body: payload });
       const data = await res.json();
       if (data.success) {
-        alert("Module uploaded successfully!");
+        await showAlert("Module uploaded successfully!", { title: 'Success' });
         setShowModal(false); fetchDashboardData();
-      } else { alert("Upload failed: " + data.error); }
-    } catch (err) { alert("Server error. Could not upload file."); } 
+      } else { await showAlert("Upload failed: " + data.error, { title: 'Upload Failed' }); }
+    } catch (err) { await showAlert("Server error. Could not upload file.", { title: 'Upload Failed' }); } 
     finally { setUploading(false); }
   };
 

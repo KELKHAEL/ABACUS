@@ -12,6 +12,7 @@ export default function QuizMonitoring() {
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [user, setUser] = useState(null);
+  const [realtimeEnabled, setRealtimeEnabled] = useState(true);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -27,6 +28,29 @@ export default function QuizMonitoring() {
     }
   }, [navigate]);
 
+  const tryLoadLogsFromBase = async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/quiz-violations?instructorId=${user.id}&limit=100`);
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+
+    if (!contentType.includes('application/json')) {
+      return { ok: false, retryable: true };
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseError) {
+      return { ok: false, retryable: false, error: 'The monitoring response was not valid JSON.' };
+    }
+
+    if (!response.ok || data.success === false) {
+      return { ok: false, retryable: false, error: data.error || 'Unable to load quiz logs.' };
+    }
+
+    return { ok: true, logs: Array.isArray(data.logs) ? data.logs : [] };
+  };
+
   const loadLogs = async (silent = false) => {
     if (!user?.id) return;
     if (!silent) {
@@ -37,15 +61,28 @@ export default function QuizMonitoring() {
 
     setError('');
     try {
-      const response = await fetch(`${API_URL}/quiz-violations?instructorId=${user.id}&limit=100`);
-      const data = await response.json();
-      if (!response.ok || data.success === false) {
-        throw new Error(data.error || 'Unable to load quiz logs.');
+      const bases = [API_URL, window.location.origin].filter(Boolean);
+      let lastError = '';
+
+      for (const baseUrl of bases) {
+        const result = await tryLoadLogsFromBase(baseUrl);
+        if (result.ok) {
+          setLogs(result.logs);
+          setLastUpdated(new Date());
+          return;
+        }
+        if (result.error) {
+          lastError = result.error;
+        }
       }
-      setLogs(Array.isArray(data.logs) ? data.logs : []);
-      setLastUpdated(new Date());
+
+      if (lastError) {
+        throw new Error(lastError);
+      } else {
+        throw new Error('Quiz monitoring backend is temporarily unavailable.');
+      }
     } catch (fetchError) {
-      setError(fetchError.message || 'Unable to load quiz monitoring data.');
+      setError(fetchError.message || 'Quiz monitoring backend is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -57,21 +94,30 @@ export default function QuizMonitoring() {
 
     loadLogs();
 
-    const source = new EventSource(`${API_URL}/quiz-violations/stream`);
-    source.onmessage = () => {
-      loadLogs(true);
-    };
-    source.onerror = () => {
-      setRefreshing(false);
-    };
+    if (!realtimeEnabled) {
+      return undefined;
+    }
+
+    let source;
+    try {
+      source = new EventSource(`${API_URL}/quiz-violations/stream`);
+      source.onmessage = () => {
+        loadLogs(true);
+      };
+      source.onerror = () => {
+        setRefreshing(false);
+      };
+    } catch (streamError) {
+      console.warn('Quiz monitoring stream unavailable:', streamError);
+    }
 
     const fallbackTimer = setInterval(() => loadLogs(true), 10000);
 
     return () => {
-      source.close();
+      if (source) source.close();
       clearInterval(fallbackTimer);
     };
-  }, [user?.id]);
+  }, [user?.id, realtimeEnabled]);
 
   const stats = useMemo(() => {
     const backgrounded = logs.filter(log => log.action === 'App Backgrounded').length;
@@ -115,25 +161,47 @@ export default function QuizMonitoring() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => loadLogs(true)}
-            style={{
-              background: '#104a28',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '12px 18px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700
-            }}
-          >
-            <RefreshCcw size={16} />
-            {refreshing ? 'Refreshing...' : 'Refresh Logs'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setRealtimeEnabled(prev => !prev)}
+              style={{
+                background: realtimeEnabled ? '#dcfce7' : '#fee2e2',
+                color: realtimeEnabled ? '#166534' : '#991b1b',
+                border: '1px solid transparent',
+                borderRadius: '999px',
+                padding: '10px 14px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 800
+              }}
+            >
+              <span style={{ width: 10, height: 10, borderRadius: '999px', background: realtimeEnabled ? '#22c55e' : '#ef4444' }} />
+              {realtimeEnabled ? 'Live Monitoring On' : 'Live Monitoring Off'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => loadLogs(true)}
+              style={{
+                background: '#104a28',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 18px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 700
+              }}
+            >
+              <RefreshCcw size={16} />
+              {refreshing ? 'Refreshing...' : 'Refresh Logs'}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -174,7 +242,7 @@ export default function QuizMonitoring() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6b7280', fontSize: '13px' }}>
               <Clock3 size={15} />
-              <span>Auto-refresh every 10 seconds</span>
+              <span>{realtimeEnabled ? 'Auto-refresh every 10 seconds' : 'Auto-refresh paused'}</span>
             </div>
           </div>
 

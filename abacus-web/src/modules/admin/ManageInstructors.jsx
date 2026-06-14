@@ -20,6 +20,9 @@ export default function ManageInstructors() {
   const [trashList, setTrashList] = useState([]);
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const [formData, setFormData] = useState({
     lastName: '',
@@ -96,15 +99,15 @@ export default function ManageInstructors() {
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
   const handleRestore = async (id) => {
-    if(!window.confirm("Restore this instructor?")) return;
+    if(!await showConfirm("Restore this instructor?", { title: 'Restore Instructor', confirmText: 'Restore' })) return;
     try { await fetch(`https://abacus-w435.onrender.com/users/${id}/restore`, { method: 'PUT' }); fetchTrash(); fetchInstructorsAndSetup(); } 
-    catch (e) { alert("Failed to restore"); }
+    catch (e) { await showAlert("Failed to restore", { title: 'Restore Failed' }); }
   };
 
   const handlePermanentDelete = async (id) => {
-    if(!window.confirm("WARNING: This will permanently delete the instructor data. This cannot be undone.")) return;
+    if(!await showConfirm("WARNING: This will permanently delete the instructor data. This cannot be undone.", { title: 'Permanent Delete', confirmText: 'Delete' })) return;
     try { await fetch(`https://abacus-w435.onrender.com/users/${id}/permanent`, { method: 'DELETE' }); fetchTrash(); } 
-    catch (e) { alert("Failed to delete permanently"); }
+    catch (e) { await showAlert("Failed to delete permanently", { title: 'Delete Failed' }); }
   };
 
   const openAddModal = () => {
@@ -143,7 +146,7 @@ export default function ManageInstructors() {
 
   // ✅ NEW SINGLE-DROPDOWN CLASS ASSIGNMENT
   const addClassRow = () => {
-    if (academicSections.length === 0) return alert("Please create sections in the Academic Setup first.");
+    if (academicSections.length === 0) return showAlert("Please create sections in the Academic Setup first.", { title: 'No Sections' });
     const defaultSection = academicSections[0].section_name;
     // Don't add if they already have it
     if(formData.assignedClasses.includes(defaultSection)) return;
@@ -159,7 +162,7 @@ export default function ManageInstructors() {
   const updateClassRow = (index, value) => {
     // Prevent duplicates
     if(formData.assignedClasses.includes(value)) {
-        return alert("Instructor is already assigned to this class.");
+        return showAlert("Instructor is already assigned to this class.", { title: 'Duplicate Class' });
     }
     const updated = [...formData.assignedClasses];
     updated[index] = value;
@@ -168,9 +171,9 @@ export default function ManageInstructors() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if(!formData.lastName || !formData.firstName) return alert("Please enter First and Last Name.");
+    if(!formData.lastName || !formData.firstName) return showAlert("Please enter First and Last Name.", { title: 'Missing Name' });
     // ENTRAPMENT: Strict Email Validation
-    if(!formData.email.trim().toLowerCase().endsWith("@cvsu.edu.ph")) return alert("Email must strictly end with @cvsu.edu.ph");
+    if(!formData.email.trim().toLowerCase().endsWith("@cvsu.edu.ph")) return showAlert("Email must strictly end with @cvsu.edu.ph", { title: 'Invalid Email' });
 
     const finalLastName = formData.lastName.toUpperCase().trim();
     const finalFirstName = formData.firstName.toUpperCase().trim();
@@ -194,17 +197,17 @@ export default function ManageInstructors() {
           try { await fetch('https://abacus-w435.onrender.com/admin-reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: editId, new_password: formData.password }) }); } 
           catch (passErr) { console.error("Failed to update password:", passErr); }
         }
-        alert(isEditing ? "Instructor Updated!" : "Instructor Created!");
+        await showAlert(isEditing ? "Instructor Updated!" : "Instructor Created!", { title: 'Saved' });
         setShowModal(false);
         fetchInstructorsAndSetup();
-      } else { alert("Error: " + data.error); }
-    } catch (error) { alert("Failed to connect to server."); }
+      } else { await showAlert("Error: " + data.error, { title: 'Save Failed' }); }
+    } catch (error) { await showAlert("Failed to connect to server.", { title: 'Save Failed' }); }
   };
 
   const handleSoftDelete = async (id) => {
-    if (window.confirm("Move this instructor to Trash?")) {
+    if (await showConfirm("Move this instructor to Trash?", { title: 'Move to Trash', confirmText: 'Trash' })) {
       try { await fetch(`https://abacus-w435.onrender.com/users/${id}/soft-delete`, { method: 'PUT' }); fetchInstructorsAndSetup(); } 
-      catch (error) { alert("Error deleting user."); }
+      catch (error) { await showAlert("Error deleting user.", { title: 'Trash Failed' }); }
     }
   };
 

@@ -28,22 +28,22 @@ export default function ManageStudents() {
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
   const handleRestore = async (id) => {
-    if(!window.confirm("Restore this student account?")) return;
+    if(!await showConfirm("Restore this student account?", { title: 'Restore Student', confirmText: 'Restore' })) return;
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
         const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/restore`, { method: 'PUT' });
         if (res.ok) { fetchStudentsAndSetup(); } 
-        else { alert("Failed to restore on server."); fetchTrash(); }
-    } catch (e) { alert("Failed to restore"); fetchTrash(); }
+        else { await showAlert("Failed to restore on server.", { title: 'Restore Failed' }); fetchTrash(); }
+    } catch (e) { await showAlert("Failed to restore", { title: 'Restore Failed' }); fetchTrash(); }
   };
 
   const handlePermanentDelete = async (id) => {
-    if(!window.confirm("WARNING: This will permanently delete the student and their grades. This cannot be undone.")) return;
+    if(!await showConfirm("WARNING: This will permanently delete the student and their grades. This cannot be undone.", { title: 'Permanent Delete', confirmText: 'Delete' })) return;
     try {
         setTrashList(prev => prev.filter(s => s.id !== id));
         const res = await fetch(`https://abacus-w435.onrender.com/users/${id}/permanent`, { method: 'DELETE' });
-        if (!res.ok) { alert("Failed to delete permanently on server."); fetchTrash(); }
-    } catch (e) { alert("Failed to delete permanently"); fetchTrash(); }
+        if (!res.ok) { await showAlert("Failed to delete permanently on server.", { title: 'Delete Failed' }); fetchTrash(); }
+    } catch (e) { await showAlert("Failed to delete permanently", { title: 'Delete Failed' }); fetchTrash(); }
   };
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,6 +60,9 @@ export default function ManageStudents() {
     firstName: '', middleName: '', lastName: '', email: '', studentId: '',
     program: '', section: 'To be assigned', status: 'Regular', password: ''
   });
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const generatePassword = () => {
     const letters = "abcdefghijklmnopqrstuvwxyz";
@@ -149,8 +152,8 @@ export default function ManageStudents() {
 
   const handleSaveStudent = async (e) => {
     e.preventDefault();
-    if(!formData.lastName || !formData.firstName) return alert("Name fields required.");
-    if (!formData.email.trim().toLowerCase().endsWith('@cvsu.edu.ph')) return alert("Invalid Email! Must end with @cvsu.edu.ph");
+    if(!formData.lastName || !formData.firstName) return showAlert("Name fields required.", { title: 'Missing Name' });
+    if (!formData.email.trim().toLowerCase().endsWith('@cvsu.edu.ph')) return showAlert("Invalid Email! Must end with @cvsu.edu.ph", { title: 'Invalid Email' });
 
     const finalLastName = formData.lastName.toUpperCase().trim();
     const finalFirstName = formData.firstName.toUpperCase().trim();
@@ -184,18 +187,18 @@ export default function ManageStudents() {
       const data = await res.json();
 
       if (data.success) {
-        alert(isEditing ? "Updated!" : "Created!");
+        await showAlert(isEditing ? "Updated!" : "Created!", { title: 'Saved' });
         setShowModal(false); fetchStudentsAndSetup();
-      } else { alert("Error: " + data.error); }
-    } catch (error) { alert("Server connection failed."); }
+      } else { await showAlert("Error: " + data.error, { title: 'Save Failed' }); }
+    } catch (error) { await showAlert("Server connection failed.", { title: 'Save Failed' }); }
   };
 
   const handleSoftDelete = async (id) => {
-    if (window.confirm("Move this student to the Trash Bin? They can be restored later.")) {
+    if (await showConfirm("Move this student to the Trash Bin? They can be restored later.", { title: 'Move to Trash', confirmText: 'Trash' })) {
       try {
         await fetch(`https://abacus-w435.onrender.com/users/${id}/soft-delete`, { method: 'PUT' });
         fetchStudentsAndSetup(); 
-      } catch (error) { alert("Delete failed."); }
+      } catch (error) { await showAlert("Delete failed.", { title: 'Trash Failed' }); }
     }
   };
 
@@ -207,8 +210,8 @@ export default function ManageStudents() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: student.id, new_password: newPassword })
       });
       const data = await response.json();
-      if (data.success) alert("Password reset successful.");
-    } catch (error) { alert("Failed to reset password."); }
+      if (data.success) await showAlert("Password reset successful.", { title: 'Password Reset' });
+    } catch (error) { await showAlert("Failed to reset password.", { title: 'Password Reset Failed' }); }
   };
 
   const mainBatchYears = [...new Set(

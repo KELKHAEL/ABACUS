@@ -20,6 +20,9 @@ export default function Gradebook() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editGrades, setEditGrades] = useState([]);
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const navigate = useNavigate();
 
@@ -127,13 +130,13 @@ export default function Gradebook() {
   };
 
   const handleDeleteGrade = async (index) => {
-    if(window.confirm("Are you sure you want to delete this grade permanently?")) {
+    if(await showConfirm("Are you sure you want to delete this grade permanently?", { title: 'Delete Grade', confirmText: 'Delete' })) {
         const gradeToDelete = editGrades[index];
         const updated = [...editGrades];
         updated.splice(index, 1); 
         setEditGrades(updated);
         try { await fetch(`https://abacus-w435.onrender.com/grades/${gradeToDelete.id}`, { method: 'DELETE' }); } 
-        catch(e) { alert("Failed to delete from server"); }
+        catch(e) { await showAlert("Failed to delete from server", { title: 'Delete Failed' }); }
     }
   };
 
@@ -151,8 +154,8 @@ export default function Gradebook() {
       
       fetchData();
       setSelectedStudent(null); setIsEditing(false); 
-      alert("Grades updated successfully!");
-    } catch (error) { alert("Failed to save grades."); }
+      await showAlert("Grades updated successfully!", { title: 'Success' });
+    } catch (error) { await showAlert("Failed to save grades.", { title: 'Save Failed' }); }
   };
 
   return (

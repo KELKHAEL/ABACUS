@@ -22,6 +22,9 @@ export default function ManageAcademicSetup() {
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [pendingTermId, setPendingTermId] = useState(null);
   const [transitionSettings, setTransitionSettings] = useState({ resetInstructors: true, resetStudents: false });
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   // Add state to track which programs are expanded
   const [expandedPrograms, setExpandedPrograms] = useState({});
@@ -56,17 +59,17 @@ export default function ManageAcademicSetup() {
       });
       if (type === 'program') setNewProgram("");
       fetchData();
-    } catch (e) { alert("Error adding item."); }
+    } catch (e) { await showAlert("Error adding item.", { title: 'Add Failed' }); }
   };
 
   const handleAddSection = async () => {
       if (!secProgram || !secYear || !secBlock.trim()) {
-          return alert("Please select a Program, Year Level and enter a Block (e.g., A).");
+          return showAlert("Please select a Program, Year Level and enter a Block (e.g., A).", { title: 'Missing Fields' });
       }
       const mergedSectionName = `${secProgram} ${secYear}-${secBlock.trim().toUpperCase()}`;
       
       if (data.sections.some(s => s.section_name === mergedSectionName)) {
-          return alert("This specific section already exists!");
+          return showAlert("This specific section already exists!", { title: 'Duplicate Section' });
       }
 
       try {
@@ -78,16 +81,16 @@ export default function ManageAcademicSetup() {
         // Auto-expand the program we just added a section to
         setExpandedPrograms(prev => ({ ...prev, [secProgram]: true }));
         fetchData();
-      } catch (e) { alert("Error adding section."); }
+      } catch (e) { await showAlert("Error adding section.", { title: 'Add Failed' }); }
   };
 
   const handleDelete = async (type, id) => {
-    if (!window.confirm(`Are you sure you want to permanently delete this ${type}?`)) return;
+    if (!await showConfirm(`Are you sure you want to permanently delete this ${type}?`, { title: 'Permanent Delete', confirmText: 'Delete' })) return;
     try {
       await fetch(`https://abacus-w435.onrender.com/academic-setup/${type}/${id}`, { method: 'DELETE' });
       if (type === 'program' && secProgram === data.programs.find(p => p.id === id)?.name) setSecProgram("");
       fetchData();
-    } catch (e) { alert("Error deleting item"); }
+    } catch (e) { await showAlert("Error deleting item", { title: 'Delete Failed' }); }
   };
 
   const initiateTermSwitch = (id) => {
@@ -102,11 +105,11 @@ export default function ManageAcademicSetup() {
       });
       const result = await response.json();
       if (result.success) {
-          alert("Academic Term Transition Complete! Previous term data is now archived.");
+          await showAlert("Academic Term Transition Complete! Previous term data is now archived.", { title: 'Success' });
           setShowTransitionModal(false);
           fetchData();
-      } else { alert("Error: " + result.error); }
-    } catch (e) { alert("Error updating active term"); }
+      } else { await showAlert("Error: " + result.error, { title: 'Transition Failed' }); }
+    } catch (e) { await showAlert("Error updating active term", { title: 'Transition Failed' }); }
   };
 
   if (loading) return <div style={{padding: 40, textAlign: 'center'}}>Loading Configuration...</div>;

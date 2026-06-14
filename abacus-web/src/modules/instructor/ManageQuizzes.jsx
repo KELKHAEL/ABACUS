@@ -20,6 +20,9 @@ export default function ManageQuizzes() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClass, setFilterClass] = useState('ALL');
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
   
   const navigate = useNavigate();
 
@@ -58,7 +61,7 @@ export default function ManageQuizzes() {
       const res = await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}`);
       const fullQuiz = await res.json();
       
-      if (fullQuiz.error) { alert(fullQuiz.error); setLoading(false); return; }
+      if (fullQuiz.error) { await showAlert(fullQuiz.error, { title: 'Quiz Load Failed' }); setLoading(false); return; }
       
       if (isRetakeMode) {
           navigate('/instructor/CreateQuiz', { state: { retakeParentQuiz: fullQuiz } });
@@ -66,7 +69,7 @@ export default function ManageQuizzes() {
           navigate('/instructor/CreateQuiz', { state: { quizToEdit: fullQuiz } });
       }
     } catch (error) {
-      alert("Failed to load quiz details.");
+      await showAlert("Failed to load quiz details.", { title: 'Quiz Load Failed' });
       setLoading(false);
     }
   };
@@ -84,7 +87,7 @@ export default function ManageQuizzes() {
 
   const handleMoveToTrash = async (quizId, e) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Move this quiz to the trashbin?")) {
+    if (await showConfirm("Move this quiz to the trashbin?", { title: 'Move to Trash', confirmText: 'Trash' })) {
       try {
         const res = await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}/status`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'deleted' })
@@ -92,12 +95,12 @@ export default function ManageQuizzes() {
         if (res.ok) {
             setQuizzes(prev => prev.map(q => q.id === quizId ? { ...q, status: 'deleted' } : q));
         }
-      } catch (error) { alert("Failed to move to trash."); }
+      } catch (error) { await showAlert("Failed to move to trash.", { title: 'Trash Failed' }); }
     }
   };
 
   const handleRestore = async (quizId) => {
-    if(!window.confirm("Restore this quiz? Students will be able to see it again.")) return;
+    if(!await showConfirm("Restore this quiz? Students will be able to see it again.", { title: 'Restore Quiz', confirmText: 'Restore' })) return;
     
     const quizToRestore = trashList.find(q => q.id === quizId);
     setTrashList(prev => prev.filter(q => q.id !== quizId));
@@ -112,26 +115,26 @@ export default function ManageQuizzes() {
       });
       
       if (!res.ok) {
-         alert("Failed to restore quiz on the server.");
+         await showAlert("Failed to restore quiz on the server.", { title: 'Restore Failed' });
          fetchQuizzesAndUser(); 
          fetchTrash();
       }
     } catch (error) { 
-        alert("Failed to restore quiz."); 
+        await showAlert("Failed to restore quiz.", { title: 'Restore Failed' }); 
         fetchQuizzesAndUser(); 
         fetchTrash();
     }
   };
 
   const handlePermanentDelete = async (quizId) => {
-    if (window.confirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.")) {
+    if (await showConfirm("WARNING: This will permanently delete the quiz AND erase all associated student grades from the Gradebook.", { title: 'Permanent Delete', confirmText: 'Delete' })) {
       try {
         setTrashList(prev => prev.filter(q => q.id !== quizId));
         setQuizzes(prev => prev.filter(q => q.id !== quizId));
 
         await fetch(`https://abacus-w435.onrender.com/quizzes/${quizId}`, { method: 'DELETE' });
       } catch (error) { 
-          alert("Delete failed."); 
+          await showAlert("Delete failed.", { title: 'Delete Failed' }); 
           fetchTrash(); 
       }
     }

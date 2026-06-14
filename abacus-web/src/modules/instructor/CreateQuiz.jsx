@@ -30,6 +30,9 @@ export default function CreateQuiz({ setActiveTab }) {
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDesc, setQuizDesc] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const [questions, setQuestions] = useState([
     { 
@@ -176,7 +179,7 @@ export default function CreateQuiz({ setActiveTab }) {
   };
 
   const deleteQuestion = (qIdx) => {
-    if (questions.length <= 1) return alert("Quiz must have at least one question.");
+    if (questions.length <= 1) return showAlert("Quiz must have at least one question.", { title: 'Validation' });
     const newQ = [...questions]; newQ.splice(qIdx, 1); setQuestions(newQ);
   };
 
@@ -196,22 +199,22 @@ export default function CreateQuiz({ setActiveTab }) {
   // --- 3. SAVE TO MYSQL ---
   const publishQuiz = async () => {
     // ✅ FIX: Crucial Validations to prevent 500 Database Crash
-    if (!quizTitle.trim()) return alert("Please enter a Quiz Title.");
-    if (!dueDate) return alert("Please set a deadline / due date.");
-    if (!selectedClassStr) return alert("Please select a target class.");
-    if (isRetake && targetStudents.length === 0) return alert("Please select at least one student for the Retake.");
+    if (!quizTitle.trim()) return showAlert("Please enter a Quiz Title.", { title: 'Validation' });
+    if (!dueDate) return showAlert("Please set a deadline / due date.", { title: 'Validation' });
+    if (!selectedClassStr) return showAlert("Please select a target class.", { title: 'Validation' });
+    if (isRetake && targetStudents.length === 0) return showAlert("Please select at least one student for the Retake.", { title: 'Validation' });
 
     for (let i = 0; i < questions.length; i++) {
-      if (!questions[i].questionText.trim()) return alert(`Question ${i + 1} is missing text.`);
-      if (questions[i].type === 'short' && !questions[i].correctAnswerText.trim()) return alert(`Question ${i + 1} needs a correct answer key.`);
-      if (questions[i].type !== 'short' && questions[i].options.some(o => !o.trim())) return alert(`Question ${i + 1} has empty options.`);
-      if (questions[i].type === 'checkbox' && (!questions[i].correctIndices || questions[i].correctIndices.length === 0)) return alert(`Question ${i + 1} needs at least one correct checkbox selected.`);
+      if (!questions[i].questionText.trim()) return showAlert(`Question ${i + 1} is missing text.`, { title: 'Validation' });
+      if (questions[i].type === 'short' && !questions[i].correctAnswerText.trim()) return showAlert(`Question ${i + 1} needs a correct answer key.`, { title: 'Validation' });
+      if (questions[i].type !== 'short' && questions[i].options.some(o => !o.trim())) return showAlert(`Question ${i + 1} has empty options.`, { title: 'Validation' });
+      if (questions[i].type === 'checkbox' && (!questions[i].correctIndices || questions[i].correctIndices.length === 0)) return showAlert(`Question ${i + 1} needs at least one correct checkbox selected.`, { title: 'Validation' });
     }
 
     try {
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
-      if (!user) return alert("You must be logged in.");
+      if (!user) return showAlert("You must be logged in.", { title: 'Authentication Required' });
 
       const payload = {
         title: quizTitle,
@@ -244,11 +247,11 @@ export default function CreateQuiz({ setActiveTab }) {
       const data = await response.json();
 
       if (data.success) {
-        alert(isEditing ? "Quiz Updated!" : "Quiz Published Successfully!");
+        await showAlert(isEditing ? "Quiz Updated!" : "Quiz Published Successfully!", { title: 'Success' });
         if (setActiveTab) setActiveTab('dashboard');
         else navigate('/instructor/ManageQuizzes'); 
       } else { throw new Error(data.error); }
-    } catch (e) { alert("Error publishing quiz: " + e.message); }
+    } catch (e) { await showAlert("Error publishing quiz: " + e.message, { title: 'Publish Failed' }); }
   };
 
   return (
@@ -406,7 +409,7 @@ export default function CreateQuiz({ setActiveTab }) {
       <div className="bottom-publish-bar">
         <div className="bar-content" style={{display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center'}}>
           <div style={{display: 'flex', gap: '15px', alignItems: 'center'}}>
-            <button className="btn-cancel" onClick={() => { if(window.confirm("Exit without saving?")) navigate('/instructor/ManageQuizzes'); }} style={{background: 'white', border: '1px solid #d1d5db', color: '#4b5563', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold'}}>Cancel</button>
+            <button className="btn-cancel" onClick={async () => { if(await showConfirm("Exit without saving?", { title: 'Discard Changes', confirmText: 'Exit' })) navigate('/instructor/ManageQuizzes'); }} style={{background: 'white', border: '1px solid #d1d5db', color: '#4b5563', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold'}}>Cancel</button>
             <span className="draft-status">{isEditing ? "Editing Quiz" : "Draft saved locally"}</span>
           </div>
           <button className="btn-publish-final" onClick={publishQuiz} style={isRetake ? {background: '#ca8a04'} : {}}>

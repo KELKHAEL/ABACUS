@@ -30,6 +30,9 @@ export default function InstructorAnnouncements() {
 
   const [formData, setFormData] = useState({ title: '', content: '' });
   const [selectedClasses, setSelectedClasses] = useState([]); 
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const navigate = useNavigate();
 
@@ -109,28 +112,28 @@ export default function InstructorAnnouncements() {
   const openTrash = () => { setShowTrashModal(true); fetchTrash(); };
 
   const handleSoftDelete = async (groupedIds) => {
-    if (window.confirm("Move this announcement to Trash? It will be removed from the students' app immediately.")) {
+    if (await showConfirm("Move this announcement to Trash? It will be removed from the students' app immediately.", { title: 'Move to Trash', confirmText: 'Trash' })) {
       try {
         await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/soft-delete`, { method: 'PUT' })));
         fetchDashboardData();
-      } catch (e) { alert("Failed to trash announcement."); }
+      } catch (e) { await showAlert("Failed to trash announcement.", { title: 'Trash Failed' }); }
     }
   };
 
   const handleRestore = async (groupedIds) => {
-    if(!window.confirm("Restore this announcement?")) return;
+    if(!await showConfirm("Restore this announcement?", { title: 'Restore Announcement', confirmText: 'Restore' })) return;
     try {
         await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/restore`, { method: 'PUT' })));
         fetchTrash(); fetchDashboardData();
-    } catch (e) { alert("Failed to restore"); }
+    } catch (e) { await showAlert("Failed to restore", { title: 'Restore Failed' }); }
   };
 
   const handlePermanentDelete = async (groupedIds) => {
-    if(!window.confirm("WARNING: This will permanently delete the announcement for ALL assigned classes.")) return;
+    if(!await showConfirm("WARNING: This will permanently delete the announcement for ALL assigned classes.", { title: 'Permanent Delete', confirmText: 'Delete' })) return;
     try {
         await Promise.all(groupedIds.map(id => fetch(`https://abacus-w435.onrender.com/announcements/${id}/permanent`, { method: 'DELETE' })));
         fetchTrash();
-    } catch (e) { alert("Failed to delete permanently"); }
+    } catch (e) { await showAlert("Failed to delete permanently", { title: 'Delete Failed' }); }
   };
 
   const openCreateModal = () => {
@@ -151,8 +154,8 @@ export default function InstructorAnnouncements() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.content) return alert("Please fill out all fields.");
-    if (selectedClasses.length === 0) return alert("Please select at least one target class.");
+    if (!formData.title || !formData.content) return showAlert("Please fill out all fields.", { title: 'Missing Fields' });
+    if (selectedClasses.length === 0) return showAlert("Please select at least one target class.", { title: 'Missing Audience' });
 
     const userStr = localStorage.getItem('user');
     const user = JSON.parse(userStr);
@@ -175,7 +178,7 @@ export default function InstructorAnnouncements() {
                   })
               });
           }));
-          alert("Announcement updated successfully!");
+          await showAlert("Announcement updated successfully!", { title: 'Success' });
       } else {
           const payload = {
               title: formData.title, 
@@ -192,11 +195,11 @@ export default function InstructorAnnouncements() {
           });
           const data = await res.json();
           if (!data.success) throw new Error(data.error);
-          alert("Announcements posted successfully!");
+          await showAlert("Announcements posted successfully!", { title: 'Success' });
       }
       setShowModal(false);
       fetchDashboardData();
-    } catch (err) { alert("Server error."); } 
+    } catch (err) { await showAlert("Server error.", { title: 'Save Failed' }); } 
     finally { setSaving(false); }
   };
 

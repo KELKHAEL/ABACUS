@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom'; 
-import { LayoutDashboard, FilePlus, BookOpen, Users, LogOut, Triangle, UploadCloud, Megaphone, List, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FilePlus, BookOpen, Users, LogOut, Triangle, UploadCloud, Megaphone, List, ShieldCheck, Activity } from 'lucide-react';
 import './InstructorSidebar.css'; 
 
-export default function InstructorSidebar() {
+export default function InstructorSidebar({ isMobileOpen = false }) {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
 
@@ -14,7 +14,7 @@ export default function InstructorSidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isMobileOpen ? 'mobile-open' : 'mobile-hidden'}`}>
       <div className="brand" style={{ marginBottom: '40px', padding: '0 10px' }}>
         <Triangle size={24} fill="#FFC107" color="#FFC107" style={{transform: 'rotate(180deg)'}} />
         <span className="brand-text" style={{ marginLeft: '10px', fontWeight: 'bold', color: 'white' }}>
@@ -50,6 +50,10 @@ export default function InstructorSidebar() {
       
         <Link to="/instructor/Announcements" className={`nav-item ${isActive('/instructor/Announcements') ? 'active' : ''}`}>
           <Megaphone size={20} /><span>Announcements</span>
+        </Link>
+
+        <Link to="/instructor/QuizMonitoring" className={`nav-item ${isActive('/instructor/QuizMonitoring') ? 'active' : ''}`}>
+          <Activity size={20} /><span>Quiz Monitoring</span>
         </Link>
 
         <Link to="/instructor/InstructorPromotions" className={`nav-item ${isActive('/instructor/InstructorPromotions') ? 'active' : ''}`}>

@@ -155,3 +155,59 @@
   color: white;
   backdrop-filter: blur(4px);
 }
+
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 28px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 20px 16px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .stat-card {
+    height: auto;
+    min-height: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome-title {
+    font-size: 24px;
+  }
+
+  .welcome-subtitle {
+    font-size: 14px;
+  }
+
+  .stat-card {
+    padding: 20px;
+  }
+
+  .count-number {
+    font-size: 30px;
+  }
+
+  .card-footer {
+    opacity: 1;
+    transform: none;
+  }
+}

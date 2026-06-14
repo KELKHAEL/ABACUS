@@ -14,6 +14,9 @@ export default function MyClassList() {
   // Modal & Zoom State
   const [viewImage, setViewImage] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const dialog = window.abacusDialog;
+  const showAlert = (message, options = {}) => dialog?.alert ? dialog.alert(message, options) : Promise.resolve(window.alert(message));
+  const showConfirm = (message, options = {}) => dialog?.confirm ? dialog.confirm(message, options) : Promise.resolve(window.confirm(message));
 
   const navigate = useNavigate();
 
@@ -48,7 +51,7 @@ export default function MyClassList() {
   }, []);
 
   const handleStatusChange = async (studentId, newStatus) => {
-    if(!window.confirm(`Change this student's status to ${newStatus}?`)) return;
+    if(!await showConfirm(`Change this student's status to ${newStatus}?`, { title: 'Update Status', confirmText: 'Yes, Update' })) return;
     try {
         const res = await fetch(`https://abacus-w435.onrender.com/users/${studentId}/student-status`, {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -57,8 +60,8 @@ export default function MyClassList() {
         const data = await res.json();
         if (data.success) {
             setMyStudents(prev => prev.map(s => s.id === studentId ? {...s, status: newStatus} : s));
-        } else { alert("Failed to update status: " + data.error); }
-    } catch (error) { alert("Server error while updating status."); }
+        } else { await showAlert("Failed to update status: " + data.error, { title: 'Update Failed' }); }
+    } catch (error) { await showAlert("Server error while updating status.", { title: 'Update Failed' }); }
   };
 
   const openImagePreview = (url) => {
@@ -185,8 +188,8 @@ export default function MyClassList() {
                                             {s.status || 'Regular'}
                                         </span>
                                     </td>
-                                    <td style={{textAlign: 'right'}}>
-                                        <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px', alignItems: 'center'}}>
+                                    <td style={{textAlign: 'center'}}>
+                                        <div style={{display: 'flex', justifyContent: 'center', gap: '5px', alignItems: 'center', flexWrap: 'wrap'}}>
                                             <button title="Mark as Regular" onClick={() => handleStatusChange(s.id, 'Regular')} style={{background: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>REG</button>
                                             <button title="Mark as Irregular" onClick={() => handleStatusChange(s.id, 'Irregular')} style={{background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>IRR</button>
                                             <button title="Mark as Dropped" onClick={() => handleStatusChange(s.id, 'Dropped')} style={{background: '#ef4444', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}>DRP</button>
@@ -196,7 +199,7 @@ export default function MyClassList() {
                                                 className="btn-icon-small" 
                                                 title="View COR" 
                                                 style={{color: s.cor_image_url ? '#0284c7' : '#cbd5e1'}}
-                                                onClick={() => s.cor_image_url ? openImagePreview(`https://abacus-w435.onrender.com${s.cor_image_url}`) : alert("No COR image uploaded by this student.")}
+                                                onClick={() => s.cor_image_url ? openImagePreview(`https://abacus-w435.onrender.com${s.cor_image_url}`) : showAlert("No COR image uploaded by this student.", { title: 'COR Missing' })}
                                             >
                                                 <FileImage size={18}/>
                                             </button>
