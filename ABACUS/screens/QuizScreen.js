@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import * as ScreenCapture from 'expo-screen-capture'; 
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://abacus-w435.onrender.com';
 
 export default function QuizScreen({ route, navigation }) {
   const { quizId, quizTitle } = route.params; 

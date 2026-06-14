@@ -34,7 +34,7 @@ export default function QuizMonitoring() {
     const rawText = await response.text();
 
     if (!contentType.includes('application/json')) {
-      return { ok: false, retryable: true };
+      return { ok: false, retryable: false, error: 'The monitoring endpoint did not return JSON.' };
     }
 
     let data;
@@ -61,26 +61,14 @@ export default function QuizMonitoring() {
 
     setError('');
     try {
-      const bases = [API_URL, window.location.origin].filter(Boolean);
-      let lastError = '';
-
-      for (const baseUrl of bases) {
-        const result = await tryLoadLogsFromBase(baseUrl);
-        if (result.ok) {
-          setLogs(result.logs);
-          setLastUpdated(new Date());
-          return;
-        }
-        if (result.error) {
-          lastError = result.error;
-        }
+      const result = await tryLoadLogsFromBase(API_URL);
+      if (result.ok) {
+        setLogs(result.logs);
+        setLastUpdated(new Date());
+        return;
       }
 
-      if (lastError) {
-        throw new Error(lastError);
-      } else {
-        throw new Error('Quiz monitoring backend is temporarily unavailable.');
-      }
+      throw new Error(result.error || 'Quiz monitoring backend is temporarily unavailable.');
     } catch (fetchError) {
       setError(fetchError.message || 'Quiz monitoring backend is temporarily unavailable.');
     } finally {

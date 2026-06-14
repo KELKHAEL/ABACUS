@@ -11,7 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy'; 
 import * as Sharing from 'expo-sharing';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://abacus-w435.onrender.com';
 
 export default function ModulesScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -76,7 +76,7 @@ export default function ModulesScreen({ navigation }) {
   const handleQuizLockedAccess = () => {
     Alert.alert(
       'Access restricted during active quiz',
-      `You are currently taking ${activeQuizLock?.quiz_title || 'a quiz'}. Finish it before opening modules.`
+      `${activeQuizLock?.quiz_title || 'A quiz'} is currently active for your class. Please finish it before opening modules.`
     );
   };
 

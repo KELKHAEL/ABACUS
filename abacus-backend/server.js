@@ -806,23 +806,105 @@ app.get('/quiz-sessions/active', async (req, res) => {
   }
 
   try {
-    let query = `
+    let sessionQuery = `
       SELECT qs.*, q.title AS quiz_title, q.description AS quiz_description, q.target_section AS quiz_target_section
       FROM quiz_activity_sessions qs
       JOIN quizzes q ON q.id = qs.quiz_id
       WHERE qs.user_id = ? AND qs.status = 'active' AND qs.last_heartbeat >= (NOW() - INTERVAL ${QUIZ_SESSION_TIMEOUT_MINUTES} MINUTE)
     `;
-    const params = [userId];
+    const sessionParams = [userId];
 
     if (quizId) {
-      query += " AND qs.quiz_id = ?";
-      params.push(quizId);
+      sessionQuery += " AND qs.quiz_id = ?";
+      sessionParams.push(quizId);
     }
 
-    query += " ORDER BY qs.started_at DESC LIMIT 1";
+    sessionQuery += " ORDER BY qs.started_at DESC LIMIT 1";
 
-    const [rows] = await db.query(query, params);
-    res.json({ success: true, activeQuiz: rows[0] || null });
+    const [sessionRows] = await db.query(sessionQuery, sessionParams);
+    if (sessionRows.length > 0) {
+      return res.json({
+        success: true,
+        activeQuiz: sessionRows[0],
+        lockType: 'session'
+      });
+    }
+
+    const [studentRows] = await db.query(
+      "SELECT id, year_level, section FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    );
+    if (studentRows.length === 0) {
+      return res.json({ success: true, activeQuiz: null });
+    }
+
+    const student = studentRows[0];
+    const activeTermId = await getActiveTermId();
+    const [quizRows] = await db.query(
+      `
+        SELECT q.*, u.full_name AS author, IF(q.term_id = ?, 0, 1) AS is_archived
+        FROM quizzes q
+        JOIN users u ON u.id = q.created_by
+        WHERE q.status = 'active'
+          AND (q.due_date IS NULL OR q.due_date > NOW())
+          AND (q.target_year = 'ALL' OR q.target_year = ?)
+          AND (q.target_section = 'ALL' OR q.target_section = ?)
+        ORDER BY q.created_at DESC
+      `,
+      [activeTermId, student.year_level || null, student.section || null]
+    );
+
+    let postedLock = null;
+    for (const quiz of quizRows) {
+      if (Number(quiz.is_archived) === 1) continue;
+
+      let targetStudentIds = [];
+      if (Number(quiz.is_retake) === 1) {
+        try {
+          targetStudentIds = JSON.parse(quiz.target_students || '[]').map(Number);
+        } catch (error) {
+          continue;
+        }
+      } else {
+        const targetQueryParts = ["SELECT id FROM users WHERE role = 'STUDENT' AND is_deleted = 0"];
+        const targetParams = [];
+        if (quiz.target_year && quiz.target_year !== 'ALL') {
+          targetQueryParts.push("AND year_level = ?");
+          targetParams.push(quiz.target_year);
+        }
+        if (quiz.target_section && quiz.target_section !== 'ALL') {
+          targetQueryParts.push("AND section = ?");
+          targetParams.push(quiz.target_section);
+        }
+
+        const [targetRows] = await db.query(targetQueryParts.join(' '), targetParams);
+        targetStudentIds = targetRows.map(row => Number(row.id));
+      }
+
+      if (targetStudentIds.length === 0) continue;
+      if (!targetStudentIds.includes(Number(userId))) continue;
+
+      const [takenRows] = await db.query(
+        "SELECT DISTINCT user_id FROM student_grades WHERE quiz_id = ?",
+        [quiz.id]
+      );
+      const takenStudentIds = new Set(takenRows.map(row => Number(row.user_id)));
+      const hasPendingStudents = targetStudentIds.some(targetId => !takenStudentIds.has(targetId));
+      if (!hasPendingStudents) {
+        continue;
+      }
+
+      postedLock = {
+        ...quiz,
+        quiz_title: quiz.title,
+        quiz_description: quiz.description,
+        quiz_target_section: quiz.target_section,
+        lockType: 'posted'
+      };
+      break;
+    }
+
+    res.json({ success: true, activeQuiz: postedLock });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

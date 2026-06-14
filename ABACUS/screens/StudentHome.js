@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://abacus-w435.onrender.com';
 
 const ModuleCard = ({ title, category, color, onPress }) => (
   <TouchableOpacity style={[styles.card, { borderLeftWidth: 5, borderLeftColor: color }]} onPress={onPress}>
@@ -151,9 +151,20 @@ export default function StudentHome({ navigation }) {
   const handleQuizLockedAccess = () => {
     Alert.alert(
       'Access restricted during active quiz',
-      `You are currently taking ${activeQuizLock?.quiz_title || 'a quiz'}. Please finish it before opening modules, lectures, or simulations.`
+      `${activeQuizLock?.quiz_title || 'A quiz'} is currently active for your class. Please finish it before opening modules, lectures, or simulations.`
     );
   };
+
+  const renderLockedSection = (title, message) => (
+    <View style={styles.lockedSectionCard}>
+      <Ionicons name="lock-closed" size={46} color="#b45309" />
+      <Text style={styles.lockedSectionTitle}>{title}</Text>
+      <Text style={styles.lockedSectionText}>{message}</Text>
+      <TouchableOpacity style={styles.lockedSectionButton} onPress={handleQuizLockedAccess}>
+        <Text style={styles.lockedSectionButtonText}>Access Restricted</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // --- DYNAMIC TOUR MEASUREMENT ENGINE ---
   const measureElement = (ref) => {
@@ -396,20 +407,24 @@ export default function StudentHome({ navigation }) {
 
         <Text style={styles.sectionTitle}>Learning Modules</Text>
 
-        <View style={styles.listContainer}>
-          {allModules.map((item) => (
-            <ModuleCard 
-              key={item.id} title={item.title} category={item.category} color={item.color} 
-              onPress={() => {
-                if (activeQuizLock) {
-                  handleQuizLockedAccess();
-                  return;
-                }
-                navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics || [] });
-              }} 
-            />
-          ))}
-        </View>
+        {activeQuizLock ? (
+          renderLockedSection(
+            'Modules locked during quiz',
+            'Lecture modules are unavailable while a quiz is active for your class.'
+          )
+        ) : (
+          <View style={styles.listContainer}>
+            {allModules.map((item) => (
+              <ModuleCard
+                key={item.id}
+                title={item.title}
+                category={item.category}
+                color={item.color}
+                onPress={() => navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics || [] })}
+              />
+            ))}
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -419,6 +434,12 @@ export default function StudentHome({ navigation }) {
       <View style={styles.innerLayout}>
         <Text style={styles.headerTitle}>Computational Simulations</Text>
         <Text style={styles.subText}>Interactive logic tools!</Text>
+        {activeQuizLock ? (
+          renderLockedSection(
+            'Simulations locked during quiz',
+            'Interactive simulations are disabled until your active quiz session ends.'
+          )
+        ) : (
         <View style={{marginTop: 20, gap: 15}}>
           <SimulationCard title="Scientific Calculator" desc="A built on scientific calculator on the app!" color="#104a28" onPress={() => navigation.navigate("ScientificCalculator")} />
           <SimulationCard title="Sets Builder" desc="Venn Diagrams & Operations" color="#2D7FF9" onPress={() => navigation.navigate('SetsSimulation')} />
@@ -455,6 +476,7 @@ export default function StudentHome({ navigation }) {
           <SimulationCard title="Rail Fence Cipher Lab" desc="A cryptography simulation technique that uses a rail-like fence to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("RailfenceCipherLab")} />
           <SimulationCard title="Columnar Cipher Lab" desc="A cryptography simulation technique that uses a word as a key to encrypt and decrypt secret message." color="#104a28" onPress={() => navigation.navigate("ColumnarCipherLab")} />
         </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -759,6 +781,39 @@ const styles = StyleSheet.create({
   navItemActive: { backgroundColor: '#104a28', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
   navTextActive: { color: '#fff', fontWeight: '600', fontSize: 13 },
   menuCard: { padding: 5, alignItems: 'center' },
+  lockedSectionCard: {
+    marginTop: 20,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fdba74',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12
+  },
+  lockedSectionTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#92400e',
+    textAlign: 'center'
+  },
+  lockedSectionText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#b45309',
+    textAlign: 'center'
+  },
+  lockedSectionButton: {
+    marginTop: 4,
+    backgroundColor: '#104a28',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10
+  },
+  lockedSectionButtonText: {
+    color: 'white',
+    fontWeight: '800'
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

@@ -148,7 +148,7 @@ export default function Dashboard() {
           </div>
           <div className="card-footer text-white">
             <span className="status-badge">Active</span>
-            <ArrowRight size={16} color="#ffffff" />
+            <ArrowRight size={16} color="#104a28" />
           </div>
         </div>
       </div>

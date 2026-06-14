@@ -98,11 +98,12 @@ export default function LectureContentScreen({ route, navigation }) {
   const { topicId, topicTitle, moduleColor } = route.params;
   const { user } = useContext(AuthContext);
   const [activeQuizLock, setActiveQuizLock] = useState(null);
+  const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://abacus-w435.onrender.com';
 
   const fetchQuizLockState = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/quiz-sessions/active?userId=${user.id}`);
+      const response = await fetch(`${API_URL}/quiz-sessions/active?userId=${user.id}`);
       const data = await response.json();
       setActiveQuizLock(data?.activeQuiz || null);
     } catch (error) {
@@ -235,7 +236,7 @@ export default function LectureContentScreen({ route, navigation }) {
           <Ionicons name="lock-closed" size={72} color="#b45309" />
           <Text style={styles.lockTitle}>Access restricted during active quiz</Text>
           <Text style={styles.lockText}>
-            {activeQuizLock.quiz_title ? `${activeQuizLock.quiz_title} is currently active.` : 'A quiz session is active for this account.'}
+            {activeQuizLock.quiz_title ? `${activeQuizLock.quiz_title} is currently active for your class.` : 'A quiz is active for this account.'}
           </Text>
           <TouchableOpacity style={styles.lockButton} onPress={() => navigation.goBack()}>
             <Text style={styles.lockButtonText}>Go Back</Text>
