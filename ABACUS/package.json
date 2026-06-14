@@ -40,8 +40,8 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-css": "3.0.7",
     "react-native-copilot": "^3.3.3",
+    "react-native-css": "3.0.7",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
@@ -52,13 +52,16 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@types/react": "~19.1.0",
     "@tailwindcss/postcss": "^4.1.11",
+    "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "lightningcss": "1.30.1"
+  }
 }
