@@ -23,6 +23,7 @@ import UploadModules from './modules/instructor/UploadModules';
 import InstructorAnnouncements from './modules/instructor/InstructorAnnouncements';
 import ManageQuizzes from './modules/instructor/ManageQuizzes';
 import InstructorPromotions from './modules/instructor/InstructorPromotions';
+import QuizMonitoring from './modules/instructor/QuizMonitoring';
 
 // Auth
 import Login from './auth/Login';
@@ -88,6 +89,7 @@ function App() {
            <Route path="/instructor/MyClassList" element={<MyClassList />} />
            <Route path="/instructor/UploadModules" element={<UploadModules />} />
            <Route path="/instructor/Announcements" element={<InstructorAnnouncements />} />
+           <Route path="/instructor/QuizMonitoring" element={<QuizMonitoring />} />
            <Route path="/instructor/InstructorPromotions" element={<InstructorPromotions />} />
         </Route>
 

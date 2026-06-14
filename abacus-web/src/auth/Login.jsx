@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock } from "lucide-react"; 
+import { Mail, Lock, Eye, EyeOff } from "lucide-react"; 
 import "./Login.css";
 
 import abacusLogo from "../assets/ABACUS_LOGO_HIGHLIGHTED.png";
@@ -10,6 +10,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -110,15 +111,36 @@ const Login = () => {
 
             <div className="input-group">
               <label>Password</label>
-              <div className="input-wrapper">
+              <div className="input-wrapper" style={{ position: 'relative' }}>
                  <Lock size={20} className="input-icon"/>
                  <input 
-                   type="password" 
+                   type={showPassword ? "text" : "password"} 
                    value={password} 
                    onChange={e => setPassword(e.target.value)} 
                    placeholder="Enter your password"
                    required 
+                   style={{ paddingRight: '44px' }}
                  />
+                 <button
+                   type="button"
+                   onClick={() => setShowPassword(prev => !prev)}
+                   aria-label={showPassword ? "Hide password" : "Show password"}
+                   style={{
+                     position: 'absolute',
+                     right: '12px',
+                     top: '50%',
+                     transform: 'translateY(-50%)',
+                     border: 'none',
+                     background: 'transparent',
+                     padding: 0,
+                     cursor: 'pointer',
+                     color: '#6b7280',
+                     display: 'flex',
+                     alignItems: 'center'
+                   }}
+                 >
+                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                 </button>
               </div>
             </div>
 

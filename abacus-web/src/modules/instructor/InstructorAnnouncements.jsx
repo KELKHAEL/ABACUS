@@ -23,6 +23,7 @@ export default function InstructorAnnouncements() {
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null); 
+  const [expandedAnnouncements, setExpandedAnnouncements] = useState(new Set());
   
   const [trashList, setTrashList] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
@@ -206,6 +207,15 @@ export default function InstructorAnnouncements() {
       return diffDays > 0 ? diffDays : 0; 
   };
 
+  const toggleAnnouncementExpanded = (key) => {
+    setExpandedAnnouncements(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const currentDataList = viewMode === 'sent' ? announcements : adminAnnouncements;
   const filteredList = currentDataList.filter(item => {
     const d = new Date(item.created_at);
@@ -298,7 +308,12 @@ export default function InstructorAnnouncements() {
             ) : filteredList.length === 0 ? (
               <tr><td colSpan="5" className="text-center p-4" style={{color: '#888'}}>No announcements found.</td></tr>
             ) : (
-              filteredList.map((ann, i) => (
+              filteredList.map((ann, i) => {
+                const announcementKey = ann.grouped_ids ? ann.grouped_ids.join('-') : String(ann.id || i);
+                const isExpanded = expandedAnnouncements.has(announcementKey);
+                const shouldClamp = !isExpanded && String(ann.content || '').length > 220;
+
+                return (
                   <tr key={ann.id || i}>
                     <td>
                       <div style={{fontWeight: '600', color: '#111', display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -306,7 +321,39 @@ export default function InstructorAnnouncements() {
                       </div>
                     </td>
                     <td>
-                      <span style={{fontSize: '13px', color: '#555'}}>{ann.content}</span>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          color: '#555',
+                          overflow: 'hidden',
+                          display: shouldClamp ? '-webkit-box' : 'block',
+                          WebkitBoxOrient: shouldClamp ? 'vertical' : 'initial',
+                          WebkitLineClamp: shouldClamp ? 4 : 'unset',
+                          maxHeight: shouldClamp ? '7.2em' : 'none',
+                          wordBreak: 'break-word',
+                          whiteSpace: 'normal'
+                        }}
+                      >
+                        {ann.content}
+                      </div>
+                      {String(ann.content || '').length > 220 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleAnnouncementExpanded(announcementKey)}
+                          style={{
+                            marginTop: '8px',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: '#104a28',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {isExpanded ? 'Show Less' : 'Read More'}
+                        </button>
+                      )}
                     </td>
                     
                     {viewMode === 'sent' && (
@@ -341,8 +388,8 @@ export default function InstructorAnnouncements() {
                         </td>
                     )}
                   </tr>
-                )
-              )
+                );
+              })
             )}
           </tbody>
         </table>

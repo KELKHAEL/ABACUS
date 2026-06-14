@@ -57,6 +57,7 @@ export default function StudentHome({ navigation }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loadingAnnounce, setLoadingAnnounce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeQuizLock, setActiveQuizLock] = useState(null);
 
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterSender, setFilterSender] = useState('ALL'); 
@@ -108,6 +109,21 @@ export default function StudentHome({ navigation }) {
     } catch (error) {}
   };
 
+  const fetchQuizLockState = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`${API_URL}/quiz-sessions/active?userId=${user.id}`);
+      const data = await response.json();
+      if (data?.activeQuiz) {
+        setActiveQuizLock(data.activeQuiz);
+      } else {
+        setActiveQuizLock(null);
+      }
+    } catch (error) {
+      console.warn('Unable to fetch quiz lock state', error);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (activeTab === 'Announcements') {
       setLoadingAnnounce(true);
@@ -115,12 +131,29 @@ export default function StudentHome({ navigation }) {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    fetchQuizLockState();
+    const unsubscribe = navigation.addListener('focus', fetchQuizLockState);
+    const timer = setInterval(fetchQuizLockState, 15000);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      clearInterval(timer);
+    };
+  }, [navigation, fetchQuizLockState]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchAnnouncements().finally(() => setRefreshing(false));
   }, []);
 
   const handleProfileClick = () => { navigation.navigate('ProfileScreen'); };
+  const handleQuizLockedAccess = () => {
+    Alert.alert(
+      'Access restricted during active quiz',
+      `You are currently taking ${activeQuizLock?.quiz_title || 'a quiz'}. Please finish it before opening modules, lectures, or simulations.`
+    );
+  };
 
   // --- DYNAMIC TOUR MEASUREMENT ENGINE ---
   const measureElement = (ref) => {
@@ -349,13 +382,31 @@ export default function StudentHome({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {activeQuizLock && (
+          <View style={styles.quizLockBanner}>
+            <Ionicons name="lock-closed" size={20} color="#b45309" />
+            <View style={{flex: 1}}>
+              <Text style={styles.quizLockTitle}>Access restricted during active quiz</Text>
+              <Text style={styles.quizLockText} numberOfLines={2}>
+                {activeQuizLock.quiz_title ? `${activeQuizLock.quiz_title} is currently active.` : 'A quiz session is currently active on this account.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>Learning Modules</Text>
 
         <View style={styles.listContainer}>
           {allModules.map((item) => (
             <ModuleCard 
               key={item.id} title={item.title} category={item.category} color={item.color} 
-              onPress={() => navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics || [] })} 
+              onPress={() => {
+                if (activeQuizLock) {
+                  handleQuizLockedAccess();
+                  return;
+                }
+                navigation.navigate('ModuleDetail', { moduleTitle: item.title, moduleColor: item.color, topics: item.topics || [] });
+              }} 
             />
           ))}
         </View>
@@ -552,12 +603,24 @@ export default function StudentHome({ navigation }) {
             {activeTab === 'Home' && <Text style={styles.navTextActive}>Home</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity ref={modulesRef} style={styles.menuCard} onPress={() => navigation.navigate('ModulesScreen')}>
+          <TouchableOpacity ref={modulesRef} style={styles.menuCard} onPress={() => {
+            if (activeQuizLock) {
+              handleQuizLockedAccess();
+              return;
+            }
+            navigation.navigate('ModulesScreen');
+          }}>
             <Ionicons name={activeTab === 'ModulesScreen' ? "document-text" : "document-text-outline"} size={22} color={activeTab === 'ModulesScreen' ? "white" : "#666"} />
             {activeTab === 'ModulesScreen' && <Text style={styles.navTextActive}>Modules</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity ref={labsRef} style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]} onPress={() => setActiveTab('Simulations')}>
+          <TouchableOpacity ref={labsRef} style={[styles.navItem, activeTab === 'Simulations' && styles.navItemActive]} onPress={() => {
+            if (activeQuizLock) {
+              handleQuizLockedAccess();
+              return;
+            }
+            setActiveTab('Simulations');
+          }}>
             <Ionicons name={activeTab === 'Simulations' ? "cube" : "cube-outline"} size={22} color={activeTab === 'Simulations' ? "white" : "#666"} />
             {activeTab === 'Simulations' && <Text style={styles.navTextActive}>Labs</Text>}
           </TouchableOpacity>
@@ -666,6 +729,9 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
   actionButton: { width: '48%', backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 1 },
   actionButtonText: { fontSize: 13, fontWeight: '600', color: '#333' },
+  quizLockBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1, padding: 14, borderRadius: 14, marginTop: 18, marginBottom: 4 },
+  quizLockTitle: { fontSize: 14, fontWeight: '800', color: '#92400e', marginBottom: 2 },
+  quizLockText: { fontSize: 12, color: '#b45309', lineHeight: 18 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 15 },
   listContainer: { gap: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },

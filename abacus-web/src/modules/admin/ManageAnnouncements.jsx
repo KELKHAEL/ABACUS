@@ -25,6 +25,7 @@ export default function ManageAnnouncements() {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [expandedAnnouncements, setExpandedAnnouncements] = useState(new Set());
 
   const [audience, setAudience] = useState('STUDENTS'); 
   const [formData, setFormData] = useState({ title: '', content: '' });
@@ -290,6 +291,15 @@ export default function ManageAnnouncements() {
     return true;
   });
 
+  const toggleAnnouncementExpanded = (key) => {
+    setExpandedAnnouncements(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const getTargetDisplay = (item) => {
     if (item.target_year === 'INSTRUCTORS') {
       if (item.target_classes && item.target_classes.length > 1) {
@@ -366,31 +376,66 @@ export default function ManageAnnouncements() {
             <p>No announcements found for these filters.</p>
           </div>
         ) : (
-          filteredAnnouncements.map((item, i) => (
-            <div key={item.id || i} className="announce-card">
-              <div className="card-header">
-                <span className={`role-badge ${item.author_role === 'ADMIN' ? 'badge-admin' : 'badge-instructor'}`}>
-                  {item.author_role}
-                </span>
-                <div style={{display: 'flex', gap: '5px'}}>
-                    <button className="btn-icon-edit" onClick={() => openEditModal(item)} title="Edit"><Edit size={18} /></button>
-                    <button className="btn-icon-delete" onClick={() => handleSoftDelete(item.grouped_ids)} title="Delete"><Trash2 size={18} /></button>
+          filteredAnnouncements.map((item, i) => {
+            const announcementKey = item.grouped_ids ? item.grouped_ids.join('-') : String(item.id || i);
+            const isExpanded = expandedAnnouncements.has(announcementKey);
+            const shouldClamp = !isExpanded && String(item.content || '').length > 220;
+
+            return (
+              <div key={item.id || i} className="announce-card" style={{ overflow: 'hidden' }}>
+                <div className="card-header">
+                  <span className={`role-badge ${item.author_role === 'ADMIN' ? 'badge-admin' : 'badge-instructor'}`}>
+                    {item.author_role}
+                  </span>
+                  <div style={{display: 'flex', gap: '5px'}}>
+                      <button className="btn-icon-edit" onClick={() => openEditModal(item)} title="Edit"><Edit size={18} /></button>
+                      <button className="btn-icon-delete" onClick={() => handleSoftDelete(item.grouped_ids)} title="Delete"><Trash2 size={18} /></button>
+                  </div>
+                </div>
+                
+                <h3 className="card-title">{item.title}</h3>
+                <div
+                  className="card-content"
+                  style={{
+                    overflow: 'hidden',
+                    display: shouldClamp ? '-webkit-box' : 'block',
+                    WebkitBoxOrient: shouldClamp ? 'vertical' : 'initial',
+                    WebkitLineClamp: shouldClamp ? 4 : 'unset',
+                    maxHeight: shouldClamp ? '7.2em' : 'none',
+                    wordBreak: 'break-word'
+                  }}
+                >
+                  {item.content}
+                </div>
+                {String(item.content || '').length > 220 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleAnnouncementExpanded(announcementKey)}
+                    style={{
+                      marginTop: '10px',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#104a28',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isExpanded ? 'Show Less' : 'Read More'}
+                  </button>
+                )}
+                
+                <div className="card-footer">
+                  <div className="footer-item"><User size={14} /> {item.author_name}</div>
+                  <div className="footer-item">
+                    <Target size={14} /> 
+                    {getTargetDisplay(item)}
+                  </div>
+                  <div className="footer-item"><Calendar size={14} /> {new Date(item.created_at).toLocaleDateString()}</div>
                 </div>
               </div>
-              
-              <h3 className="card-title">{item.title}</h3>
-              <p className="card-content">{item.content}</p>
-              
-              <div className="card-footer">
-                <div className="footer-item"><User size={14} /> {item.author_name}</div>
-                <div className="footer-item">
-                  <Target size={14} /> 
-                  {getTargetDisplay(item)}
-                </div>
-                <div className="footer-item"><Calendar size={14} /> {new Date(item.created_at).toLocaleDateString()}</div>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

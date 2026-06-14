@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback } from 'react';
+import React, { useState, useContext, useCallback, useEffect } from 'react';
 import { 
   View, Text, FlatList, TouchableOpacity, StyleSheet, 
   ActivityIndicator, StatusBar, Alert, Platform
@@ -18,6 +18,7 @@ export default function ModulesScreen({ navigation }) {
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [activeQuizLock, setActiveQuizLock] = useState(null);
   
   const [viewMode, setViewMode] = useState('active'); 
 
@@ -47,15 +48,44 @@ export default function ModulesScreen({ navigation }) {
     }
   }, [user, isUnassigned]);
 
+  const fetchQuizLockState = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`${API_URL}/quiz-sessions/active?userId=${user.id}`);
+      const data = await response.json();
+      setActiveQuizLock(data?.activeQuiz || null);
+    } catch (error) {
+      console.warn('Could not load quiz lock state', error);
+    }
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       if (user) {
         fetchModules();
+        fetchQuizLockState();
       }
-    }, [user, fetchModules])
+    }, [user, fetchModules, fetchQuizLockState])
   );
 
+  useEffect(() => {
+    const timer = setInterval(fetchQuizLockState, 15000);
+    return () => clearInterval(timer);
+  }, [fetchQuizLockState]);
+
+  const handleQuizLockedAccess = () => {
+    Alert.alert(
+      'Access restricted during active quiz',
+      `You are currently taking ${activeQuizLock?.quiz_title || 'a quiz'}. Finish it before opening modules.`
+    );
+  };
+
   const handleDownloadAndOpen = async (fileUrl, fileName, moduleId) => {
+    if (activeQuizLock) {
+      handleQuizLockedAccess();
+      return;
+    }
+
     try {
       setDownloadingId(moduleId);
       
@@ -107,7 +137,7 @@ export default function ModulesScreen({ navigation }) {
           <TouchableOpacity 
               style={[styles.downloadBtn, isDeleted && { backgroundColor: '#ef4444' }, viewMode === 'archived' && !isDeleted && {backgroundColor: '#4b5563'}]}
               onPress={() => handleDownloadAndOpen(item.file_url, item.file_name, item.id)}
-              disabled={downloadingId === item.id || isDeleted}
+              disabled={downloadingId === item.id || isDeleted || Boolean(activeQuizLock)}
           >
               {downloadingId === item.id ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -148,6 +178,13 @@ export default function ModulesScreen({ navigation }) {
           <Ionicons name="refresh" size={24} color="#104a28" />
         </TouchableOpacity>
       </View>
+
+      {activeQuizLock && (
+        <View style={styles.lockBanner}>
+          <Ionicons name="lock-closed" size={18} color="#b45309" />
+          <Text style={styles.lockBannerText}>Access restricted during active quiz</Text>
+        </View>
+      )}
 
       <View style={styles.tabBar}>
         <TouchableOpacity style={[styles.tab, viewMode === 'active' && styles.activeTab]} onPress={() => setViewMode('active')}>
@@ -209,5 +246,7 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   dateText: { fontSize: 12, color: '#9ca3af', fontWeight: '500' },
   downloadBtn: { backgroundColor: '#104a28', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, flexDirection: 'row', alignItems: 'center', minWidth: 100, justifyContent: 'center' },
-  downloadText: { color: 'white', fontWeight: 'bold', fontSize: 13 }
+  downloadText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+  lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fffbeb', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f59e0b', paddingVertical: 10, paddingHorizontal: 20 },
+  lockBannerText: { color: '#92400e', fontWeight: '700', fontSize: 13 }
 });

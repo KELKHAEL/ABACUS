@@ -32,6 +32,10 @@ export default function QuizScreen({ route, navigation }) {
 
   const appState = useRef(AppState.currentState);
   const isCheating = useRef(false);
+  const quizSessionStarted = useRef(false);
+  const quizEnded = useRef(false);
+  const heartbeatTimer = useRef(null);
+  const lastQuizSignature = useRef(null);
 
   useEffect(() => {
     const fetchQuizDetails = async () => {
@@ -54,8 +58,124 @@ export default function QuizScreen({ route, navigation }) {
     fetchQuizDetails();
   }, [quizId, navigation]);
 
+  const reportQuizViolation = async (action, details = "") => {
+    if (!user?.id || !quizId) return;
+    try {
+      await fetch(`${API_URL}/quiz-violations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          quizId,
+          action,
+          details,
+          metadata: { source: 'mobile', screen: 'QuizScreen' }
+        })
+      });
+    } catch (error) {
+      console.warn('Failed to store quiz violation log', error);
+    }
+  };
+
+  const syncQuizSession = async (endpoint, extra = {}) => {
+    if (!user?.id || !quizId) return;
+    try {
+      await fetch(`${API_URL}/quiz-sessions/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          quizId,
+          clientState: AppState.currentState,
+          ...extra
+        })
+      });
+    } catch (error) {
+      console.warn(`Failed to sync quiz session (${endpoint})`, error);
+    }
+  };
+
+  const startQuizSession = async () => {
+    if (!user?.id || !quizData || quizSessionStarted.current) return;
+
+    const quizSignature = `${quizId}-${user.id}`;
+    if (lastQuizSignature.current === quizSignature && quizSessionStarted.current) return;
+
+    try {
+      const response = await fetch(`${API_URL}/quiz-sessions/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          quizId,
+          clientState: AppState.currentState,
+          metadata: {
+            quizTitle,
+            targetSection: quizData.target_section,
+            targetYear: quizData.target_year
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.success === false) {
+        const message = data?.error || 'Unable to start quiz session.';
+        Alert.alert('Quiz Locked', message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        return;
+      }
+
+      lastQuizSignature.current = quizSignature;
+      quizSessionStarted.current = true;
+      await syncQuizSession('heartbeat', {
+        metadata: {
+          quizTitle,
+          targetSection: quizData.target_section,
+          targetYear: quizData.target_year
+        }
+      });
+
+      heartbeatTimer.current = setInterval(() => {
+        syncQuizSession('heartbeat', {
+          metadata: {
+            quizTitle,
+            targetSection: quizData.target_section,
+            targetYear: quizData.target_year
+          }
+        });
+      }, 15000);
+    } catch (error) {
+      Alert.alert('Connection Error', 'Could not start the quiz session.');
+    }
+  };
+
+  const endQuizSession = async (reason = 'ended') => {
+    if (!quizSessionStarted.current || !user?.id || !quizId) return;
+    try {
+      await fetch(`${API_URL}/quiz-sessions/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          quizId,
+          reason,
+          metadata: {
+            quizTitle,
+            targetSection: quizData?.target_section,
+            targetYear: quizData?.target_year
+          }
+        })
+      });
+    } catch (error) {
+      console.warn('Failed to end quiz session', error);
+    }
+  };
+
   useEffect(() => {
     if (loading || !hasStarted || showResult) return;
+
+    if (!quizSessionStarted.current) {
+      startQuizSession();
+    }
 
     ScreenCapture.preventScreenCaptureAsync();
 
@@ -65,6 +185,7 @@ export default function QuizScreen({ route, navigation }) {
 
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        reportQuizViolation('App Backgrounded', `App state changed to ${nextAppState}.`);
         handleCheatDetection("App moved to background. You cannot leave the quiz to search for answers.");
       }
       appState.current = nextAppState;
@@ -83,13 +204,25 @@ export default function QuizScreen({ route, navigation }) {
     });
 
     return () => {
+      if (heartbeatTimer.current) {
+        clearInterval(heartbeatTimer.current);
+        heartbeatTimer.current = null;
+      }
       ScreenCapture.allowScreenCaptureAsync();
       if (screenshotSubscription) screenshotSubscription.remove();
       if (appStateSubscription) appStateSubscription.remove();
       if (backSubscription) backSubscription.remove(); 
       if (navUnsubscribe) navUnsubscribe();
+
+      if (hasStarted && !quizEnded.current) {
+        reportQuizViolation('App Closed', 'Quiz screen unmounted before completion.');
+      }
+
+      if (!quizEnded.current) {
+        endQuizSession('closed');
+      }
     };
-  }, [loading, hasStarted, showResult, navigation]);
+  }, [loading, hasStarted, showResult, navigation, quizData]);
 
   const promptLeaveWarning = () => {
     Alert.alert(
@@ -105,6 +238,7 @@ export default function QuizScreen({ route, navigation }) {
   const handleCheatDetection = (reason) => {
     if (isCheating.current || showResult) return;
     isCheating.current = true;
+    quizEnded.current = true;
     finishQuiz(0, studentAnswers, reason); 
   };
 
@@ -174,6 +308,7 @@ export default function QuizScreen({ route, navigation }) {
     setIsSubmitting(true);
     setShowResult(true); 
     setScore(finalScore);
+    quizEnded.current = true;
     
     const totalItems = quizData ? quizData.questions.length : 100;
 
@@ -187,9 +322,11 @@ export default function QuizScreen({ route, navigation }) {
             score: finalScore,
             totalItems: totalItems,
             subjectTitle: quizTitle,
-            responses: finalAnswersDict 
+          responses: finalAnswersDict 
         })
       });
+
+      await endQuizSession(cheatReason ? 'violation' : 'submitted');
 
       setIsSubmitting(false);
       
@@ -202,6 +339,7 @@ export default function QuizScreen({ route, navigation }) {
     } catch (error) {
       setIsSubmitting(false);
       console.error(error);
+      await endQuizSession('submit_failed');
       Alert.alert("Error", "Could not save grade. Returning to menu.", [
          { text: "OK", onPress: () => navigation.goBack() }
       ]);

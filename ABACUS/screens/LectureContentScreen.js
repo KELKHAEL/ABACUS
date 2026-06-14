@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../AuthContext';
 
 // Import your content components (You will create these in the lectures folder)
 import IntroContent_1_1 from './lectures/IntroDiscreteMath_1_1';
@@ -95,6 +96,29 @@ import LinearDiophantine_10_5 from './lectures/LinearDiophantine_10_5';
 
 export default function LectureContentScreen({ route, navigation }) {
   const { topicId, topicTitle, moduleColor } = route.params;
+  const { user } = useContext(AuthContext);
+  const [activeQuizLock, setActiveQuizLock] = useState(null);
+
+  const fetchQuizLockState = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/quiz-sessions/active?userId=${user.id}`);
+      const data = await response.json();
+      setActiveQuizLock(data?.activeQuiz || null);
+    } catch (error) {
+      console.warn('Could not load quiz lock state', error);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchQuizLockState();
+    const unsubscribe = navigation.addListener('focus', fetchQuizLockState);
+    const timer = setInterval(fetchQuizLockState, 15000);
+    return () => {
+      if (unsubscribe) unsubscribe();
+      clearInterval(timer);
+    };
+  }, [navigation, fetchQuizLockState]);
 
   // Logic to render the correct component based on ID
   const renderContent = () => {
@@ -206,15 +230,28 @@ export default function LectureContentScreen({ route, navigation }) {
         <View style={{width: 28}} /> 
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.mainTitle, { color: moduleColor }]}>{topicTitle}</Text>
-        <View style={[styles.accentBar, { backgroundColor: moduleColor }]} />
-        
-        {/* Full Academic Module Content rendered here */}
-        {renderContent()}
+      {activeQuizLock ? (
+        <View style={styles.lockContainer}>
+          <Ionicons name="lock-closed" size={72} color="#b45309" />
+          <Text style={styles.lockTitle}>Access restricted during active quiz</Text>
+          <Text style={styles.lockText}>
+            {activeQuizLock.quiz_title ? `${activeQuizLock.quiz_title} is currently active.` : 'A quiz session is active for this account.'}
+          </Text>
+          <TouchableOpacity style={styles.lockButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.lockButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.mainTitle, { color: moduleColor }]}>{topicTitle}</Text>
+          <View style={[styles.accentBar, { backgroundColor: moduleColor }]} />
+          
+          {/* Full Academic Module Content rendered here */}
+          {renderContent()}
 
-        <View style={{height: 60}} />
-      </ScrollView>
+          <View style={{height: 60}} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -232,5 +269,10 @@ const styles = StyleSheet.create({
   accentBar: { width: 60, height: 6, borderRadius: 3, marginBottom: 30 },
   placeholder: { color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', marginTop: 50 },
   labButton: { flexDirection: 'row', padding: 20, borderRadius: 15, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 40, elevation: 4 },
-  labButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 }
+  labButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
+  lockContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30, gap: 14 },
+  lockTitle: { fontSize: 22, fontWeight: '900', color: '#92400e', textAlign: 'center' },
+  lockText: { fontSize: 15, color: '#b45309', textAlign: 'center', lineHeight: 22 },
+  lockButton: { backgroundColor: '#104a28', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 10 },
+  lockButtonText: { color: 'white', fontWeight: '800' }
 });

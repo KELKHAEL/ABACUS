@@ -22,6 +22,8 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 const activeSockets = new Map();
+const quizViolationStreams = new Set();
+const QUIZ_SESSION_TIMEOUT_MINUTES = 3;
 
 io.on('connection', (socket) => {
     socket.on('register_device', (userId) => { activeSockets.set(userId, socket.id); });
@@ -38,6 +40,23 @@ io.on('connection', (socket) => {
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const isSessionFresh = (row) => {
+  if (!row || !row.last_heartbeat) return false;
+  const lastHeartbeat = new Date(row.last_heartbeat).getTime();
+  return Date.now() - lastHeartbeat <= QUIZ_SESSION_TIMEOUT_MINUTES * 60 * 1000;
+};
+
+const broadcastQuizViolation = (payload) => {
+  const message = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const stream of quizViolationStreams) {
+    try {
+      stream.write(message);
+    } catch (error) {
+      quizViolationStreams.delete(stream);
+    }
+  }
+};
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, 'uploads/'); },
@@ -121,6 +140,47 @@ const smartFormatName = (inputName) => {
     try { await connection.query("ALTER TABLE announcements MODIFY COLUMN target_section VARCHAR(255)"); } catch(e){}
 
     try { await connection.query("ALTER TABLE student_grades ADD COLUMN responses JSON DEFAULT NULL"); } catch(e){}
+
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS quiz_activity_sessions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          quiz_id INT NOT NULL,
+          target_year VARCHAR(50) DEFAULT NULL,
+          target_section VARCHAR(255) DEFAULT NULL,
+          device_id VARCHAR(255) DEFAULT NULL,
+          client_state VARCHAR(50) DEFAULT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'active',
+          started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          last_heartbeat DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          ended_at DATETIME DEFAULT NULL,
+          metadata JSON DEFAULT NULL,
+          INDEX idx_quiz_activity_user (user_id),
+          INDEX idx_quiz_activity_quiz (quiz_id),
+          INDEX idx_quiz_activity_status (status),
+          INDEX idx_quiz_activity_heartbeat (last_heartbeat)
+        )
+      `);
+    } catch(e){}
+
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS quiz_violation_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          quiz_id INT NOT NULL,
+          action VARCHAR(100) NOT NULL,
+          details TEXT DEFAULT NULL,
+          device_id VARCHAR(255) DEFAULT NULL,
+          metadata JSON DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_quiz_violation_user (user_id),
+          INDEX idx_quiz_violation_quiz (quiz_id),
+          INDEX idx_quiz_violation_created (created_at)
+        )
+      `);
+    } catch(e){}
 
     try { await connection.query("UPDATE users SET section = 'To be assigned' WHERE section LIKE 'To be assi%'"); } catch(e){}
     try { await connection.query("UPDATE users SET cor_status = 'Unassigned' WHERE cor_status = 'Pending' AND cor_image_url IS NULL"); } catch(e){}
@@ -634,6 +694,222 @@ app.patch('/quizzes/:id/status', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ success: false, error: "Quiz not found" });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+app.post('/quiz-sessions/start', async (req, res) => {
+  const { userId, quizId, deviceId, clientState, metadata } = req.body;
+  if (!userId || !quizId) {
+    return res.status(400).json({ success: false, error: "Missing userId or quizId." });
+  }
+
+  try {
+    const [quizRows] = await db.query(
+      "SELECT id, target_year, target_section FROM quizzes WHERE id = ? LIMIT 1",
+      [quizId]
+    );
+    if (quizRows.length === 0) {
+      return res.status(404).json({ success: false, error: "Quiz not found." });
+    }
+
+    const quiz = quizRows[0];
+    const [activeRows] = await db.query(
+      `SELECT * FROM quiz_activity_sessions
+       WHERE user_id = ? AND status = 'active' AND last_heartbeat >= (NOW() - INTERVAL ${QUIZ_SESSION_TIMEOUT_MINUTES} MINUTE)
+       ORDER BY started_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    if (activeRows.length > 0 && Number(activeRows[0].quiz_id) !== Number(quizId)) {
+      return res.status(409).json({
+        success: false,
+        error: "An active quiz session is already in progress.",
+        activeQuiz: activeRows[0]
+      });
+    }
+
+    if (activeRows.length > 0) {
+      await db.query(
+        `UPDATE quiz_activity_sessions
+         SET last_heartbeat = NOW(), client_state = ?, device_id = ?, metadata = ?, ended_at = NULL
+         WHERE id = ?`,
+        [clientState || 'active', deviceId || null, metadata ? JSON.stringify(metadata) : null, activeRows[0].id]
+      );
+
+      return res.json({ success: true, sessionId: activeRows[0].id, activeQuiz: activeRows[0] });
+    }
+
+    const [insertResult] = await db.query(
+      `INSERT INTO quiz_activity_sessions
+        (user_id, quiz_id, target_year, target_section, device_id, client_state, status, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
+      [
+        userId,
+        quizId,
+        quiz.target_year || null,
+        quiz.target_section || null,
+        deviceId || null,
+        clientState || 'active',
+        metadata ? JSON.stringify(metadata) : null
+      ]
+    );
+
+    res.json({ success: true, sessionId: insertResult.insertId });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/quiz-sessions/heartbeat', async (req, res) => {
+  const { userId, quizId, deviceId, clientState, metadata } = req.body;
+  if (!userId || !quizId) {
+    return res.status(400).json({ success: false, error: "Missing userId or quizId." });
+  }
+
+  try {
+    const [result] = await db.query(
+      `UPDATE quiz_activity_sessions
+       SET last_heartbeat = NOW(), client_state = ?, device_id = ?, metadata = ?
+       WHERE user_id = ? AND quiz_id = ? AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1`,
+      [clientState || 'active', deviceId || null, metadata ? JSON.stringify(metadata) : null, userId, quizId]
+    );
+    res.json({ success: true, updated: result.affectedRows > 0 });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/quiz-sessions/end', async (req, res) => {
+  const { userId, quizId, reason, deviceId, metadata } = req.body;
+  if (!userId || !quizId) {
+    return res.status(400).json({ success: false, error: "Missing userId or quizId." });
+  }
+
+  try {
+    await db.query(
+      `UPDATE quiz_activity_sessions
+       SET status = 'ended', ended_at = NOW(), client_state = ?, device_id = ?, metadata = ?
+       WHERE user_id = ? AND quiz_id = ? AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1`,
+      [reason || 'ended', deviceId || null, metadata ? JSON.stringify(metadata) : null, userId, quizId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/quiz-sessions/active', async (req, res) => {
+  const { userId, quizId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: "Missing userId." });
+  }
+
+  try {
+    let query = `
+      SELECT qs.*, q.title AS quiz_title, q.description AS quiz_description, q.target_section AS quiz_target_section
+      FROM quiz_activity_sessions qs
+      JOIN quizzes q ON q.id = qs.quiz_id
+      WHERE qs.user_id = ? AND qs.status = 'active' AND qs.last_heartbeat >= (NOW() - INTERVAL ${QUIZ_SESSION_TIMEOUT_MINUTES} MINUTE)
+    `;
+    const params = [userId];
+
+    if (quizId) {
+      query += " AND qs.quiz_id = ?";
+      params.push(quizId);
+    }
+
+    query += " ORDER BY qs.started_at DESC LIMIT 1";
+
+    const [rows] = await db.query(query, params);
+    res.json({ success: true, activeQuiz: rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/quiz-violations', async (req, res) => {
+  const { userId, quizId, action, details, deviceId, metadata } = req.body;
+  if (!userId || !quizId || !action) {
+    return res.status(400).json({ success: false, error: "Missing userId, quizId, or action." });
+  }
+
+  try {
+    const [result] = await db.query(
+      `INSERT INTO quiz_violation_logs (user_id, quiz_id, action, details, device_id, metadata)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, quizId, action, details || null, deviceId || null, metadata ? JSON.stringify(metadata) : null]
+    );
+
+    const [rows] = await db.query(
+      `SELECT ql.*, u.full_name AS user_name, u.email AS user_email, q.title AS quiz_title
+       FROM quiz_violation_logs ql
+       JOIN users u ON u.id = ql.user_id
+       JOIN quizzes q ON q.id = ql.quiz_id
+       WHERE ql.id = ?`,
+      [result.insertId]
+    );
+
+    const payload = rows[0] || { id: result.insertId, user_id: userId, quiz_id: quizId, action, details };
+    broadcastQuizViolation(payload);
+
+    res.json({ success: true, log: payload });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/quiz-violations', async (req, res) => {
+  const { instructorId, quizId, limit = 50 } = req.query;
+
+  try {
+    let query = `
+      SELECT ql.*, u.full_name AS user_name, u.email AS user_email, q.title AS quiz_title, q.created_by
+      FROM quiz_violation_logs ql
+      JOIN users u ON u.id = ql.user_id
+      JOIN quizzes q ON q.id = ql.quiz_id
+    `;
+    const params = [];
+    const filters = [];
+
+    if (instructorId) {
+      filters.push("q.created_by = ?");
+      params.push(instructorId);
+    }
+
+    if (quizId) {
+      filters.push("ql.quiz_id = ?");
+      params.push(quizId);
+    }
+
+    if (filters.length > 0) {
+      query += ` WHERE ${filters.join(" AND ")}`;
+    }
+
+    query += " ORDER BY ql.created_at DESC LIMIT ?";
+    params.push(Math.min(Number(limit) || 50, 200));
+
+    const [rows] = await db.query(query, params);
+    res.json({ success: true, logs: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/quiz-violations/stream', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  res.write('retry: 5000\n\n');
+  quizViolationStreams.add(res);
+
+  req.on('close', () => {
+    quizViolationStreams.delete(res);
+  });
 });
 
 app.delete('/quizzes/:id', async (req, res) => {
